@@ -1,6 +1,7 @@
 // Ripetizione spaziata delle carte: la stessa delle revisioni dei set (js/revisioni.js). Ogni carta (e ogni riga delle
 // revisioni) ha N° Rep, ultimo ripasso e intervallo; prossima revisione = ultimo ripasso + intervallo.
-// N° Rep conta i ripassi effettivi e basta: non decide l'intervallo.
+// Nei ripassi l'intervallo dipende da quando ripassi, non solo dal N° Rep. Cambiando il N° Rep a mano invece
+// l'intervallo torna quello della sequenza per quella rep (come la formula di Notion).
 //
 // Sequenza degli intervalli (Impostazioni, predefinita Fibonacci 1, 2, 3, 5, 8, 13, 21): ripassando sempre il giorno
 // previsto e bene, dopo la rep 1 si aspetta il primo numero, dopo la rep 2 il secondo, e così via; dopo l'ultimo gli
@@ -17,7 +18,8 @@
 //
 // Quattro valutazioni: Scarso, Ok, Buono, Perfetto.
 // - Buono o Perfetto: la formula qui sopra; la carta è imparata.
-// - Ok: la stessa formula con metà crescita (r → 1 + (r − 1) / 2): torna un po' prima finché non le dai Buono o Perfetto.
+// - Ok: la stessa formula con metà crescita (r → 1 + (r − 1) / 2), arrotondata per difetto così torna sempre un po'
+//   prima che con Buono (anche con gli intervalli piccoli), finché non le dai Buono o Perfetto.
 // - Scarso: N° Rep e ultimo ripasso restano, l'intervallo torna indietro di un passo nella sequenza (con il raddoppio si
 //   dimezza) e la carta è da ripassare subito (daRifareDal) finché non le dai almeno Ok. Quel ripasso la "recupera":
 //   N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da quello ridotto.
@@ -129,7 +131,9 @@ const Srs = (() => {
         if (P <= 0) return { intervallo: I, giorno };
         let r = ritmo(I, seq);
         if (ok) r = 1 + (r - 1) / 2;
-        return { intervallo: arrotonda(P < I ? I + P * (r - 1) : r * I * I / P), giorno: oggi };
+        const nuovo = P < I ? I + P * (r - 1) : r * I * I / P;
+        // Ok per difetto: con gli intervalli piccoli l'arrotondamento lo farebbe tornare insieme a Buono
+        return { intervallo: ok ? limita(Math.floor(nuovo), 1, MAX_GIORNI) : arrotonda(nuovo), giorno: oggi };
     }
 
     // ---- Stato delle carte ---------------------------------------------------------------

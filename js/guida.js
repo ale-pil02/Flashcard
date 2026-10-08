@@ -149,7 +149,8 @@ const Guida = (() => {
             html: () => `
                 <p>Quello che decidi tu vale sempre, senza domande:</p>
                 <ul class="guida-elenco">
-                    <li><span><b>N° Rep</b>: quante volte hai ripassato. Cambiarlo non sposta le date.</span></li>
+                    <li><span><b>N° Rep</b>: quante volte hai ripassato. Cambiandolo, l'intervallo torna quello della sequenza per
+                        quella rep (rep 5 → ${giorniTesto(Srs.intervalloPerRep(5))}) e la prossima revisione si sposta.</span></li>
                     <li><span><b>Ultimo ripasso</b> e <b>Intervallo</b>: la prossima revisione è l'ultimo ripasso più l'intervallo.</span></li>
                     <li><span><b>Prossima revisione</b>: scegli la data e l'intervallo si adegua.</span></li>
                     <li><span><b>Valutazione</b>: cambia lo stato del set, non le date.</span></li>
@@ -166,7 +167,8 @@ const Guida = (() => {
                     <li>Passa a <b>Per flashcard</b> e premi <b>Ripassa quelle da fare</b>.</li>
                     <li>Ogni tanto: Impostazioni → <b>Backup</b>.</li>
                 </ol>
-                <p class="nota">Puoi riaprire questa guida da Revisioni o da Impostazioni.</p>`,
+                <p class="nota">Puoi riaprire questa guida da Revisioni o da Impostazioni. Con i dati di prova (Impostazioni → Dati di prova) c'è anche
+                    un tutorial che ti accompagna nelle pagine vere.</p>`,
         },
     ];
 

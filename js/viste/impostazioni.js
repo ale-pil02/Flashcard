@@ -13,6 +13,15 @@ Viste.impostazioni = {
                 <span><b>${etichetta}</b><small>${aiuto}</small></span>
                 <input type="number" name="${nome}" min="${min}" max="${max}" step="1" value="${imp[nome]}">
             </label>`;
+        // Numero oppure "Senza limite" (salvato come null)
+        const limiteCampo = (nome, etichetta, aiuto, min, max, predefinito) => `
+            <div class="impostazione">
+                <span><b>${etichetta}</b><small>${aiuto}</small></span>
+                <div class="campo-limite">
+                    <input type="number" data-limite="${nome}" min="${min}" max="${max}" step="1" value="${imp[nome] == null ? predefinito : imp[nome]}" ${imp[nome] == null ? 'disabled' : ''} aria-label="${etichetta}">
+                    <label class="spunta-limite"><input type="checkbox" data-senza-limite="${nome}" ${imp[nome] == null ? 'checked' : ''}>Senza limite</label>
+                </div>
+            </div>`;
 
         el.innerHTML = `
             <div class="pagina pagina-stretta">
@@ -28,8 +37,8 @@ Viste.impostazioni = {
 
                 <section class="riquadro gruppo-impostazioni">
                     <h3>${ico('fulmine')}Studio</h3>
-                    ${numeroCampo('nuovePerSessione', 'Carte nuove per sessione', 'Quante carte mai viste entrano in una sessione di studio', 0, 500)}
-                    ${numeroCampo('maxPerSessione', 'Carte massime per sessione', 'Limite complessivo di una sessione', 1, 1000)}
+                    ${limiteCampo('nuovePerSessione', 'Carte nuove per sessione', 'Quante carte mai viste entrano in una sessione di studio', 0, 500, IMPOSTAZIONI_PREDEFINITE.nuovePerSessione)}
+                    ${limiteCampo('maxPerSessione', 'Carte massime per sessione', 'Limite complessivo di una sessione', 1, 1000, IMPOSTAZIONI_PREDEFINITE.maxPerSessione)}
                     <label class="impostazione">
                         <span><b>Ordine delle carte</b><small>Nell'ordine del set le domande seguono l'albero: prima la madre, poi le figlie</small></span>
                         <select name="ordineCasuale">
@@ -137,10 +146,11 @@ Viste.impostazioni = {
                     </div>
                     <div class="impostazione">
                         <span><b>Dati di prova</b><small>${DatiProva.presenti()
-                            ? 'Caricati: materie, set e carte con “(prova)” nel nome. Rimuovendoli i tuoi dati restano intatti'
-                            : 'Due materie con set, sotto-set, domande ad albero e un mese di storico, per provare l\'app'}</small></span>
+                            ? 'Caricati: materie, set e carte con “(prova)” nel nome. Ogni set ha uno scenario delle revisioni; il tutorial te li mostra. Rimuovendoli i tuoi dati restano intatti'
+                            : 'Due materie con set in scenari diversi (puntuale, in ritardo, in anticipo, già ripassato oggi…), flashcard sfasate e una mappa, con un tutorial che te li mostra'}</small></span>
                         ${DatiProva.presenti()
-                            ? `<button type="button" class="btn btn-fantasma" data-azione="rimuovi-prova">${ico('cestino')}Rimuovi</button>`
+                            ? `<div class="azioni-riga"><button type="button" class="btn btn-secondario" data-azione="tour">${ico('lampadina')}Tutorial</button>
+                                <button type="button" class="btn btn-fantasma" data-azione="rimuovi-prova">${ico('cestino')}Rimuovi</button></div>`
                             : `<button type="button" class="btn btn-secondario" data-azione="carica-prova">${ico('stella')}Carica</button>`}
                     </div>
                     <div class="impostazione">
@@ -201,6 +211,20 @@ Viste.impostazioni = {
         });
         $$('[data-preset-sequenza]', el).forEach(b => b.addEventListener('click', () => salvaSequenza(Srs.SEQUENZE[b.dataset.presetSequenza].numeri)));
         anteprimaSequenza();
+
+        // Carte per sessione: un numero oppure "Senza limite"
+        $$('[data-limite]', el).forEach(campo => campo.addEventListener('change', () => {
+            campo.value = limita(parseInt(campo.value, 10) || 0, +campo.min, +campo.max);
+            Dati.salvaImpostazioni({ [campo.dataset.limite]: +campo.value });
+            Ui.toast('Salvato', 'successo', 1200);
+        }));
+        $$('[data-senza-limite]', el).forEach(spunta => spunta.addEventListener('change', () => {
+            const campo = $(`[data-limite="${spunta.dataset.senzaLimite}"]`, el);
+            campo.disabled = spunta.checked;
+            Dati.salvaImpostazioni({ [spunta.dataset.senzaLimite]: spunta.checked ? null : +campo.value });
+            Ui.toast(spunta.checked ? 'Senza limite' : 'Salvato', 'successo', 1200);
+            App.aggiornaPiede();
+        }));
 
         // Salvataggio automatico dei campi
         $$('input[name], select[name]', el).forEach(campo => {
@@ -275,11 +299,12 @@ Viste.impostazioni = {
                 b.disabled = false;
             },
             ripristina: () => Importa.ripristinaBackup(),
-            'carica-prova': () => { if (DatiProva.carica()) App.ridisegna(); },
+            'carica-prova': () => { if (DatiProva.carica()) { App.ridisegna(); Tour.proponi(); } },
+            tour: () => Tour.avvia(),
             'rimuovi-prova': async () => {
                 const ok = await Ui.conferma('Tolgo materie, set, carte, storico ed esami di prova, compreso quello che hai aggiunto dentro le materie di prova. I tuoi dati restano.',
                     { titolo: 'Rimuovere i dati di prova?', ok: 'Rimuovi', pericolo: true });
-                if (ok) { DatiProva.rimuovi(); App.ridisegna(); }
+                if (ok) { Tour.esci(); DatiProva.rimuovi(); App.ridisegna(); }
             },
             'elimina-tutto': async () => {
                 const ok = await Ui.conferma('Cancelli <b>tutto</b>: materie, set, flashcard, statistiche ed esami. Se non hai un backup non potrai recuperarli.',

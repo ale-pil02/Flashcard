@@ -114,14 +114,15 @@ Viste.studio = (() => {
         const nuove = query.ambito === 'oggi' ? pool.filter(c => dovuta(c) && bloccata(c))
             : pool.filter(c => Srs.stato(c) === 'nuova' && !Srs.daRipassare(c, ora) && !(dovuta(c) && !bloccata(c)));
         const libere = nuove.filter(c => !bloccata(c));
-        const scelte = (imp.ordineCasuale ? mescola(libere) : libere).slice(0, imp.nuovePerSessione);
-        const lista = [...daRipassare, ...scelte].slice(0, imp.maxPerSessione);
+        const limiti = Dati.limitiSessione(imp);
+        const scelte = (imp.ordineCasuale ? mescola(libere) : libere).slice(0, limiti.nuove);
+        const lista = [...daRipassare, ...scelte].slice(0, limiti.max);
         const nuoveDentro = lista.filter(c => Srs.stato(c) === 'nuova').length;
         return {
             lista: ordina(lista),
             riserva: nuove.filter(bloccata),
-            quotaNuove: imp.nuovePerSessione - nuoveDentro,
-            max: imp.maxPerSessione,
+            quotaNuove: limiti.nuove - nuoveDentro,
+            max: limiti.max,
         };
     }
 

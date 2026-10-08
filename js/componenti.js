@@ -303,8 +303,9 @@ const Ui = (() => {
     function pannelloStudio(carte) {
         const c = Dati.conteggi(carte);
         const imp = Dati.impostazioni();
-        const nuove = Math.min(c.nuova - c.nuoveDovute, imp.nuovePerSessione);
-        const pronte = Math.min(c.daRipassare + nuove, imp.maxPerSessione);
+        const limiti = Dati.limitiSessione(imp);
+        const nuove = Math.min(c.nuova - c.nuoveDovute, limiti.nuove);
+        const pronte = Math.min(c.daRipassare + nuove, limiti.max);
         const prossima = carte.filter(x => !Srs.daRipassare(x)).map(Srs.prossima).filter(Boolean).sort((a, b) => a - b)[0];
         const dettaglio = pronte
             ? [c.daRipassare && `${c.daRipassare} da ripassare`, nuove && `${plurale(nuove, 'nuova', 'nuove')}`].filter(Boolean).join(' · ')

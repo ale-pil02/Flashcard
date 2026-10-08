@@ -387,7 +387,7 @@ Viste.editor = {
             const minimo = !scarso && sr.giorno ? chiaveGiorno(aggiungiGiorni(daChiaveGiorno(sr.giorno), 1)) : '';
             const blocco = senzaDate ? 'disabled title="Mai valutata: scegli una valutazione qui sopra per darle delle date"' : '';
             box.innerHTML = `
-                <label class="campo-mini"><span>N° Rep</span><input type="number" min="0" step="1" data-srs="rep" value="${sr.rep || 0}" title="Quante volte l'hai ripassata: cambiarlo non sposta le date"></label>
+                <label class="campo-mini"><span>N° Rep</span><input type="number" min="0" step="1" data-srs="rep" value="${sr.rep || 0}" title="Quante volte l'hai ripassata: cambiandolo, l'intervallo torna quello della sequenza per quella rep"></label>
                 <label class="campo-mini"><span>Ultimo ripasso</span><input type="date" data-srs="giorno" value="${sr.giorno || ''}" max="${chiaveGiorno()}" ${blocco}></label>
                 <label class="campo-mini"><span>Intervallo (giorni)</span><input type="number" min="1" step="1" data-srs="intervallo" value="${sr.giorno ? sr.intervallo : ''}" ${blocco || (sr.giorno ? '' : 'disabled title="Prima serve l\'ultimo ripasso"')}></label>
                 <label class="campo-mini"><span>${scarso ? 'Da rifare dal' : 'Prossima revisione'}</span><input type="date" data-srs="prossima" value="${p ? chiaveGiorno(p) : ''}" ${minimo ? `min="${minimo}"` : ''} ${blocco}></label>`;

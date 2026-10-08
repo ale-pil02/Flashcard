@@ -271,12 +271,13 @@ const Disposizione = (() => {
         });
     }
 
-    // Rettangolo che contiene i nodi (con etichette) di tutti gli alberi dati
+    // Rettangolo che contiene i nodi (con etichette e immagini, anche quelle fluttuanti: extTutto) di tutti gli alberi dati
     function limiti(radici) {
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         const visita = n => {
-            x0 = Math.min(x0, n.x + n.ext.sx); y0 = Math.min(y0, n.y + n.ext.alto);
-            x1 = Math.max(x1, n.x + n.ext.dx); y1 = Math.max(y1, n.y + n.ext.basso);
+            const e = n.extTutto || n.ext;
+            x0 = Math.min(x0, n.x + e.sx); y0 = Math.min(y0, n.y + e.alto);
+            x1 = Math.max(x1, n.x + e.dx); y1 = Math.max(y1, n.y + e.basso);
             n.figli.forEach(visita);
         };
         radici.forEach(visita);

@@ -30,14 +30,15 @@ flashcard (anche ad albero), materiali, esami del piano di studio, impostazioni 
   le figlie compaiono nello studio solo dopo che la madre è stata imparata.
 - Una sola modalità di studio con quattro valutazioni: Scarso, Ok, Buono, Perfetto. Ok e Scarso tornano in fondo alla
   sessione finché non diventano Buono o Perfetto; l'utente può terminare quando vuole. Ripetizione spaziata uguale per
-  carte e revisioni: ognuna ha N° Rep (conta i ripassi e basta), ultimo ripasso e intervallo; prossima = ultimo ripasso +
+  carte e revisioni: ognuna ha N° Rep, ultimo ripasso e intervallo; prossima = ultimo ripasso +
   intervallo. Gli intervalli seguono la sequenza delle impostazioni (predefinita Fibonacci: dopo la rep 1, 2, 3, 4, 5
   si aspettano 1, 2, 3, 5, 8 giorni…). Ripasso in ritardo: intervallo × ritmo × previsto / passati (più ritardo, più
   vicina la prossima); in anticipo: la data prevista più la parte di intervallo "guadagnata"; lo stesso giorno: N° Rep +1
   e date ferme. Ok fa crescere l'intervallo la metà; Scarso → N° Rep fermo, intervallo indietro di un passo, carta da
   ripassare subito finché non arriva almeno a Ok. Se lo studio parte fuori dal giorno previsto l'utente sceglie se conta
   o se è un ripasso di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
-  N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche.
+  N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche (cambiare solo il N° Rep riporta l'intervallo a
+  quello della sequenza per quella rep).
 - Revisioni: oltre alle flashcard, l'utente ripassa interi argomenti (capitoli, schemi) con il metodo del suo database
   di Notion, con le stesse regole qui sopra; alert rosso se in ritardo, giallo se è oggi, verde se manca ancora. Ogni
   set studiato ha la sua riga (riga_del_set), aggiornata dall'app a fine sessione: N° Rep +1 se ha valutato tutte le
@@ -153,7 +154,9 @@ tu scrivi solo le domande.
      tutto il resto. Ricostruisci i livelli che esistono davvero. Se una parte è illeggibile o ambigua non ricostruirla
      a intuito: lasciala fuori e segnalala alla fine.
    - Se non c'è nessuna fonte, chiedila e fermati.
-2. prepara_piano_localizzazione → il piano: l'elenco esatto delle carte da scrivere, in ordine.
+2. prepara_piano_localizzazione → il piano: l'elenco esatto delle carte da scrivere, in ordine. Per alcuni nodi di una
+   mappa passa nodi_mappa (con con_rami, set_id, salta_esistenti). Se il messaggio dice che il piano è già pronto (il
+   pulsante "Flashcard dai nodi" della mappa lo prepara per i nodi scelti), non rifarlo: vai al passo 4 con quel piano_id.
    I tag: generale (radice), sottoramo (livello 1), concetto N (nodo che si dirama ancora, N = livello della carta
    nell'albero delle domande − 1: una catena unita conta un livello, quindi sotto il sottoramo c'è sempre concetto 1),
    dettaglio (nodo terminale). Le foglie che sono solo un'etichetta vengono assorbite nella carta del padre (che chiede

@@ -9,7 +9,8 @@ Viste.set = {
     nav: 'libreria',
     titolo: 'Set',
     filtri: { setId: null, testo: '', tag: '', stato: '' },
-    pannelloRevisioni: 'set',   // sezione Revisioni del set: 'set' (gli argomenti) o 'carte' (le flashcard per conto loro)
+    pannelloRevisioni: 'set',   // sezione Revisioni del set: 'set' (gli argomenti) o 'carte' (le flashcard)
+    soloSfasate: false,         // pannello "Per flashcard": solo le carte sfasate rispetto al set
     chiuse: new Set(),   // carte con i rami chiusi
 
     mostra(el, params) {
@@ -132,7 +133,8 @@ Viste.set = {
         // ---- Revisioni: solo gli argomenti di questo set e dei suoi sotto-set, "Per set" o "Per flashcard" ----
         const boxRevisioni = $('[data-revisioni-set]', el);
         const argomentiDelSet = () => Dati.argomentiDiSet(s.id, { conSottoSet: true });
-        const vociCarte = () => Revisioni.carteDevianti({ setIds: [s.id, ...Dati.discendentiSet(s.id)] });
+        const setIds = [s.id, ...Dati.discendentiSet(s.id)];
+        const vociCarte = () => { const tutte = Revisioni.tutteLeVoci({ setIds }); return this.soloSfasate ? tutte.filter(Revisioni.sfasata) : tutte; };
         const contoRevisioni = () => {
             const c = Revisioni.conteggi(argomentiDelSet());
             const n = c.scaduto + c.oggi;
@@ -140,8 +142,8 @@ Viste.set = {
         };
         const disegnaRevisioni = (fuoco = null) => {
             const lista = argomentiDelSet();
-            const voci = vociCarte();
-            const daFareCarte = voci.filter(Revisioni.cartaDaRipassare).length;
+            const sfasate = Revisioni.carteDevianti({ setIds });
+            const daFareCarte = sfasate.filter(Revisioni.cartaDaRipassare).length;
             const perCarte = this.pannelloRevisioni === 'carte' && lista.length > 0;
             boxRevisioni.innerHTML = `
                 <section class="sezione sezione-revisioni${Ui.classeApribile('revisioni')}">
@@ -149,7 +151,7 @@ Viste.set = {
                         ${Ui.titoloApribile('revisioni', `Revisioni ${lista.length ? `<span class="conteggio">${lista.length}</span>` : ''}<span data-conto-revisioni>${contoRevisioni()}</span>`)}
                         <div class="azioni-riga">
                             <a class="btn btn-fantasma btn-piccolo" href="#/revisioni">${ico('calendario-spunta')}Tutte le revisioni</a>
-                            ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set">${ico('fulmine')}Ripassa quelle da fare (${daFareCarte})</button>` : ''}
+                            ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set" title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareCarte})</button>` : ''}
                             ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
                         </div>
                     </div>
@@ -158,7 +160,11 @@ Viste.set = {
                         <div class="pannelli-rev pannelli-rev-set" role="tablist" aria-label="Pannello delle revisioni">
                             <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('cartella')}Per set</button>
                             <button type="button" role="tab" class="pannello-rev${perCarte ? ' attivo' : ''}" data-pannello-rev="carte" aria-selected="${perCarte}">
-                                ${ico('carte')}Per flashcard${voci.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}">${daFareCarte || voci.length}</span>` : ''}</button>
+                                ${ico('carte')}Per flashcard${sfasate.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}" title="Flashcard sfasate${daFareCarte ? ' da ripassare' : ''}">${daFareCarte || sfasate.length}</span>` : ''}</button>
+                        </div>` : ''}
+                        ${perCarte ? `<div class="segmentato piccolo filtro-carte-set" role="group" aria-label="Quali flashcard">
+                            <button type="button" class="${this.soloSfasate ? '' : 'attivo'}" data-filtro-carte="tutte">${ico('carte')}Tutte</button>
+                            <button type="button" class="${this.soloSfasate ? 'attivo' : ''}" data-filtro-carte="sfasate">${ico('sincronizza')}Solo sfasate${sfasate.length ? ` (${sfasate.length})` : ''}</button>
                         </div>` : ''}
                         <div data-tabella-revisioni></div>
                     </div>
@@ -171,12 +177,22 @@ Viste.set = {
                 disegnaRevisioni();
             });
             const ripassaCarte = $('[data-azione="ripassa-carte-set"]', boxRevisioni);
-            if (ripassaCarte) ripassaCarte.addEventListener('click', () => Revisioni.avviaRipassoCarte(vociCarte().filter(Revisioni.cartaDaRipassare)));
+            if (ripassaCarte) ripassaCarte.addEventListener('click', () => Revisioni.avviaRipassoCarte(Revisioni.carteDevianti({ setIds }).filter(Revisioni.cartaDaRipassare)));
+            const filtro = $('.filtro-carte-set', boxRevisioni);
+            if (filtro) filtro.addEventListener('click', e => {
+                const b = e.target.closest('[data-filtro-carte]');
+                if (!b || (b.dataset.filtroCarte === 'sfasate') === this.soloSfasate) return;
+                this.soloSfasate = b.dataset.filtroCarte === 'sfasate';
+                disegnaRevisioni();
+            });
             if (perCarte) {
                 Revisioni.montaCarte($('[data-tabella-revisioni]', boxRevisioni), {
                     voci: vociCarte,
+                    perUrgenza: this.soloSfasate,
                     dopo: () => disegnaRevisioni(),
-                    vuoto: `<p class="nota nota-centrata">Tutte le flashcard di questo set vanno al passo con il set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo l'ultimo ripasso e mai valutate e quelle ripassate per conto loro.</p>`,
+                    vuoto: this.soloSfasate
+                        ? `<p class="nota nota-centrata">Tutte le flashcard di questo set vanno al passo con il set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo l'ultimo ripasso e mai valutate e quelle ripassate o cambiate per conto loro.</p>`
+                        : `<p class="nota nota-centrata">Il set non ha ancora flashcard.</p>`,
                 });
                 return;
             }

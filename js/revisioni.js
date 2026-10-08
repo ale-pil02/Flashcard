@@ -4,7 +4,8 @@
 //   Prossima revisione = Ultimo ripasso + Intervallo
 //   Alert = giorni tra la prossima revisione e oggi: < 0 "Da ripassare (N giorni)", 0 "Ripassare oggi", > 0 "Attendi N giorni"
 // A ogni ripasso l'intervallo segue la sequenza delle impostazioni (Fibonacci: 1, 2, 3, 5, 8… giorni) e si adatta se
-// ripassi in anticipo, in ritardo o lo stesso giorno (js/srs.js, dopoRipasso). N° Rep conta i ripassi e basta.
+// ripassi in anticipo, in ritardo o lo stesso giorno (js/srs.js, dopoRipasso). Cambiando il N° Rep a mano l'intervallo
+// torna quello della sequenza per quella rep.
 // Lo Stato (Ottimo, Buono, Ok, Scarso, Incompleto) non cambia gli intervalli. N° Rep, ultimo ripasso, intervallo e
 // prossima revisione si cambiano anche a mano nella tabella.
 //
@@ -371,29 +372,40 @@ const Revisioni = (() => {
 
     // ---- Flashcard che vanno per conto loro --------------------------------------------
 
-    // Una carta di un argomento già ripassato almeno una volta che non è mai stata valutata o che ha la prossima
-    // revisione in un giorno diverso da quella dell'argomento: non va al passo con l'argomento. Torna con lui quando
-    // la ripassi Buono o Perfetto in un ripasso completo del set, o subito con "Riadegua al set".
-    // Ogni carta diventa { carta, argomento, ripetizioni, intervallo, ultimoRipasso } per le formule delle righe.
-    // materiaId o setIds limitano gli argomenti a una materia o ad alcuni set
-    function carteDevianti({ materiaId = null, setIds = null } = {}) {
-        const out = [];
-        const dentro = setIds ? new Set(setIds) : null;
-        Dati.tuttiGliArgomenti().filter(a => automatico(a) && a.ultimoRipasso && (a.ripetizioni || 0) > 0)
-            .filter(a => { const s = Dati.set(a.setId); return s && (!materiaId || s.materiaId === materiaId) && (!dentro || dentro.has(a.setId)); })
-            .forEach(a => {
-                const delSet = chiaveGiorno(prossima(a));
-                (carteDi(a) || []).forEach(c => {
-                    if (argomentoDi(c) !== a) return;
-                    const p = Srs.prossima(c);
-                    const s = c.srs || {};
-                    if ((Srs.valutazione(c) == null && !s.allineata) || !p || chiaveGiorno(p) !== delSet) {
-                        out.push({ carta: c, argomento: a, ripetizioni: s.rep || 0, intervallo: s.giorno ? Srs.intervalloDi(s.intervallo, s.rep) : null, ultimoRipasso: s.giorno || null });
-                    }
-                });
-            });
-        return out;
+    // Come sta una carta rispetto al suo argomento (il set, già ripassato almeno una volta):
+    // { tipo, giorni, testo } con tipo 'senza-set' (set mai ripassato) | 'passo' (stessa prossima revisione) |
+    // 'mai' (mai valutata) | 'scarso' (da rifare) | 'prima' | 'dopo' (la sua prossima revisione cade N giorni prima o dopo)
+    function sfasatura(c, a = argomentoDi(c)) {
+        if (!a) return { tipo: 'senza-set', giorni: 0, testo: 'Set mai ripassato' };
+        const s = c.srs || {};
+        if (Srs.valutazione(c) == null && !s.allineata) return { tipo: 'mai', giorni: 0, testo: 'Mai valutata' };
+        const p = Srs.prossima(c);
+        const g = p ? giorniTra(prossima(a), p) : 0;
+        const quanto = g ? `${plurale(Math.abs(g), 'giorno', 'giorni')} ${g < 0 ? 'prima del' : 'dopo il'} set` : '';
+        if (s.ultimaValutazione === Srs.SCARSO) return { tipo: 'scarso', giorni: Math.abs(g), testo: `Scarso: da rifare${quanto ? ` · ${quanto}` : ''}` };
+        if (!g) return { tipo: 'passo', giorni: 0, testo: 'Al passo con il set' };
+        return { tipo: g < 0 ? 'prima' : 'dopo', giorni: Math.abs(g), testo: `${quanto}${s.ultimaValutazione === Srs.OK ? ' (Ok)' : ''}` };
     }
+
+    // Una voce del pannello delle flashcard: { carta, argomento, ripetizioni, intervallo, ultimoRipasso, sfasatura }
+    function voceCarta(c) {
+        const a = argomentoDi(c);
+        const s = c.srs || {};
+        return { carta: c, argomento: a, ripetizioni: s.rep || 0, intervallo: s.giorno ? Srs.intervalloDi(s.intervallo, s.rep) : null, ultimoRipasso: s.giorno || null, sfasatura: sfasatura(c, a) };
+    }
+
+    // Sfasata: non va al passo con il set già ripassato (mai valutata, Scarso, prossima revisione in un altro giorno)
+    function sfasata(v) { return !['passo', 'senza-set'].includes(v.sfasatura.tipo); }
+
+    // Tutte le flashcard (di una materia, di alcuni set o di tutti), nell'ordine dei set e dell'albero delle carte
+    function tutteLeVoci({ materiaId = null, setIds = null } = {}) {
+        const carte = setIds ? Dati.carteDiSetMultipli(setIds) : materiaId ? Dati.carteDiMateria(materiaId) : Dati.tutteLeCarte();
+        return carte.map(voceCarta);
+    }
+
+    // Le carte dei set già ripassati che non vanno al passo con il loro set. Tornano con lui quando le ripassi Buono o
+    // Perfetto in un ripasso completo del set, o subito con "Riadegua al set"
+    function carteDevianti(ambito = {}) { return tutteLeVoci(ambito).filter(sfasata); }
 
     function avviaRipassoCarte(voci, titolo) {
         if (!voci.length) return;
@@ -971,6 +983,7 @@ const Revisioni = (() => {
         { col: 'carta', testo: 'Flashcard', icona: 'carte', larghezza: 300 },
         { col: 'set', testo: 'Set', icona: 'cartella', larghezza: 160 },
         { col: 'stato', testo: 'Valutazione', icona: 'obiettivo', larghezza: 122 },
+        { col: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 176 },
         { col: 'num', testo: 'N° Rep', icona: 'elenco-num', larghezza: 64 },
         { col: 'data', testo: 'Ultimo ripasso', icona: 'calendario', larghezza: 134 },
         { col: 'intervallo', testo: 'Intervallo', icona: 'ruota', larghezza: 92 },
@@ -1008,6 +1021,7 @@ const Revisioni = (() => {
                             ${Srs.VALUTAZIONI.map(x => `<option value="${x.valore}" ${val === x.valore ? 'selected' : ''}>${x.nome}</option>`).join('')}
                         </select></label>
                 </td>
+                <td class="col-sfasatura"><span class="sfasatura sfasatura-${v.sfasatura.tipo}">${esc(v.sfasatura.testo)}</span></td>
                 <td class="col-num"><input class="campo-rev cella-num" type="number" min="0" step="1" data-carta-campo="rep" value="${v.ripetizioni}" aria-label="N° Rep"></td>
                 <td class="col-data"><label class="sovrapposto"><span class="testo-sovrapposto">${v.ultimoRipasso ? dataLunga(v.ultimoRipasso) : '<span class="tenue">—</span>'}</span>
                     <input class="controllo-sovrapposto" type="date" data-carta-campo="giorno" value="${v.ultimoRipasso || ''}" max="${chiaveGiorno()}" aria-label="Ultimo ripasso"></label></td>
@@ -1017,17 +1031,18 @@ const Revisioni = (() => {
                 <td class="col-azioni">
                     <button type="button" class="btn-ripassato con-studio${v.ultimoRipasso === chiaveGiorno() ? ' fatto' : ''}" data-carta-ripassa
                         title="Ripassa questa flashcard" aria-label="Ripassa">${ico(v.ultimoRipasso === chiaveGiorno() ? 'spunta' : 'fulmine')}</button>
-                    <button type="button" class="btn btn-fantasma btn-piccolo btn-adegua" data-carta-adegua
-                        title="Riadeguamento al set: prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce da questo elenco; valutazione e N° Rep restano">${ico('sincronizza')}Riadegua al set</button>
+                    ${v.argomento && sfasata(v) ? `<button type="button" class="btn btn-fantasma btn-piccolo btn-adegua" data-carta-adegua
+                        title="Riadeguamento al set: prende ultimo ripasso e intervallo del set (la stessa prossima revisione) e torna al passo; valutazione e N° Rep restano">${ico('sincronizza')}Riadegua al set</button>` : ''}
                 </td>
             </tr>`;
     }
 
-    // opzioni: { voci: () => [voce di carteDevianti], vuoto: html quando non ci sono righe, dopo: () => void }
+    // opzioni: { voci: () => [voce di tutteLeVoci o carteDevianti], perUrgenza: le più urgenti prima (se no nell'ordine
+    // dato), vuoto: html quando non ci sono righe, dopo: () => void }
     function montaCarte(contenitore, opzioni) {
-        const op = { vuoto: '', dopo: () => {}, ...opzioni };
+        const op = { vuoto: '', dopo: () => {}, perUrgenza: true, ...opzioni };
         const larghezza = COLONNE_CARTE.reduce((n, c) => n + c.larghezza, 0);
-        const voci = () => [...op.voci()].sort(perUrgenzaCarte);
+        const voci = () => (op.perUrgenza ? [...op.voci()].sort(perUrgenzaCarte) : op.voci());
 
         const disegna = () => {
             const lista = voci();
@@ -1105,7 +1120,7 @@ const Revisioni = (() => {
         STATI, intervallo, prossima, giorniMancanti, avviso, daRipassare, perUrgenza, conteggi, quanteDaRipassare,
         etichettaAvviso, dataBreve, dataLunga, nomeSet, monta, formNuovo, unoPerOgniSet, ripristinaLarghezze,
         carteDelSet, statoDaCarte, statoDi, rigaDelSet, registraSessione, segnaComunque, descriviEsito,
-        avviaRipasso, carteDevianti, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
+        avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
         avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, fuoriGiorno,
     };
 })();
