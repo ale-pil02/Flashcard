@@ -103,6 +103,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         ${pulsante('p-nota', ico('nota'), 'Nota, link e data', 'data-p="nota"')}
                         ${pulsante('p-struttura', ico('elenco'), 'Struttura (elenco dei nodi)', 'data-p="struttura"')}
                     </div>
+                    ${pulsante('flashcard', ico('carte'), 'Flashcard dai nodi scelti: le scrive l\'IA, con tag e rientri come la localizzazione')}
                     ${pulsante('assistente', ico('scintille'), "Assistente IA: chiedigli di modificare la mappa")}
                     ${pulsante('altro', ico('altro'), 'Altre azioni')}
                 </div>
@@ -428,14 +429,21 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 b.ext.sx = Math.min(b.ext.sx, x); b.ext.dx = Math.max(b.ext.dx, x + w);
                 return { e, ee, x, y, w, h };
             });
-            // Le immagini libere allargano l'ingombro come le etichette: la disposizione ne tiene conto
+            // Le immagini libere allargano l'ingombro come le etichette: la disposizione ne tiene conto. Quelle fluttuanti
+            // no: seguono il nodo ma non spostano gli altri nodi; contano solo per i limiti della mappa (extTutto)
+            b.extTutto = { ...b.ext };
+            const allarga = (e, x, y, w, h) => {
+                e.alto = Math.min(e.alto, y); e.basso = Math.max(e.basso, y + h);
+                e.sx = Math.min(e.sx, x); e.dx = Math.max(e.dx, x + w);
+            };
             b.fig = (b.n.figure || []).map(f => {
                 const fe = elFigure.get(b.id + ':' + f.id);
                 if (!fe) return null;
                 const w = limita(+f.larghezza || 160, 24, 1600), h = w * (+f.rapporto || 0.75);
                 const x = b.w / 2 + (+f.dx || 0) - w / 2, y = b.h / 2 + (+f.dy || 0) - h / 2;
-                b.ext.alto = Math.min(b.ext.alto, y); b.ext.basso = Math.max(b.ext.basso, y + h);
-                b.ext.sx = Math.min(b.ext.sx, x); b.ext.dx = Math.max(b.ext.dx, x + w);
+                if (!f.fluttuante) allarga(b.ext, x, y, w, h);
+                allarga(b.extTutto, x, y, w, h);
+                fe.classList.toggle('fluttuante', !!f.fluttuante);
                 return { f, fe, x, y, w, h };
             }).filter(Boolean);
         });
@@ -822,6 +830,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 <span class="pop-titolo">${st.sel.size} nodi</span>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="figlio" title="Un nodo nuovo, figlio di tutti i nodi scelti">${ico('piu')}Figlio comune</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="graffa" ${fratelli ? 'title="Una graffa raccoglie i nodi scelti e li porta a un nodo nuovo"' : 'disabled title="La graffa raccoglie nodi con lo stesso genitore"'}><b class="segno-graffa">}</b>Graffa</button>
+                <button type="button" class="btn btn-secondario btn-piccolo" data-multi="flashcard" title="Le flashcard di questi nodi, scritte dall'IA">${ico('carte')}Flashcard</button>
             </div>`);
         }
         if (st.rel) {
@@ -858,8 +867,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     function popFigura(p, sopra = false) {
+        const f = figura(st.fig) || {};
         return `<div class="mappa-pop${sopra ? ' sopra' : ''}" data-pop="fig" style="left:${p.x}px;top:${p.y}px">
             <div class="mappa-pop-riga">
+                <button type="button" data-fig-az="fluttuante" class="${f.fluttuante ? 'attivo' : ''}" aria-pressed="${!!f.fluttuante}"
+                    title="${f.fluttuante ? 'Fluttuante: segue il nodo ma non sposta i nodi. Clic per farle occupare spazio' : 'Occupa spazio: i nodi le fanno posto. Clic per renderla fluttuante (segue il nodo, non sposta i nodi)'}">${ico('collega')}</button>
                 <button type="button" data-fig-az="ingrandisci" title="Guarda l'immagine ingrandita">${ico('occhio')}</button>
                 <button type="button" data-fig-az="piu" title="Più grande">+</button>
                 <button type="button" data-fig-az="meno" title="Più piccola">−</button>
@@ -1371,10 +1383,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     // Immagine libera accanto al nodo: a destra (o dove la si lascia, in coordinate della mappa)
-    async function scegliFigura(id = st.attivo) {
+    // fluttuante: l'immagine segue il nodo ma non occupa spazio nella disposizione (spostarla non sposta i nodi)
+    async function scegliFigura(id = st.attivo, { fluttuante = false } = {}) {
         if (!id) { Ui.toast('Seleziona prima un nodo'); return; }
         const file = await scegliFile('image/*');
-        if (file) await mettiFigura(id, file);
+        if (file) await mettiFigura(id, file, null, { fluttuante });
     }
 
     async function leggiImmagine(file) {
@@ -1383,7 +1396,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         return { src, misure };
     }
 
-    async function mettiFigura(id, file, punto = null) {
+    async function mettiFigura(id, file, punto = null, { fluttuante = false } = {}) {
         const n = m.nodi[id];
         if (!n) return;
         try {
@@ -1392,7 +1405,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             m.immagini[k] = src;
             const larghezza = Math.min(240, misure.w || 160);
             const rapporto = misure.w ? misure.h / misure.w : 0.75;
-            const f = { id: uid(), img: k, larghezza, rapporto, ...posizioneFigura(id, larghezza, larghezza * rapporto, punto) };
+            const f = { id: uid(), img: k, larghezza, rapporto, ...posizioneFigura(id, larghezza, larghezza * rapporto, punto), ...(fluttuante ? { fluttuante: true } : {}) };
             modifica(() => { n.figure = [...(n.figure || []), f]; });
             selezionaFigura(id, f.id);
         } catch (e) {
@@ -1409,6 +1422,14 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (punto) return { dx: punto.x - c.x, dy: punto.y - c.y };
         const cima = Math.min(0, ...(b.et || []).map(x => x.y), ...(b.fig || []).filter(x => x.f.id !== esclusa).map(x => x.y));
         return { dx: 0, dy: cima - b.h / 2 - 12 - h / 2 };
+    }
+
+    // Fluttuante ↔ occupa spazio: l'immagine resta dov'è rispetto al suo nodo
+    function alternaFluttuante(ref = st.fig) {
+        const f = figura(ref);
+        if (!f) return;
+        modifica(() => { if (f.fluttuante) delete f.fluttuante; else f.fluttuante = true; });
+        Ui.toast(f.fluttuante ? 'Fluttuante: segue il nodo ma non sposta i nodi' : 'Ora occupa spazio: i nodi le fanno posto', 'successo', 2400);
     }
 
     function eliminaFigura(ref = st.fig) {
@@ -1459,7 +1480,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const id = st.attivo;
         if (!id) { Ui.toast('Seleziona prima un nodo'); return; }
         Ui.menu(ancora, [
-            { testo: 'Accanto al nodo (la sposti e ridimensioni)', icona: 'immagine', clic: () => scegliFigura(id) },
+            { testo: 'Accanto al nodo (occupa spazio: i nodi le fanno posto)', icona: 'immagine', clic: () => scegliFigura(id) },
+            { testo: 'Fluttuante, agganciata al nodo (segue il nodo, non sposta i nodi)', icona: 'collega', clic: () => scegliFigura(id, { fluttuante: true }) },
             { testo: 'Dentro il nodo', icona: 'immagine', clic: () => scegliImmagine(id) },
         ]);
     }
@@ -2021,9 +2043,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             </section>
             <section class="pannello-sezione">
                 <h3>Immagini accanto al nodo</h3>
-                <p class="pannello-nota">${(n.figure || []).length ? `${plurale(n.figure.length, 'immagine attaccata', 'immagini attaccate')} al nodo: si muovono con lui. Trascinala per spostarla, tira il suo angolo per cambiarne la grandezza.`
+                <p class="pannello-nota">${(n.figure || []).length ? `${plurale(n.figure.length, 'immagine attaccata', 'immagini attaccate')} al nodo: si muovono con lui. Trascinala per spostarla, tira il suo angolo per cambiarne la grandezza. Con ${ico('collega')} diventa fluttuante: segue il nodo ma spostandola non sposti i nodi.`
                     : 'Un\'immagine fuori dal nodo, attaccata a lui: la metti dove vuoi e la ridimensioni. Puoi anche trascinare un file sulla mappa, dove la vuoi, con il nodo selezionato.'}</p>
-                <button type="button" class="btn btn-secondario btn-piccolo" data-fig-aggiungi>${ico('immagine')}Aggiungi un'immagine accanto</button>
+                <div class="azioni-riga">
+                    <button type="button" class="btn btn-secondario btn-piccolo" data-fig-aggiungi="accanto" title="Occupa spazio: i nodi le fanno posto">${ico('immagine')}Immagine accanto</button>
+                    <button type="button" class="btn btn-secondario btn-piccolo" data-fig-aggiungi="fluttuante" title="Segue il nodo, ma spostandola non sposti i nodi">${ico('collega')}Immagine fluttuante</button>
+                </div>
             </section>
             <section class="pannello-sezione">
                 <h3>Immagine dentro il nodo</h3>
@@ -2065,7 +2090,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         Ui.menu(ancora, [
             multipla && { testo: 'Figlio comune dei nodi scelti', icona: 'piu', clic: () => figlioComune(false) },
             multipla && sonoFratelli([...st.sel]) && { testo: 'Graffa sui nodi scelti', icona: 'ramo', clic: () => figlioComune(true) },
-            multipla && '-',
+            { testo: multipla ? 'Flashcard dei nodi scelti (IA)' : 'Flashcard da questo nodo (IA)', icona: 'carte', clic: () => flashcardDaiNodi(multipla ? [...st.sel] : [id]) },
+            '-',
             { testo: 'Nuovo nodo figlio', icona: 'piu', clic: () => aggiungiFiglio(id) },
             !radice && n.genitore && { testo: 'Nuovo nodo fratello', icona: 'ramo', clic: () => aggiungiFratello(id) },
             { testo: 'Aggiungi etichetta', icona: 'testo-t', clic: () => aggiungiEtichetta(id) },
@@ -2113,6 +2139,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 const posto = posizioneFigura(ref.nodo, f.larghezza, f.larghezza * (f.rapporto || 0.75), null, f.id);
                 modifica(() => { Object.assign(f, posto); });
             } },
+            { testo: f.fluttuante ? 'Falle occupare spazio (i nodi le fanno posto)' : 'Rendila fluttuante (segue il nodo, non sposta i nodi)', icona: 'collega', clic: () => alternaFluttuante(ref) },
             { testo: 'Mettila dentro il nodo', icona: 'immagine', clic: () => figuraDentro(ref) },
             '-',
             { testo: 'Elimina l\'immagine', icona: 'cestino', pericolo: true, clic: () => eliminaFigura(ref) },
@@ -2128,6 +2155,55 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             { testo: 'Adatta alla finestra', icona: 'adatta', clic: () => adatta() },
             { testo: 'Seleziona tutto', icona: 'seleziona', clic: () => { st.sel = new Set(geo.keys()); st.attivo = st.focus || m.radice; aggiornaSelezione(); aggiornaPannello(); } },
         ]);
+    }
+
+    // ---- Flashcard dai nodi scelti -----------------------------------------------------------------
+    // L'app prepara il piano della localizzazione (js/localizzazione.js) su tutta la mappa e tiene solo le carte dei nodi
+    // scelti (con o senza i rami sotto): tag, risposte e rientri sono quelli della localizzazione, e le carte nascono
+    // collegate ai loro nodi. Le domande le scrive l'assistente IA, che poi crea le carte nel set (si annulla dalla chat)
+    function flashcardDaiNodi(ids = [...st.sel]) {
+        ids = ids.filter(id => m.nodi[id]);
+        if (!ids.length) { Ui.toast('Seleziona prima uno o più nodi (Maiusc o Ctrl + clic, oppure Maiusc + trascina)', 'info', 5000); return; }
+        if (!Dati.tuttiSet().length) { Ui.toast('Prima crea un set in cui mettere le flashcard', 'errore', 5000); return; }
+        const nomi = ids.map(id => Mappe.testoSemplice(m.nodi[id].testo) || '(senza testo)');
+        let piano = null;
+        const prepara = el => {
+            const setId = $('[name=set]', el).value;
+            const conRami = $('[name=rami]', el).checked;
+            const salta = $('[name=salta]', el).checked;
+            const box = $('[data-conto-flashcard]', el);
+            try {
+                piano = Localizzazione.preparaPiano(JSON.parse(JSON.stringify(Materiali.alberoDaMappa(m))), { fonte: m.nome, mappaId: m.id, soloNodi: ids, conRami, setId, saltaEsistenti: salta });
+                const n = piano.carte.length;
+                const saltate = piano.solo_nodi_scelti ? piano.solo_nodi_scelti.carte_saltate_perche_gia_fatte : 0;
+                box.innerHTML = n ? `L'IA scriverà <b>${plurale(n, 'flashcard', 'flashcard')}</b>${saltate ? `; ${plurale(saltate, 'nodo ha', 'nodi hanno')} già la sua nel set` : ''}.`
+                    : saltate ? `Tutti i nodi scelti hanno già la loro flashcard in questo set.` : 'Nessuna flashcard da scrivere per questi nodi.';
+                $('.modale-piede .btn-primario', el).disabled = !n;
+            } catch (e) { piano = null; box.textContent = e.message; $('.modale-piede .btn-primario', el).disabled = true; }
+        };
+        Ui.modale({
+            titolo: 'Flashcard dai nodi scelti', classe: 'modale-piccola',
+            corpo: `
+                <p>${ids.length === 1 ? 'Nodo scelto' : `${ids.length} nodi scelti`}: <b>${esc(nomi.slice(0, 4).join(' · '))}</b>${nomi.length > 4 ? ` e altri ${nomi.length - 4}` : ''}.</p>
+                <p class="nota">Le domande le scrive l'assistente IA. Tag (generale, sottoramo, concetto N, dettaglio), risposte e rientri sono quelli
+                    della localizzazione, e ogni carta resta collegata al suo nodo: nello studio la risposta mostra quella parte di mappa.</p>
+                <label class="campo"><span class="etichetta">Set</span><select name="set">${Ui.opzioniSet(m.setId)}</select></label>
+                <label class="spunta-riga"><input type="checkbox" name="rami" checked><span>Anche i rami sotto ai nodi scelti</span></label>
+                <label class="spunta-riga"><input type="checkbox" name="salta" checked><span>Salta i nodi che hanno già una flashcard in questo set</span></label>
+                <p class="conteggio-sessione" data-conto-flashcard></p>`,
+            alApri: el => { prepara(el); el.addEventListener('change', () => prepara(el)); },
+            azioni: [
+                { testo: 'Annulla', classe: 'btn-fantasma' },
+                { testo: `${ico('scintille')}Scrivile con l'IA`, classe: 'btn-primario', principale: true, clic: md => {
+                    if (!piano || !piano.carte.length) return;
+                    const setId = $('[name=set]', md.el).value;
+                    md.chiudi();
+                    Assistente.apri({ setId });
+                    Assistente.invia(`/localizzazione Scrivi le flashcard di localizzazione ${ids.length === 1 ? `del nodo «${nomi[0]}»` : `dei ${ids.length} nodi scelti`} della mappa «${m.nome}» e mettile nel set «${Dati.set(setId).nome}» (id ${setId}). Il piano è già pronto (piano_id ${piano.id}, ${plurale(piano.carte.length, 'carta', 'carte')}): non rifarlo, scrivi le domande e crea le carte.`,
+                        { dettagli: `[Piano già preparato dall'app]\n${JSON.stringify(Localizzazione.pianoPerIA(piano))}`, etichetta: `Piano di ${plurale(piano.carte.length, 'carta', 'carte')} dai nodi della mappa` });
+                } },
+            ],
+        });
     }
 
     function menuAltro(ancora) {
@@ -2829,6 +2905,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 'cerca-prec': () => vaiATrovato(-1), 'cerca-succ': () => vaiATrovato(1), 'cerca-chiudi': chiudiRicerca,
                 altro: () => menuAltro(a), 'chiudi-pannello': () => apriPannello(null),
                 assistente: () => Assistente.alterna(),
+                flashcard: () => flashcardDaiNodi(),
                 panoramica: spiegaPanoramica,
             };
             if (a.dataset.p) apriPannello(a.dataset.p);
@@ -2935,8 +3012,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             scegliImmagine();
         } else if (t.closest('[data-img-fuori]')) {
             immagineFuori();
-        } else if (t.closest('[data-fig-aggiungi]')) {
-            scegliFigura();
+        } else if ((x = t.closest('[data-fig-aggiungi]'))) {
+            scegliFigura(st.attivo, { fluttuante: x.dataset.figAggiungi === 'fluttuante' });
         }
     }
 
@@ -3009,7 +3086,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const t = e.target;
         let x;
         if ((x = t.closest('[data-disp-nodo]')) && st.popDisp) { scegliDisposizione(st.popDisp, x.dataset.dispNodo); return; }
-        if ((x = t.closest('[data-multi]'))) { figlioComune(x.dataset.multi === 'graffa'); return; }
+        if ((x = t.closest('[data-multi]'))) { if (x.dataset.multi === 'flashcard') flashcardDaiNodi(); else figlioComune(x.dataset.multi === 'graffa'); return; }
         const r = m.relazioni.find(q => q.id === st.rel);
         if (r && (x = t.closest('[data-rel-az]'))) {
             const az = x.dataset.relAz;
@@ -3032,6 +3109,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             if (!f) return;
             const az = x.dataset.figAz;
             if (az === 'elimina') eliminaFigura(ref);
+            else if (az === 'fluttuante') alternaFluttuante(ref);
             else if (az === 'dentro') figuraDentro(ref);
             else if (az === 'ingrandisci') Ricco.ingrandisci(m.immagini[f.img]);
             else if (az === 'piu' || az === 'meno') scaleFigura(az === 'piu' ? 1.25 : 0.8, ref);

@@ -14,7 +14,11 @@ Dopo un aggiornamento dell'app basta ricaricare la pagina.
 > **Impostazioni → Backup → Esporta**.
 
 Per provarla senza toccare i tuoi dati: **Impostazioni → Dati di prova → Carica**
-(si tolgono con **Rimuovi**, che lascia intatto il resto).
+(si tolgono con **Rimuovi**, che lascia intatto il resto). Ogni set di prova ha uno scenario delle revisioni (mai
+ripassato, puntuale oggi, in ritardo, in anticipo, già ripassato oggi, in attesa) con lo storico coerente, e ci sono
+flashcard Ok, Scarso, aggiunte dopo, ripassate per conto loro e collegate alla mappa. Dopo il caricamento l'app propone
+un **tutorial interattivo** che gira nelle pagine vere usando proprio quegli scenari (`js/tour.js`; si riapre da
+Impostazioni → Dati di prova → Tutorial).
 
 ## Cosa c'è
 
@@ -30,7 +34,7 @@ Per provarla senza toccare i tuoi dati: **Impostazioni → Dati di prova → Car
 | **Editor** | Domanda, risposta, fonte della risposta, parte della mappa, domanda madre, suggerimento, spiegazione, tag, immagini |
 | **Statistiche** | Carte di oggi, tempo di studio, grafico giornaliero, calendario, avanzamento per materia |
 | **Piano di studio** | Date degli esami con conto alla rovescia, collegate alle materie |
-| **Impostazioni** | Nome, carte per sessione, ordine, studio a cascata, carte di dettaglio, assistente IA, tema, import, backup, dati di prova |
+| **Impostazioni** | Nome, carte per sessione (anche senza limite), ordine, studio a cascata, carte di dettaglio, sequenza delle revisioni, assistente IA, tema, import, backup, dati di prova e tutorial |
 | **Materiali** | In ogni set: PDF, slide, mappe mentali, Word, PowerPoint, immagini, testi e note, anche da una cartella o da file collegati (Drive) |
 | **Assistente IA** | Gemini: fa le operazioni dell'app, risponde sui materiali, crea flashcard di localizzazione |
 | **Annulla** | Ogni messaggio dell'assistente e ogni azione su più carte si annulla (e si ripristina) |
@@ -164,6 +168,12 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   *concetto N* segue l'albero delle carte, non la profondità del nodo nella mappa. Quando un sottoramo ha un
   solo figlio i due diventano una carta sola, e sotto di lei ci sono comunque i *concetto 1* (prima diventavano
   *concetto 2*; le carte già fatte sono state corrette una volta all'avvio, annullabile da Modifiche recenti).
+- **Flashcard dai nodi di una mappa**: nell'editor della mappa scegli uno o più nodi e premi il pulsante delle carte
+  nella barra (o *Flashcard* nella finestrella dei nodi scelti, o il menu ⋯ del nodo). Scegli il set, se tenere anche i
+  rami sotto ai nodi e se saltare i nodi che nel set hanno già una carta: l'app prepara il piano della localizzazione
+  su tutta la mappa (così tag, risposte e madri restano giusti) e tiene solo le carte di quei nodi; l'assistente scrive
+  le domande e crea le carte, collegate ai loro nodi. Una carta la cui madre resta fuori va sotto la carta che il set
+  ha già per quel nodo, quindi i rientri restano anche facendo la mappa a pezzi.
 
 Le istruzioni dell'assistente (carattere, regole per le flashcard, procedura della skill) sono in
 `js/ia/istruzioni.js`; gli strumenti che può usare in `js/ia/strumenti.js` (e per le mappe in `js/ia/strumenti-mappe.js`).
@@ -177,7 +187,7 @@ I set (e, a mano, anche altri argomenti: capitoli, schemi) si ripassano con lo s
 |---|---|
 | Argomento | Il nome (di solito il set, il capitolo o lo schema) |
 | Schema / fonte | Testo libero e i materiali collegati, da aprire con un clic (🔗 per collegarne o toglierne) |
-| N° Rep | Quante volte l'hai ripassato (solo un conteggio: cambiarlo a mano non sposta le date) |
+| N° Rep | Quante volte l'hai ripassato. Cambiandolo a mano l'intervallo torna quello della sequenza per quella rep (come in Notion) |
 | Ultimo ripasso | La data dell'ultimo ripasso |
 | Intervallo | Giorni dall'ultimo ripasso alla prossima revisione, aggiornato a ogni ripasso (vedi *Ripetizione spaziata*) |
 | Prossima revisione | Ultimo ripasso + intervallo; scegliendo la data a mano l'intervallo si adegua |
@@ -223,11 +233,13 @@ I ripassi si annullano dall'avviso, dal menu ⋯ della riga (*Annulla l'ultimo r
 nel menu c'è anche la cronologia dei ripassi.
 
 **Pannello «Per flashcard»** (nella sezione Revisioni e nella pagina di ogni set). Ogni carta ha la stessa ripetizione
-del set (vedi *Ripetizione spaziata*), con il suo N° Rep. Nel pannello ci sono le carte dei set già ripassati che non
-vanno al passo con il loro set (o argomento): mai ripassate (aggiunte dopo) o con la prossima revisione in un giorno
-diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro, cambiate a mano). Si modificano come le righe
-(valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione), ⚡ ripassa una carta, **Ripassa quelle da fare**
-le prende tutte. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
+del set (vedi *Ripetizione spaziata*), con il suo N° Rep. Il pannello mostra **tutte** le flashcard, nell'ordine dei set,
+con la colonna **Rispetto al set**: *Al passo con il set*, *Set mai ripassato*, *Mai valutata*, *Scarso: da rifare*,
+oppure *N giorni prima / dopo il set* (con *(Ok)* se è stata valutata Ok). **Solo sfasate** lascia le carte dei set già
+ripassati che non vanno al passo con il loro set (o argomento), le più urgenti prima: mai ripassate (aggiunte dopo) o
+con la prossima revisione in un giorno diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro,
+cambiate a mano). Si modificano come le righe (valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione),
+⚡ ripassa una carta, **Ripassa le sfasate da fare** le prende tutte. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
 quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
 prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
 valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
@@ -308,7 +320,9 @@ L'editor (rotta `#/mappa/<id>`):
   Con l'immagine scelta: Canc la elimina, doppio clic la ingrandisce; dalla sua barretta la rimetti sopra il
   nodo o la porti dentro (e quella dentro si porta fuori dal pannello Nota). Un file trascinato sopra un nodo
   va dentro il nodo; lasciato in un punto vuoto diventa un'immagine accanto al nodo selezionato, proprio lì.
-  Nel modello: `figure [{ id, img, larghezza, rapporto, dx, dy }]` sul nodo.
+  Un'immagine **fluttuante** (scelta dal pulsante 🖼, dal pannello Nota, o con 🔗 nella barretta di un'immagine che
+  c'è già) segue il suo nodo quando il nodo si sposta, ma non occupa spazio nella disposizione: spostandola non sposti
+  i nodi. Nel modello: `figure [{ id, img, larghezza, rapporto, dx, dy, fluttuante }]` sul nodo.
 - **Concentrati su questo ramo** (menu del nodo) mostra un solo sottoargomento; **Esporta il ramo come
   immagine** ne fa un PNG. Dal menu ⋯: PNG di tutta la mappa, OPML, copia come elenco rientrato.
 - **Assistente** (✨ nella barra): fa sulla mappa tutto quello che fai tu, vedi *Assistente IA*.
@@ -356,7 +370,8 @@ importate si studiano e si modificano.
 ## Ripetizione spaziata
 
 Un solo sistema, lo stesso per le flashcard e per le revisioni: **prossima revisione = ultimo ripasso + intervallo**.
-N° Rep conta i ripassi e basta.
+Nei ripassi l'intervallo dipende anche da quando ripassi (ritardi e anticipi), non solo dal N° Rep; cambiando il N° Rep
+a mano l'intervallo torna quello della sequenza per quella rep (rep 4 → 5 giorni, rep 5 → 8…).
 
 **Sequenza** (Impostazioni → Revisioni, predefinita Fibonacci **1, 2, 3, 5, 8, 13, 21**; c'è anche Raddoppio, o la
 scrivi tu): ripassando sempre il giorno previsto, dopo la rep 1 aspetti il primo numero, dopo la rep 2 il secondo e
@@ -380,8 +395,8 @@ Arrotondato ai giorni, minimo 1. Se poi torni puntuale, l'intervallo riprende a 
 - Valutazioni: **Scarso**, **Ok**, **Buono**, **Perfetto**.
 - **Buono** o **Perfetto**: N° Rep +1, ultimo ripasso = oggi, intervallo con la formula. La carta è imparata e nella
   sessione non torna più.
-- **Ok**: come sopra ma con metà crescita (r → 1 + (r − 1) / 2: da 8 giorni a 11 invece di 13), così la carta torna un
-  po' prima finché non le dai Buono o Perfetto. Nella sessione torna in fondo, per il set resta tra le carte «da
+- **Ok**: come sopra ma con metà crescita (r → 1 + (r − 1) / 2, arrotondato per difetto: da 8 giorni a 10 invece di 13;
+  da 2 a 2 invece di 3), così la carta torna sempre un po' prima finché non le dai Buono o Perfetto. Nella sessione torna in fondo, per il set resta tra le carte «da
   sistemare» e porta lo stato del set a Ok.
 - **Scarso**: N° Rep e ultimo ripasso restano com'erano, l'intervallo **torna indietro di un passo** nella sequenza (da
   8 a 5; con il Raddoppio si dimezza) e la carta è **da ripassare subito** (da oggi; i giorni dopo risulta in ritardo)
@@ -425,10 +440,11 @@ js/storia.js            modifiche annullabili (turni dell'assistente, azioni su 
 js/revisioni.js         revisioni: tabella modificabile, riga del set aggiornata dallo studio, stato dalle carte,
                         pannello delle flashcard per conto loro, avviso «conta o è una prova» all'avvio dello studio
 js/guida.js             guida a passi su flashcard e revisioni, con il simulatore della prossima data
+js/tour.js              tutorial interattivo nelle pagine vere, sui dati di prova
 js/selezione.js         selezione di più flashcard e azioni di gruppo
 js/ricco.js             editor di testo formattato e pulizia dell'HTML
 js/importa.js           import ed export (testo dell'app, Excel, CSV) e backup JSON (file dei materiali compresi)
-js/prova.js             dati di prova
+js/prova.js             dati di prova: un set per ogni scenario delle revisioni, con storico coerente
 js/localizzazione.js    la skill delle flashcard di localizzazione (piano e controlli)
 js/materiali.js         materiali dei set: lettura dei file, novità tra versioni, visualizzatore, sezione nel set
 js/cartelle.js          cartelle e file collegati ai set (Drive per desktop), ricontrollati ogni 5 secondi

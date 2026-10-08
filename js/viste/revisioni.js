@@ -1,6 +1,7 @@
 // Revisioni: la sezione "master" della spaced repetition (js/revisioni.js), come il database di Notion.
-// Due pannelli: "Per set" (gli argomenti, una riga per set aggiornata dallo studio) e "Per flashcard" (le carte che
-// vanno ripassate per conto loro, prima del loro set). Schede: tutte, una per materia, "Da ripassare".
+// Due pannelli: "Per set" (gli argomenti, una riga per set aggiornata dallo studio) e "Per flashcard" (tutte le carte e
+// come stanno rispetto al loro set; "Solo sfasate" lascia quelle che vanno per conto loro). Schede: tutte, una per
+// materia, "Da ripassare".
 // Qui si modifica tutto, anche il set di una riga; nella pagina di un set si vedono e si modificano solo gli
 // argomenti di quel set e dei suoi sotto-set.
 
@@ -9,6 +10,7 @@ Viste.revisioni = {
     titolo: 'Revisioni',
     scheda: 'tutte',     // 'tutte' | 'da-ripassare' | id di una materia
     pannello: 'set',     // 'set' | 'carte'
+    soloSfasate: false,  // pannello "Per flashcard": solo le carte sfasate rispetto al set
 
     mostra(el) {
         const ico = Ui.ico;
@@ -17,14 +19,27 @@ Viste.revisioni = {
         const materiaScheda = Dati.materia(this.scheda) ? this.scheda : null;
         const carte = this.pannello === 'carte';
         const tutti = Dati.tuttiGliArgomenti();
-        const devianti = Revisioni.carteDevianti();
-        const c = Revisioni.conteggi(carte ? devianti : tutti);
-        const daFare = c.scaduto + c.oggi;
+        const tutteCarte = carte ? Revisioni.tutteLeVoci() : [];
+        const devianti = carte ? tutteCarte.filter(Revisioni.sfasata) : Revisioni.carteDevianti();
         const daFareSet = tutti.filter(Revisioni.daRipassare).length;
         const daFareCarte = devianti.filter(Revisioni.cartaDaRipassare).length;
+        const soloSfasate = carte && this.soloSfasate;
 
+        // Le flashcard della scheda scelta: tutte o solo le sfasate; in "Da ripassare" le sfasate da fare
+        const vociCarte = () => {
+            if (this.scheda === 'da-ripassare') return Revisioni.carteDevianti().filter(Revisioni.cartaDaRipassare);
+            const lista = Revisioni.tutteLeVoci({ materiaId: materiaScheda });
+            return this.soloSfasate ? lista.filter(Revisioni.sfasata) : lista;
+        };
+        const mostrate = carte ? vociCarte() : null;
+        const c = Revisioni.conteggi(carte ? mostrate : tutti);
+        const daFare = carte ? devianti.filter(Revisioni.cartaDaRipassare).length : c.scaduto + c.oggi;
+        const sfasateMostrate = carte ? mostrate.filter(Revisioni.sfasata) : [];
+        const daFareMostrate = sfasateMostrate.filter(Revisioni.cartaDaRipassare);
+
+        const elencoCarte = soloSfasate ? devianti : tutteCarte;
         const conto = carte
-            ? { tutte: devianti.length, materia: id => devianti.filter(v => (Dati.set(v.carta.setId) || {}).materiaId === id).length }
+            ? { tutte: elencoCarte.length, materia: id => elencoCarte.filter(v => (Dati.set(v.carta.setId) || {}).materiaId === id).length }
             : { tutte: tutti.length, materia: id => Dati.argomentiDiMateria(id).length };
         const schede = [
             { id: 'tutte', testo: 'Tutte', conto: conto.tutte },
@@ -37,7 +52,7 @@ Viste.revisioni = {
                 <header class="pagina-testa">
                     <div>
                         <h1>Revisioni</h1>
-                        <p class="sottotitolo">${carte ? 'Flashcard che non vanno al passo con il loro set: mai valutate o con la prossima revisione in un altro giorno'
+                        <p class="sottotitolo">${carte ? 'Tutte le flashcard e come stanno rispetto al loro set. «Solo sfasate» lascia quelle che non vanno al passo: mai valutate, Scarso o con la prossima revisione in un altro giorno'
                             : `Ripasso degli argomenti a intervalli crescenti: ${Srs.anteprimaSequenza(6).join(', ')}… giorni (la sequenza si cambia nelle Impostazioni)`}</p>
                     </div>
                     <div class="azioni-testa">
@@ -54,13 +69,22 @@ Viste.revisioni = {
                         ${ico('carte')}Per flashcard${devianti.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}">${daFareCarte || devianti.length}</span>` : ''}</button>
                 </div>
 
-                ${(carte ? devianti.length : tutti.length) ? `
+                ${carte && this.scheda !== 'da-ripassare' && tutteCarte.length ? `
+                <div class="filtro-carte-rev">
+                    <div class="segmentato piccolo" role="group" aria-label="Quali flashcard">
+                        <button type="button" class="${soloSfasate ? '' : 'attivo'}" data-filtro-carte="tutte">${ico('carte')}Tutte</button>
+                        <button type="button" class="${soloSfasate ? 'attivo' : ''}" data-filtro-carte="sfasate">${ico('sincronizza')}Solo sfasate${devianti.length ? ` (${devianti.length})` : ''}</button>
+                    </div>
+                </div>` : ''}
+
+                ${(carte ? mostrate.length : tutti.length) ? `
                 <div class="riepilogo-rev">
                     <span class="avviso-rev avviso-scaduto"><i></i><b>${c.scaduto}</b> in ritardo</span>
                     <span class="avviso-rev avviso-oggi"><i></i><b>${c.oggi}</b> da fare oggi</span>
                     <span class="avviso-rev avviso-attesa"><i></i><b>${c.attesa}</b> in attesa</span>
-                    ${c.mai ? `<span class="avviso-rev avviso-mai"><i></i><b>${c.mai}</b> mai ripassati</span>` : ''}
-                    ${carte && daFare ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte">${ico('fulmine')}Ripassa quelle da fare</button>` : ''}
+                    ${c.mai ? `<span class="avviso-rev avviso-mai"><i></i><b>${c.mai}</b> ${carte ? 'mai ripassate' : 'mai ripassati'}</span>` : ''}
+                    ${carte && daFareMostrate.length ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte"
+                        title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il loro set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareMostrate.length})</button>` : ''}
                 </div>` : ''}
 
                 <nav class="schede-rev" role="tablist">
@@ -73,22 +97,27 @@ Viste.revisioni = {
 
         const ridisegna = () => App.ridisegna();
 
-        // Le flashcard della scheda scelta
-        const vociCarte = () => {
-            const lista = Revisioni.carteDevianti({ materiaId: materiaScheda });
-            return this.scheda === 'da-ripassare' ? lista.filter(Revisioni.cartaDaRipassare) : lista;
-        };
-
         if (carte) {
             Revisioni.montaCarte($('[data-tabella]', el), {
                 voci: vociCarte,
+                // Tutte: nell'ordine dei set e dell'albero; solo le sfasate: le più urgenti prima
+                perUrgenza: this.soloSfasate || this.scheda === 'da-ripassare',
                 dopo: ridisegna,
                 vuoto: this.scheda === 'da-ripassare'
-                    ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard è rimasta indietro rispetto al suo set. 🎉' })
-                    : Ui.vuoto({
-                        icona: 'carte', titolo: 'Nessuna flashcard per conto suo',
-                        testo: 'Qui compaiono le carte dei set già ripassati che non vanno al passo con il loro set: quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate e quelle ripassate per conto loro.',
-                    }),
+                    ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard sfasata è da ripassare: le altre si ripassano con il loro set. 🎉' })
+                    : this.soloSfasate
+                        ? Ui.vuoto({
+                            icona: 'ok-cerchio', titolo: 'Tutte al passo',
+                            testo: 'Nessuna flashcard è sfasata rispetto al suo set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate e quelle ripassate o cambiate per conto loro.',
+                        })
+                        : Ui.vuoto({ icona: 'carte', titolo: 'Ancora nessuna flashcard', testo: 'Crea o importa qualche flashcard nei tuoi set.' }),
+            });
+            const filtro = $('.filtro-carte-rev', el);
+            if (filtro) filtro.addEventListener('click', e => {
+                const b = e.target.closest('[data-filtro-carte]');
+                if (!b || (b.dataset.filtroCarte === 'sfasate') === this.soloSfasate) return;
+                this.soloSfasate = b.dataset.filtroCarte === 'sfasate';
+                ridisegna();
             });
         } else {
             const argomenti = () => {
@@ -133,7 +162,7 @@ Viste.revisioni = {
         Ui.collegaAzioni(el, {
             nuovo: async () => { if (await Revisioni.formNuovo({ materiaId: materiaScheda })) ridisegna(); },
             'uno-per-set': async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); },
-            'ripassa-carte': () => Revisioni.avviaRipassoCarte(vociCarte().filter(Revisioni.cartaDaRipassare)),
+            'ripassa-carte': () => Revisioni.avviaRipassoCarte(vociCarte().filter(v => Revisioni.sfasata(v) && Revisioni.cartaDaRipassare(v))),
             guida: () => Guida.apri(),
             menu: b => Ui.menu(b, [
                 !carte && { testo: materiaScheda ? `Un argomento per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un argomento per ogni set', icona: 'cartella',

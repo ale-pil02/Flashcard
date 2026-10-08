@@ -10,6 +10,9 @@
 // All'assistente IA resta solo il lavoro di giudizio: scrivere le domande.
 // In più rispetto alla skill, le carte create nel set sono già ad albero (madre → figlie),
 // così si studiano a cascata.
+// Da una mappa dell'app si possono fare le carte solo di alcuni nodi (scelti nell'editor della mappa, con o senza i
+// rami sotto): il piano si calcola su tutta la mappa, così tag, risposte e madri restano quelli giusti, e poi tiene
+// solo le carte di quei nodi. Una carta la cui madre resta fuori va sotto la carta che il set ha già per quel nodo.
 
 const Localizzazione = (() => {
     const MAX_PAROLE_ETICHETTA = 6;
@@ -132,6 +135,7 @@ const Localizzazione = (() => {
                 nodi_coperti: [...catena.map(x => x.id), ...assorbiti.map(f => f.id)],
                 discendenti_totali: discendenti(n).length,
                 nodo: n,
+                nodi: [...catena, ...assorbiti],
                 mappaNodo: cur.mappaNodo || n.mappaNodo || null,
             });
             propri.forEach(f => emetti(f, profondita + 1));
@@ -140,9 +144,41 @@ const Localizzazione = (() => {
         return carte;
     }
 
+    // Solo le carte che coprono i nodi scelti della mappa (con conRami anche tutti quelli sotto). La madre di una carta è
+    // la carta tenuta più vicina sopra di lei, oppure la carta che il set ha già per quel nodo (genitoreEsistente).
+    // saltaEsistenti: niente carte per i nodi che nel set hanno già una carta collegata
+    function soloNodiScelti(radice, carte, { soloNodi, conRami, mappaId, setId, saltaEsistenti }) {
+        const scelti = new Set(soloNodi);
+        const dentro = new Set();
+        [radice, ...discendenti(radice)].forEach(n => {
+            if (!scelti.has(n.mappaNodo)) return;
+            dentro.add(n);
+            if (conRami) discendenti(n).forEach(d => dentro.add(d));
+        });
+        const nelSet = setId && mappaId ? Dati.carteDiSet(setId, { tutte: true }).filter(c => c.mappa && c.mappa.id === mappaId) : [];
+        const cartaDelNodo = new Map(nelSet.map(c => [c.mappa.nodo, c.id]));
+        const giaFatte = c => cartaDelNodo.has(c.mappaNodo);
+        const tenute = carte.map((c, i) => (c.nodi.some(n => dentro.has(n)) && !(saltaEsistenti && giaFatte(c)) ? i : -1)).filter(i => i >= 0);
+        const nuovoIndice = new Map(tenute.map((i, k) => [i, k]));
+        const saltate = carte.filter(c => c.nodi.some(n => dentro.has(n)) && saltaEsistenti && giaFatte(c)).length;
+        const scelte = tenute.map(i => {
+            const c = { ...carte[i], madre: null, genitoreEsistente: null };
+            for (let su = carte[i].madre; su != null; su = carte[su].madre) {
+                if (nuovoIndice.has(su)) { c.madre = nuovoIndice.get(su); break; }
+                const gia = carte[su].nodi.map(n => cartaDelNodo.get(n.mappaNodo)).find(Boolean);
+                if (gia) { c.genitoreEsistente = gia; break; }
+            }
+            return c;
+        });
+        return { carte: scelte, saltate };
+    }
+
     // albero: { titolo, corpo, figli }. opzioni: etichetteForzate, etichetteAnnullate, numerazione { nodoId: numero }
-    // mappaId = mappa dell'app da cui viene l'albero (i suoi nodi hanno mappaNodo): le carte nascono collegate al loro nodo
-    function preparaPiano(albero, { etichetteForzate = [], etichetteAnnullate = [], numerazione = {}, fonte = '', mappaId = null } = {}) {
+    // mappaId = mappa dell'app da cui viene l'albero (i suoi nodi hanno mappaNodo): le carte nascono collegate al loro nodo.
+    // soloNodi = [id dei nodi della mappa]: solo le carte di quei nodi (conRami: anche dei rami sotto); setId e
+    // saltaEsistenti servono per agganciarle alle carte che il set ha già e per non rifare quelle già fatte
+    function preparaPiano(albero, { etichetteForzate = [], etichetteAnnullate = [], numerazione = {}, fonte = '', mappaId = null,
+        soloNodi = null, conRami = true, setId = null, saltaEsistenti = false } = {}) {
         if (!albero || !String(albero.titolo || '').trim()) throw new Error('La fonte non ha un titolo alla radice: va chiesto all\'utente.');
         const radice = daSemplice(albero);
         numera(radice);
@@ -167,16 +203,23 @@ const Localizzazione = (() => {
         carte.forEach((c, i) => c.nodi_coperti.forEach(id => cartaDelNodo.set(id, i)));
         carte.forEach(c => { c.madre = c.nodo.padre ? cartaDelNodo.get(c.nodo.padre.id) : null; });
 
+        let tutte = carte, saltate = 0;
+        if (soloNodi && soloNodi.length) {
+            ({ carte: tutte, saltate } = soloNodiScelti(radice, carte, { soloNodi, conRami, mappaId, setId, saltaEsistenti }));
+            if (saltate) avvisi.push(`${saltate} nodi scelti hanno già una flashcard nel set: saltati.`);
+        }
+
         const piano = {
             id: 'p' + uid().slice(0, 8),
             fonte, mappaId,
             titolo_fonte: titoloFonte,
             nodi_totali: 1 + discendenti(radice).length,
             numerazione_sottorami: Object.fromEntries(radice.figli.map(r => [r.titolo, numeri[r.id] || '(per nome)'])),
-            foglie_assorbite: carte.flatMap(c => c.assorbiti.map(v => ({ id: v.id, titolo: v.titolo, dentro: c.catena[c.catena.length - 1].titolo }))),
-            catene_collassate: carte.filter(c => c.catena.length > 1).map(c => ({ card: c.id, nodi: c.catena.map(n => n.titolo) })),
+            foglie_assorbite: tutte.flatMap(c => c.assorbiti.map(v => ({ id: v.id, titolo: v.titolo, dentro: c.catena[c.catena.length - 1].titolo }))),
+            catene_collassate: tutte.filter(c => c.catena.length > 1).map(c => ({ card: c.id, nodi: c.catena.map(n => n.titolo) })),
+            ...(soloNodi && soloNodi.length ? { solo_nodi_scelti: { nodi: soloNodi.length, con_i_rami_sotto: !!conRami, carte_saltate_perche_gia_fatte: saltate } } : {}),
             avvisi,
-            carte,
+            carte: tutte,
             domande: new Map(),
         };
         piani.set(piano.id, piano);
@@ -193,6 +236,7 @@ const Localizzazione = (() => {
             numerazione_sottorami: piano.numerazione_sottorami,
             foglie_assorbite: piano.foglie_assorbite,
             catene_collassate: piano.catene_collassate,
+            ...(piano.solo_nodi_scelti ? { solo_nodi_scelti: piano.solo_nodi_scelti } : {}),
             avvisi: piano.avvisi,
             carte: piano.carte.map(c => ({
                 id: c.id, nodo_id: c.nodo_id, tag: c.tag, percorso: c.percorso.join(' › '),
@@ -307,6 +351,7 @@ const Localizzazione = (() => {
             risposte: [{ testo: testoInHtml(v.answer), corretta: true }],
             tag: [v.tag],
             genitore: v.madre,
+            genitoreEsistente: v.genitoreEsistente || null,
             mappa: p.mappaId && v.mappaNodo && Mappe.mappa(p.mappaId) && Mappe.mappa(p.mappaId).nodi[v.mappaNodo] ? { id: p.mappaId, nodo: v.mappaNodo } : null,
         }));
         const create = Dati.creaCarte(setId, lista);

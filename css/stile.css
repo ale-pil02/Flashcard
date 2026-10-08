@@ -1174,6 +1174,10 @@ a.tessera:hover, .tessera-materia:hover {
 .impostazione b { font-weight: 600; }
 .impostazione small { color: var(--testo-3); font-size: .82rem; line-height: 1.4; }
 .impostazione input[type=number] { width: 96px; text-align: center; }
+.campo-limite { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.campo-limite input[type=number]:disabled { opacity: .45; }
+.spunta-limite { display: inline-flex; align-items: center; gap: 6px; color: var(--testo-2); font-size: .88rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.spunta-limite input { width: 17px; height: 17px; margin: 0; accent-color: var(--primario); }
 .campo-sequenza { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 0; }
 .campo-sequenza input { width: 240px; max-width: 100%; font-variant-numeric: tabular-nums; }
 .anteprima-sequenza { margin: -4px 0 4px; font-variant-numeric: tabular-nums; }
@@ -2080,3 +2084,28 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .guida-elenco .pallino { flex: none; margin-top: 7px; }
 .guida-pulsanti { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; }
 .guida-passi { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-left: 22px; line-height: 1.5; }
+
+/* Pannello "Per flashcard": tutte o solo le sfasate, e come sta ogni carta rispetto al set */
+.filtro-carte-rev { margin: -6px 0 14px; }
+.filtro-carte-set { margin: -8px 0 14px 8px; }
+.segmentato.piccolo .ico { width: 14px; height: 14px; }
+.sfasatura { display: inline-block; padding: 3px 9px; border-radius: 99px; background: var(--superficie-2); color: var(--testo-2); font-size: .8rem; font-weight: 600; line-height: 1.35; }
+.tabella-revisioni td.col-sfasatura { padding: 11px 8px 0 10px; }
+.sfasatura-passo { background: color-mix(in srgb, var(--perfetto) 14%, transparent); color: var(--perfetto-testo); }
+.sfasatura-prima, .sfasatura-scarso { background: color-mix(in srgb, var(--scarso) 13%, transparent); color: color-mix(in srgb, var(--scarso) 75%, var(--testo)); }
+.sfasatura-dopo { background: color-mix(in srgb, var(--ok) 16%, transparent); color: color-mix(in srgb, var(--ok) 60%, var(--testo)); }
+.sfasatura-mai { background: var(--primario-tenue); color: var(--primario-testo); }
+
+/* Tutorial sui dati di prova (js/tour.js): la luce sull'elemento e la scheda con il testo, sotto le finestre */
+.tour-luce { position: fixed; z-index: 95; border-radius: 12px; outline: 2.5px solid var(--primario); box-shadow: 0 0 0 9999px rgba(12, 14, 34, .32); pointer-events: none; transition: left .25s, top .25s, width .25s, height .25s; }
+.tour-scheda { position: fixed; z-index: 96; display: flex; flex-direction: column; gap: 8px; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 14px 16px 12px; overflow-y: auto; border: 1px solid var(--bordo); border-radius: 16px; background: var(--superficie); box-shadow: var(--ombra-forte); }
+.tour-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tour-numero { display: inline-flex; align-items: center; gap: 6px; color: var(--primario-testo); font-size: .8rem; font-weight: 700; }
+.tour-numero .ico { width: 15px; height: 15px; }
+.tour-scheda h3 { margin: 0; font-size: 1.05rem; }
+.tour-testo { display: flex; flex-direction: column; gap: 8px; font-size: .9rem; line-height: 1.5; }
+.tour-testo p { margin: 0; }
+.tour-testo .ico { width: 15px; height: 15px; vertical-align: -2px; }
+.tour-elenco { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 20px; }
+.tour-piede { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--bordo); }
+.tour-piede .ico { width: 15px; height: 15px; }

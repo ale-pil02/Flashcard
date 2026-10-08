@@ -41,8 +41,8 @@ const EMOJI_MATERIA = ['📚', '🧠', '🧪', '🧬', '⚖️', '💊', '📐',
 
 const IMPOSTAZIONI_PREDEFINITE = {
     nome: '',
-    nuovePerSessione: 10,       // carte nuove in una sessione
-    maxPerSessione: 30,         // carte totali in una sessione
+    nuovePerSessione: 10,       // carte nuove in una sessione (null = senza limite)
+    maxPerSessione: 30,         // carte totali in una sessione (null = senza limite)
     ordineCasuale: false,       // false = ordine del set (quello dell'albero e dell'import)
     cascata: true,              // le domande figlie entrano solo dopo aver imparato la madre
     nascondiDettagli: false,    // le carte con il tag "dettaglio" (e i loro rami) spariscono da elenchi, conteggi e studio
@@ -60,6 +60,11 @@ const Dati = (() => {
 
     function impostazioni() {
         return { ...IMPOSTAZIONI_PREDEFINITE, ...(Archivio.prendi('impostazioni', ID_IMPOSTAZIONI) || {}) };
+    }
+
+    // Quante carte nuove e quante in tutto entrano in una sessione: Infinity se "senza limite"
+    function limitiSessione(imp = impostazioni()) {
+        return { nuove: imp.nuovePerSessione == null ? Infinity : imp.nuovePerSessione, max: imp.maxPerSessione == null ? Infinity : imp.maxPerSessione };
     }
 
     function salvaImpostazioni(modifiche) {
@@ -359,6 +364,8 @@ const Dati = (() => {
         }));
         lista.forEach((dati, i) => {
             if (dati.genitore != null && dati.genitore < i && nuove[dati.genitore]) nuove[i].genitoreId = nuove[dati.genitore].id;
+            // Madre già nel set (per esempio la carta fatta prima per il nodo sopra, nella mappa)
+            else if (dati.genitoreEsistente && (carta(dati.genitoreEsistente) || {}).setId === setId) nuove[i].genitoreId = dati.genitoreEsistente;
         });
         Archivio.salvaMolti('carte', nuove);
         aggiornaSet(setId, {});
@@ -474,12 +481,16 @@ const Dati = (() => {
 
     // Ripetizione spaziata di una carta cambiata a mano (editor, tabella delle revisioni, assistente): N° Rep, ultimo
     // ripasso, intervallo in giorni o prossima revisione "AAAA-MM-GG" (cambia l'intervallo; per una carta Scarso il
-    // giorno da cui è da rifare). N° Rep conta i ripassi e basta: cambiarlo non sposta le date
+    // giorno da cui è da rifare). Cambiando il N° Rep (senza intervallo né prossima) l'intervallo torna quello della
+    // sequenza per quella rep, come in Notion
     function aggiornaSrs(id, { rep, giorno, intervallo, prossima } = {}) {
         const c = carta(id);
         if (!c) return null;
         const s = Srs.normalizza(c.srs);
-        if (rep != null) s.rep = Math.max(0, Math.round(+rep) || 0);
+        if (rep != null) {
+            s.rep = Math.max(0, Math.round(+rep) || 0);
+            if (intervallo == null && !prossima) s.intervallo = Srs.intervalloPerRep(s.rep);
+        }
         if (giorno !== undefined) {
             s.giorno = giorno || null;
             if (s.giorno && !s.intervallo) s.intervallo = Srs.intervalloPerRep(s.rep);
@@ -603,6 +614,8 @@ const Dati = (() => {
         const a = argomento(id);
         if (!a) return null;
         if ('ripetizioni' in modifiche) modifiche = { ...modifiche, ripetizioni: Math.max(0, Math.round(+modifiche.ripetizioni) || 0) };
+        // N° Rep cambiato a mano: l'intervallo torna quello della sequenza per quella rep, come in Notion
+        if ('ripetizioni' in modifiche && !('intervallo' in modifiche) && !modifiche.prossima) modifiche = { ...modifiche, intervallo: Srs.intervalloPerRep(modifiche.ripetizioni) };
         if ('intervallo' in modifiche) modifiche = { ...modifiche, intervallo: Srs.giorni(modifiche.intervallo) || Revisioni.intervallo(a) };
         // Prossima revisione scelta a mano: cambia l'intervallo (senza ultimo ripasso, l'ultimo ripasso diventa oggi)
         if (modifiche.prossima) {
@@ -812,7 +825,7 @@ const Dati = (() => {
     }
 
     return {
-        impostazioni, salvaImpostazioni,
+        impostazioni, salvaImpostazioni, limitiSessione,
         materie, materia, creaMateria, aggiornaMateria, eliminaMateria,
         tuttiSet, set, sottoSet, setRadice, alberoSet, setDiMateria, discendentiSet, percorsoSet,
         creaSet, aggiornaSet, eliminaSet, setRecenti,

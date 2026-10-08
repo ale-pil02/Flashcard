@@ -224,6 +224,7 @@ body[data-vista="mappa"] .fab-ia { display: none; }
     -webkit-user-select: none;
 }
 .mappa-figura.selezionata { outline: 2px solid var(--primario); outline-offset: 3px; }
+.mappa-figura.fluttuante:not(.selezionata):hover { outline: 1.5px dashed var(--primario); outline-offset: 3px; }
 .editor-mappa.esportando .mappa-figura { outline: none !important; }
 .editor-mappa.sola-lettura .mappa-figura { cursor: inherit; }
 .maniglia-figura {

@@ -134,7 +134,7 @@ const Strumenti = (() => {
                     })),
                     esami: Dati.esami().map(e => ({ id: e.id, nome: e.nome, data: e.data, materia_id: e.materiaId, tra_giorni: giorniTra(Date.now(), daChiaveGiorno(e.data)) })),
                     studio_oggi: Dati.oggi(attivita),
-                    impostazioni: { nuove_per_sessione: imp.nuovePerSessione, max_per_sessione: imp.maxPerSessione, ordine_casuale: imp.ordineCasuale, studio_a_cascata: imp.cascata, dettagli_nascosti: imp.nascondiDettagli, tema: imp.tema },
+                    impostazioni: { nuove_per_sessione: imp.nuovePerSessione == null ? 'senza limite' : imp.nuovePerSessione, max_per_sessione: imp.maxPerSessione == null ? 'senza limite' : imp.maxPerSessione, ordine_casuale: imp.ordineCasuale, studio_a_cascata: imp.cascata, dettagli_nascosti: imp.nascondiDettagli, tema: imp.tema },
                 };
             },
         },
@@ -333,7 +333,7 @@ const Strumenti = (() => {
         },
         {
             nome: 'modifica_carte',
-            descrizione: "Modifica una o più flashcard: testo, risposta, tag, suggerimento, spiegazione, domanda madre (madre_id vuoto = domanda principale), valutazione (come se l'utente la cambiasse a mano: cambia lo stato del set, non le date) o la sua ripetizione spaziata (n_rep, ultimo_ripasso, intervallo_giorni o prossima_revisione; n_rep conta i ripassi e non sposta le date).",
+            descrizione: "Modifica una o più flashcard: testo, risposta, tag, suggerimento, spiegazione, domanda madre (madre_id vuoto = domanda principale), valutazione (come se l'utente la cambiasse a mano: cambia lo stato del set, non le date) o la sua ripetizione spaziata (n_rep, ultimo_ripasso, intervallo_giorni o prossima_revisione; cambiando solo n_rep l'intervallo torna quello della sequenza per quella rep).",
             parametri: S.obj({
                 modifiche: S.arr(S.obj({
                     carta_id: S.str('id'), domanda: S.str('nuova domanda'), risposta: S.str('nuova risposta (solo carte a risposta aperta)'),
@@ -606,7 +606,7 @@ const Strumenti = (() => {
         },
         {
             nome: 'modifica_argomento_revisione',
-            descrizione: "Modifica un argomento delle revisioni: nome, fonte, materiali collegati, N° Rep (conta i ripassi, non sposta le date), ultimo ripasso, intervallo, prossima revisione, stato o set. Lo stato della riga di un set (riga_del_set) viene dalle valutazioni delle carte: per cambiarlo cambia la valutazione delle carte (modifica_carte).",
+            descrizione: "Modifica un argomento delle revisioni: nome, fonte, materiali collegati, N° Rep (cambiandolo da solo, l'intervallo torna quello della sequenza per quella rep), ultimo ripasso, intervallo, prossima revisione, stato o set. Lo stato della riga di un set (riga_del_set) viene dalle valutazioni delle carte: per cambiarlo cambia la valutazione delle carte (modifica_carte).",
             parametri: S.obj({
                 argomento_id: S.str('id'), nome: S.str('nome'), fonte: S.str('fonte'), materiali_ids: S.arr(S.str('id'), 'sostituisce i materiali collegati ([] = nessuno)'),
                 ripetizioni: S.int('N° Rep'), ultimo_ripasso: S.str('AAAA-MM-GG ("" per svuotare)'), stato: S.str('ottimo | buono | ok | scarso | ""'), set_id: S.str('sposta in un altro set'),
@@ -708,16 +708,16 @@ const Strumenti = (() => {
             nome: 'modifica_impostazioni',
             descrizione: "Cambia le impostazioni: nome dell'utente, carte nuove e massime per sessione, ordine casuale, studio a cascata, dettagli nascosti (le carte con tag dettaglio spariscono da elenchi, conteggi e studio), tema (sistema | chiaro | scuro).",
             parametri: S.obj({
-                nome: S.str('nome'), nuove_per_sessione: S.int('carte nuove per sessione'),
-                max_per_sessione: S.int('carte massime per sessione'), ordine_casuale: S.bool('ordine casuale'), studio_a_cascata: S.bool('studio a cascata'), nascondi_dettagli: S.bool('nascondi le carte con tag dettaglio'), tema: S.str('sistema | chiaro | scuro'),
+                nome: S.str('nome'), nuove_per_sessione: S.int('carte nuove per sessione (-1 = senza limite)'),
+                max_per_sessione: S.int('carte massime per sessione (-1 = senza limite)'), ordine_casuale: S.bool('ordine casuale'), studio_a_cascata: S.bool('studio a cascata'), nascondi_dettagli: S.bool('nascondi le carte con tag dettaglio'), tema: S.str('sistema | chiaro | scuro'),
             }),
             modifica: true,
             etichetta: () => 'Cambio le impostazioni',
             esegui: a => {
                 const mod = {};
                 if (a.nome != null) mod.nome = a.nome;
-                if (a.nuove_per_sessione != null) mod.nuovePerSessione = limita(a.nuove_per_sessione, 0, 500);
-                if (a.max_per_sessione) mod.maxPerSessione = limita(a.max_per_sessione, 1, 1000);
+                if (a.nuove_per_sessione != null) mod.nuovePerSessione = a.nuove_per_sessione < 0 ? null : limita(a.nuove_per_sessione, 0, 500);
+                if (a.max_per_sessione) mod.maxPerSessione = a.max_per_sessione < 0 ? null : limita(a.max_per_sessione, 1, 1000);
                 if (a.ordine_casuale != null) mod.ordineCasuale = !!a.ordine_casuale;
                 if (a.studio_a_cascata != null) mod.cascata = !!a.studio_a_cascata;
                 if (a.nascondi_dettagli != null) mod.nascondiDettagli = !!a.nascondi_dettagli;
@@ -772,6 +772,10 @@ const Strumenti = (() => {
                 etichette_forzate: S.arr(S.str('id nodo, es. 2.1.3'), 'nodi da trattare come foglie-etichetta (assorbite nella carta del padre)'),
                 etichette_annullate: S.arr(S.str('id nodo'), 'foglie-etichetta a cui ridare una carta propria'),
                 numerazione_sottorami: S.arr(S.obj({ nodo_id: S.str('id del sottoramo, es. 3'), numero: S.str('numero da usare') }, ['nodo_id', 'numero']), 'numeri dei sottorami letti male o assenti'),
+                nodi_mappa: S.arr(S.str('id di un nodo della mappa'), 'solo con mappa_id: le carte solo di questi nodi (tag, risposte e madri restano quelli di tutta la mappa)'),
+                con_rami: S.bool('con nodi_mappa: anche i rami sotto ai nodi (predefinito true)'),
+                set_id: S.str('con nodi_mappa: set in cui andranno le carte, per agganciarle alle carte che ha già'),
+                salta_esistenti: S.bool('con nodi_mappa: niente carte per i nodi che nel set hanno già una flashcard'),
             }),
             etichetta: () => "Preparo il piano delle flashcard di localizzazione",
             esegui: a => {
@@ -805,7 +809,10 @@ const Strumenti = (() => {
                 if (a.titolo) albero.titolo = a.titolo;
                 const numerazione = {};
                 (a.numerazione_sottorami || []).forEach(x => { if (x && x.nodo_id) numerazione[x.nodo_id] = String(x.numero); });
-                const piano = Localizzazione.preparaPiano(albero, { etichetteForzate: a.etichette_forzate || [], etichetteAnnullate: a.etichette_annullate || [], numerazione, fonte, mappaId });
+                const piano = Localizzazione.preparaPiano(albero, {
+                    etichetteForzate: a.etichette_forzate || [], etichetteAnnullate: a.etichette_annullate || [], numerazione, fonte, mappaId,
+                    ...(mappaId && Array.isArray(a.nodi_mappa) && a.nodi_mappa.length ? { soloNodi: a.nodi_mappa, conRami: a.con_rami !== false, setId: a.set_id || null, saltaEsistenti: !!a.salta_esistenti } : {}),
+                });
                 return { ...Localizzazione.pianoPerIA(piano), collegamento_alla_mappa: mappaId ? `sì, ai nodi di «${fonte}»` : 'no', ...(nota ? { nota } : {}) };
             },
         },
