@@ -278,7 +278,7 @@ Viste.impostazioni = {
                 let n = null;
                 await Storia.esegui('Sequenza degli intervalli applicata alle revisioni', () => { n = Dati.ricalcolaIntervalli(); });
                 App.aggiornaPiede();
-                if (n) Ui.toast(`Ricalcolati ${plurale(n.argomenti, 'argomento', 'argomenti')} e ${plurale(n.carte, 'flashcard', 'flashcard')}`, 'successo', 3500);
+                if (n) Ui.toast(`Ricalcolati ${plurale(n.argomenti, 'mazzo', 'mazzi')} e ${plurale(n.carte, 'flashcard', 'flashcard')}`, 'successo', 3500);
             },
             'mostra-chiave': () => { campoChiave.type = campoChiave.type === 'password' ? 'text' : 'password'; },
             'aggiorna-modelli': async b => {

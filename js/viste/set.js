@@ -153,7 +153,7 @@ Viste.set = {
                             <a class="btn btn-fantasma btn-piccolo" href="#/revisioni">${ico('calendario-spunta')}Tutte le revisioni</a>
                             ${perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="studio-libero-set" title="Hai un po' di tempo? Scegli quanto e quali flashcard studiare">${ico('orologio')}Studio libero</button>` : ''}
                             ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set" title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareCarte})</button>` : ''}
-                            ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
+                            ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo mazzo</button>` : ''}
                         </div>
                     </div>
                     <div class="sezione-corpo">

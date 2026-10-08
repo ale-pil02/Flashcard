@@ -275,7 +275,7 @@ const Revisioni = (() => {
         const a = Dati.argomento(argomentoId);
         if (!a) return null;
         const dopo = Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }, undefined, { esito: Srs.esitoDaStato(statoDi(a)) });
-        await Storia.esegui(`«${a.nome || 'Argomento'}» ripassato: prossima revisione ${quando(dopo)}`, () => {
+        await Storia.esegui(`«${a.nome || 'Mazzo'}» ripassato: prossima revisione ${quando(dopo)}`, () => {
             Dati.segnaRipasso(a.id, statoDi(a));
             allineaValutate(a, carteDi(a) || [], valutate, nonAllineare);
         });
@@ -627,7 +627,7 @@ const Revisioni = (() => {
     // ---- Tabella -------------------------------------------------------------------------
 
     const COLONNE = [
-        { col: 'nome', ordina: 'nome', testo: 'Argomento', icona: 'documento' },
+        { col: 'nome', ordina: 'nome', testo: 'Mazzo', icona: 'documento' },
         { col: 'set', ordina: 'set', testo: 'Set', icona: 'cartella', conSet: true },
         { col: 'fonte', testo: 'Schema / fonte', icona: 'elenco' },
         { col: 'num', ordina: 'ripetizioni', testo: 'N° Rep', icona: 'elenco-num' },
@@ -731,7 +731,7 @@ const Revisioni = (() => {
         const fatto = a.ultimoRipasso === chiaveGiorno();
         return conCarte(a)
             ? `<button type="button" class="btn-ripassato con-studio${fatto ? ' fatto' : ''}" data-rev="ripassa"
-                title="${fatto ? 'Ripassato oggi · ' : ''}Ripassa le flashcard ${Array.isArray(a.carte) ? "dell'argomento" : 'del set'}" aria-label="Ripassa">${ico(fatto ? 'spunta' : 'fulmine')}</button>`
+                title="${fatto ? 'Ripassato oggi · ' : ''}Ripassa le flashcard ${Array.isArray(a.carte) ? 'del mazzo' : 'del set'}" aria-label="Ripassa">${ico(fatto ? 'spunta' : 'fulmine')}</button>`
             : `<button type="button" class="btn-ripassato${fatto ? ' fatto' : ''}" data-rev="ripassato"
                 title="${fatto ? 'Ripassato oggi' : 'Ripassato: N° Rep +1 e Ultimo ripasso = oggi'}" aria-label="Ripassato">${ico('spunta')}</button>`;
     }
@@ -761,8 +761,8 @@ const Revisioni = (() => {
         const p = prossima(a);
         return `
             <tr data-id="${a.id}" class="${avviso(a).tipo === 'scaduto' ? 'scaduto' : ''}">
-                <td class="col-nome"><textarea class="campo-rev cella-nome" rows="1" data-campo="nome" placeholder="Argomento" aria-label="Argomento">${esc(a.nome)}</textarea>
-                    ${Array.isArray(a.carte) && s ? `<button type="button" class="chip chip-tenue chip-carte-arg" data-rev="scegli-carte" title="Scegli le flashcard dell'argomento">${ico('carte')}${(carteDi(a) || []).length} di ${carteDelSet(a.setId).length} flashcard</button>` : ''}</td>
+                <td class="col-nome"><textarea class="campo-rev cella-nome" rows="1" data-campo="nome" placeholder="Mazzo" aria-label="Mazzo">${esc(a.nome)}</textarea>
+                    ${Array.isArray(a.carte) && s ? `<button type="button" class="chip chip-tenue chip-carte-arg" data-rev="scegli-carte" title="Scegli le flashcard del mazzo">${ico('carte')}${(carteDi(a) || []).length} di ${carteDelSet(a.setId).length} flashcard</button>` : ''}</td>
                 ${op.colonnaSet ? `<td class="col-set">${op.setModificabile
                     ? `<label class="sovrapposto"><span class="testo-sovrapposto">${esc(s ? s.nome : '?')}</span>
                         <select class="controllo-sovrapposto" data-campo="setId" aria-label="Set">${Ui.opzioniSet(a.setId)}</select></label>`
@@ -842,7 +842,7 @@ const Revisioni = (() => {
                         <thead>${intestazione(op, ordine())}</thead>
                         <tbody>${lista.map(a => rigaHtml(a, op)).join('')}</tbody>
                     </table>
-                    ${op.nuovo ? `<button type="button" class="riga-nuova" data-rev="nuovo">${ico('piu')}Nuovo argomento</button>` : ''}
+                    ${op.nuovo ? `<button type="button" class="riga-nuova" data-rev="nuovo">${ico('piu')}Nuovo mazzo</button>` : ''}
                 </div>` : op.vuoto;
             adatta(contenitore);
             if (fuoco) {
@@ -989,7 +989,7 @@ const Revisioni = (() => {
     function menuRipasso(ancora, a, dopo) {
         if (!a) return;
         const segna = async stato => {
-            await Storia.esegui(`«${a.nome || 'Argomento'}» ripassato: prossima revisione ${quando(Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }, undefined, { esito: Srs.esitoDaStato(stato || a.stato) }))}`,
+            await Storia.esegui(`«${a.nome || 'Mazzo'}» ripassato: prossima revisione ${quando(Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }, undefined, { esito: Srs.esitoDaStato(stato || a.stato) }))}`,
                 () => Dati.segnaRipasso(a.id, stato));
             dopo();
         };
@@ -1001,7 +1001,7 @@ const Revisioni = (() => {
                     { testo: 'Ripassato oggi (senza giudizio)', icona: 'spunta', clic: () => segna('') }]),
             fattoOggi && '-',
             fattoOggi && { testo: 'Annulla il ripasso di oggi', icona: 'annulla', clic: async () => {
-                await Storia.esegui(`Ripasso di «${a.nome || 'Argomento'}» annullato`, () => Dati.annullaUltimoRipasso(a.id));
+                await Storia.esegui(`Ripasso di «${a.nome || 'Mazzo'}» annullato`, () => Dati.annullaUltimoRipasso(a.id));
                 dopo();
             } },
         ]);
@@ -1037,18 +1037,18 @@ const Revisioni = (() => {
         const conStudio = conCarte(a);
         Ui.menu(ancora, [
             op.colonnaSet && op.setModificabile && { testo: 'Apri il set', icona: 'cartella', clic: () => Router.vai('/set/' + a.setId) },
-            Dati.set(a.setId) && { testo: "Flashcard dell'argomento…", icona: 'carte', clic: async () => { if (await modaleCarte(a)) dopo(); } },
+            Dati.set(a.setId) && { testo: 'Flashcard del mazzo…', icona: 'carte', clic: async () => { if (await modaleCarte(a)) dopo(); } },
             conStudio && { testo: 'Segna il ripasso a mano…', icona: 'spunta', clic: () => menuRipasso(ancora, a, dopo) },
             (a.storico || []).length && { testo: `Cronologia dei ripassi (${a.storico.length})`, icona: 'orologio', clic: () => cronologia(a) },
             (a.storico || []).length && { testo: "Annulla l'ultimo ripasso", icona: 'annulla', clic: async () => {
-                await Storia.esegui(`Ultimo ripasso di «${a.nome || 'Argomento'}» annullato`, () => Dati.annullaUltimoRipasso(a.id));
+                await Storia.esegui(`Ultimo ripasso di «${a.nome || 'Mazzo'}» annullato`, () => Dati.annullaUltimoRipasso(a.id));
                 dopo();
             } },
             '-',
             { testo: 'Elimina', icona: 'cestino', pericolo: true, clic: async () => {
-                if (!await Ui.conferma(`Elimini <b>${esc(a.nome || 'questo argomento')}</b> dalle revisioni? Le flashcard e i materiali non vengono toccati.`,
-                    { titolo: "Eliminare l'argomento?", ok: 'Elimina', pericolo: true })) return;
-                await Storia.esegui(`«${a.nome || 'Argomento'}» tolto dalle revisioni`, () => Dati.eliminaArgomento(a.id));
+                if (!await Ui.conferma(`Elimini <b>${esc(a.nome || 'questo mazzo')}</b> dalle revisioni? Le flashcard e i materiali non vengono toccati.`,
+                    { titolo: 'Eliminare il mazzo?', ok: 'Elimina', pericolo: true })) return;
+                await Storia.esegui(`«${a.nome || 'Mazzo'}» tolto dalle revisioni`, () => Dati.eliminaArgomento(a.id));
                 dopo();
             } },
         ]);
@@ -1057,7 +1057,7 @@ const Revisioni = (() => {
     function cronologia(a) {
         const voci = [...(a.storico || [])].reverse();
         Ui.modale({
-            titolo: `Ripassi di «${a.nome || 'Argomento'}»`, classe: 'modale-piccola',
+            titolo: `Ripassi di «${a.nome || 'Mazzo'}»`, classe: 'modale-piccola',
             corpo: `<div class="cronologia-rev">${voci.map((v, i) => `
                 <div class="voce-cronologia">
                     <span class="numero-rep">${voci.length - i}</span>
@@ -1148,7 +1148,7 @@ const Revisioni = (() => {
         if (Array.isArray(carte) && !carte.length) return 'Scegli almeno una flashcard, o «Tutte le flashcard del set»';
         if (carte == null) {
             const gia = Dati.argomentiDiSet(setId).find(a => a.id !== escludi && a.delSet && !Array.isArray(a.carte));
-            if (gia) return `«${gia.nome || 'Argomento'}» ha già tutte le flashcard di questo set: scegli «Solo alcune», o cambia quello`;
+            if (gia) return `«${gia.nome || 'Mazzo'}» ha già tutte le flashcard di questo set: scegli «Solo alcune», o cambia quello`;
         }
         return '';
     }
@@ -1158,8 +1158,8 @@ const Revisioni = (() => {
         return new Promise(risolvi => {
             let salvando = false, scelta = null;
             Ui.modale({
-                titolo: `Flashcard di «${esc(a.nome || 'Argomento')}»`, classe: 'modale-piccola',
-                corpo: `<p class="nota">Lo stato, il pulsante Ripasso e il N° Rep di questo argomento seguono le flashcard che scegli.</p><div data-carte-arg></div>`,
+                titolo: `Flashcard di «${esc(a.nome || 'Mazzo')}»`, classe: 'modale-piccola',
+                corpo: `<p class="nota">Lo stato, il pulsante Ripasso e il N° Rep di questo mazzo seguono le flashcard che scegli.</p><div data-carte-arg></div>`,
                 alApri: el => { scelta = montaSceltaCarte($('[data-carte-arg]', el), a.setId, automatico(a) ? (Array.isArray(a.carte) ? a.carte : null) : null, a.id); },
                 azioni: [
                     { testo: 'Annulla', classe: 'btn-fantasma' },
@@ -1169,7 +1169,7 @@ const Revisioni = (() => {
                         if (errore) { Ui.toast(errore, 'errore', 6000); return; }
                         salvando = true;
                         m.chiudi();
-                        await Storia.esegui(`Flashcard di «${a.nome || 'Argomento'}» cambiate`, () => Dati.aggiornaArgomento(a.id, { carte, delSet: carte == null }));
+                        await Storia.esegui(`Flashcard di «${a.nome || 'Mazzo'}» cambiate`, () => Dati.aggiornaArgomento(a.id, { carte, delSet: carte == null }));
                         risolvi(true);
                     } },
                 ],
@@ -1182,7 +1182,7 @@ const Revisioni = (() => {
     // alcune). materiaId limita la scelta del set a una materia
     function formNuovo({ materiaId = null, setId = null } = {}) {
         const sets = Dati.tuttiSet().filter(s => (!materiaId || s.materiaId === materiaId) && (!setId || s.id === setId));
-        if (!sets.length) { Ui.toast('Prima crea un set: ogni argomento appartiene a un set', 'errore', 5000); return Promise.resolve(null); }
+        if (!sets.length) { Ui.toast('Prima crea un set: ogni mazzo appartiene a un set', 'errore', 5000); return Promise.resolve(null); }
         return new Promise(risolvi => {
             let creato = null, scelta = null;
             const opzioni = Dati.materie().filter(m => !materiaId || m.id === materiaId).map(m => {
@@ -1191,12 +1191,12 @@ const Revisioni = (() => {
                     `<option value="${n.set.id}">${setId ? '' : Ui.rientroOpzione(n.livello)}${esc(n.set.nome)}</option>`).join('')}</optgroup>` : '';
             }).join('');
             Ui.modale({
-                titolo: 'Nuovo argomento', classe: 'modale-piccola',
+                titolo: 'Nuovo mazzo', classe: 'modale-piccola',
                 corpo: `
                     <label class="campo"${setId ? ' hidden' : ''}><span>Set</span><select name="set">${opzioni}</select></label>
-                    <label class="campo"><span>Argomento <em>di solito il nome del capitolo o dello schema</em></span>
+                    <label class="campo"><span>Nome del mazzo <em>di solito il nome del capitolo o dello schema</em></span>
                         <input type="text" name="nome" maxlength="160" autofocus></label>
-                    <div class="campo"><span class="etichetta">Flashcard dell'argomento <em>contano per lo stato, il ripasso e il N° Rep</em></span>
+                    <div class="campo"><span class="etichetta">Flashcard del mazzo <em>contano per lo stato, il ripasso e il N° Rep</em></span>
                         <div data-carte-arg></div></div>`,
                 alApri: el => {
                     const sceltaSet = $('[name=set]', el), nome = $('[name=nome]', el);
@@ -1232,8 +1232,8 @@ const Revisioni = (() => {
     // Un argomento per ogni set che non ne ha ancora (per partire in fretta)
     async function unoPerOgniSet(sets) {
         const senza = sets.filter(s => !Dati.argomentiDiSet(s.id).length);
-        if (!senza.length) { Ui.toast('Ogni set ha già almeno un argomento'); return 0; }
-        await Storia.esegui(`${plurale(senza.length, 'argomento aggiunto', 'argomenti aggiunti')} alle revisioni`,
+        if (!senza.length) { Ui.toast('Ogni set ha già almeno un mazzo'); return 0; }
+        await Storia.esegui(`${plurale(senza.length, 'mazzo aggiunto', 'mazzi aggiunti')} alle revisioni`,
             () => senza.forEach(s => Dati.creaArgomento({ setId: s.id, nome: s.nome, delSet: true })));
         return senza.length;
     }

@@ -62,10 +62,10 @@ Viste.home = {
                             <a href="#/revisioni" class="link">Revisioni${ico('destra')}</a></div></div>
                     ${daRivedere.length ? `<div class="riquadro lista-revisioni-home">${daRivedere.slice(0, 6).map(a => `
                         <a class="riga-revisione-home" href="#/set/${a.setId}">
-                            <b>${esc(a.nome || 'Argomento')}</b><small>${esc(Revisioni.nomeSet(a.setId, true))}</small>${Revisioni.etichettaAvviso(a)}
+                            <b>${esc(a.nome || 'Mazzo')}</b><small>${esc(Revisioni.nomeSet(a.setId, true))}</small>${Revisioni.etichettaAvviso(a)}
                         </a>`).join('')}
                         ${daRivedere.length > 6 ? `<a class="riga-revisione-home" href="#/revisioni"><small>…e altri ${daRivedere.length - 6}</small></a>` : ''}</div>`
-                        : `<p class="nota">Nessun argomento da rivedere oggi: il prossimo è ${(() => { const p = argomenti.filter(a => a.ultimoRipasso).sort(Revisioni.perUrgenza)[0]; return p ? `«${esc(p.nome || 'Argomento')}», ${esc(Revisioni.avviso(p).testo.toLowerCase())}` : 'ancora da segnare'; })()}.</p>`}
+                        : `<p class="nota">Nessun mazzo da rivedere oggi: il prossimo è ${(() => { const p = argomenti.filter(a => a.ultimoRipasso).sort(Revisioni.perUrgenza)[0]; return p ? `«${esc(p.nome || 'Mazzo')}», ${esc(Revisioni.avviso(p).testo.toLowerCase())}` : 'ancora da segnare'; })()}.</p>`}
                     ${carteDaFare ? `<button type="button" class="link link-pulsante" data-azione="carte-devianti">${ico('carte')}${plurale(carteDaFare, 'flashcard da ripassare', 'flashcard da ripassare')} per conto loro, prima del loro set${ico('destra')}</button>` : ''}
                 </section>` : ''}
 

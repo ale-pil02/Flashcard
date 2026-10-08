@@ -613,7 +613,7 @@ const Strumenti = (() => {
                 intervallo_giorni: S.int('giorni dall\'ultimo ripasso alla prossima revisione'), prossima_revisione: S.str('AAAA-MM-GG, dopo l\'ultimo ripasso: l\'intervallo si adegua'),
             }, ['argomento_id']),
             modifica: true,
-            etichetta: a => `Modifico «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,
+            etichetta: a => `Modifico «${(Dati.argomento(a.argomento_id) || {}).nome || 'un mazzo'}»`,
             esegui: a => {
                 const x = Dati.argomento(a.argomento_id);
                 if (!x) throw new Error('Argomento non trovato: usa elenca_revisioni.');
@@ -639,7 +639,7 @@ const Strumenti = (() => {
             descrizione: "Segna che l'utente ha ripassato un argomento (come il suo 'Ripassato' in Notion): N° Rep +1, ultimo ripasso = oggi (o la data indicata) e nuovo intervallo secondo la sequenza, adattato se è in anticipo, in ritardo o lo stesso giorno; con lo stato se lo dice.",
             parametri: S.obj({ argomento_id: S.str('id'), stato: S.str('ottimo | buono | ok | scarso'), giorno: S.str('AAAA-MM-GG, predefinito oggi') }, ['argomento_id']),
             modifica: true,
-            etichetta: a => `Segno il ripasso di «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,
+            etichetta: a => `Segno il ripasso di «${(Dati.argomento(a.argomento_id) || {}).nome || 'un mazzo'}»`,
             esegui: a => {
                 if (!Dati.argomento(a.argomento_id)) throw new Error('Argomento non trovato: usa elenca_revisioni.');
                 return { aggiornato: argomentoPerIA(Dati.segnaRipasso(a.argomento_id, Revisioni.STATI[a.stato] ? a.stato : '', dataValida(a.giorno) || chiaveGiorno())) };
@@ -650,7 +650,7 @@ const Strumenti = (() => {
             descrizione: "Toglie un argomento dalle revisioni (flashcard e materiali restano). Chiede conferma all'utente.",
             parametri: S.obj({ argomento_id: S.str('id') }, ['argomento_id']),
             modifica: true,
-            etichetta: () => 'Tolgo un argomento dalle revisioni',
+            etichetta: () => 'Tolgo un mazzo dalle revisioni',
             esegui: async (a, ctx) => {
                 const x = Dati.argomento(a.argomento_id);
                 if (!x) throw new Error('Argomento non trovato.');
