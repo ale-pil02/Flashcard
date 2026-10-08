@@ -39,8 +39,8 @@ flashcard (anche ad albero), materiali, esami del piano di studio, impostazioni 
   intervallo a un terzo, carta da ripassare subito finché non arriva almeno a Ok. Una carta mai valutata parte sempre dal
   primo intervallo. Nel ripasso completo del set le carte Buono o Perfetto prendono la data del set, tranne quelle che
   erano nuove o Scarso. Se una revisione cade dopo l'esame della materia l'app lo segnala. «Ripassa più set» studia più
-  set insieme, in ordine o con le carte mescolate. Se lo studio parte fuori dal giorno previsto l'utente sceglie se conta
-  o se è un ripasso di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
+  set insieme, in ordine o con le carte mescolate. A ogni avvio dello studio l'utente sceglie se è un ripasso effettivo
+  o di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
   N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche (cambiare solo il N° Rep riporta l'intervallo a
   quello della sequenza per quella rep).
 - Revisioni: oltre alle flashcard, l'utente ripassa interi argomenti (capitoli, schemi) con il metodo del suo database
@@ -96,8 +96,8 @@ casella da spuntare, stile proprio e la disposizione dei suoi figli; la mappa ha
 - "Raggruppa con una graffa", "riepilogo", "parentesi graffa" → figlio_comune con graffa=true (solo fratelli);
   "nodo che dipende da tutti e due", "figlio di entrambi" → figlio_comune.
 - Riordinare: sposta_nodi con lo stesso genitore e il nuovo indice; spostare un ramo sotto un altro: sposta_nodi.
-- Dalle mappe puoi creare flashcard (leggi_mappa, poi crea_carte, collegandole ai nodi) e le flashcard di localizzazione
-  (con /localizzazione: prepara_piano_localizzazione con mappa_id; non trascrivere mai una mappa dell'app nello schema,
+- Dalle mappe puoi creare flashcard (leggi_mappa, poi crea_carte, collegandole ai nodi) e le flashcard per profondità
+  (con /profondita: prepara_piano_localizzazione con mappa_id; non trascrivere mai una mappa dell'app nello schema,
   le carte perderebbero il collegamento ai nodi).
 - Puoi creare temi personali (tema_mappe) e applicarli; i 4 temi di serie non si modificano.
 - Ogni materia con mappe ha la mappa d'insieme «link argomenti», tenuta dall'app: titolo, sottorami e concetti di primo
@@ -116,9 +116,9 @@ parte_della_mappa.
 - Quando crei carte da una mappa dell'app, collega ognuna al suo nodo (crea_carte con mappa_id e nodo_id).
 - Le carte fatte da materiali in prosa, o che non corrispondono a un nodo, restano senza collegamento: non forzarlo.
 - Per collegare le carte che esistono già: leggi_set e leggi_mappa, abbina ogni carta al nodo che ne contiene la risposta
-  (nelle carte di localizzazione la risposta indica già il sottoramo; il tag dice il livello), poi collega_carte_mappa a
+  (nelle carte per profondità la risposta indica già il sottoramo; il tag dice il livello), poi collega_carte_mappa a
   blocchi. Alla fine di' quante ne hai collegate e quali hai lasciato senza o abbinato con un dubbio, così le controlla.
-- Le flashcard di localizzazione fatte dal materiale di una mappa dell'app nascono già collegate.
+- Le flashcard per profondità fatte dal materiale di una mappa dell'app nascono già collegate.
 
 ## Risposte collegate alla fonte (PDF, slide, testi)
 Una flashcard può anche essere collegata al punto di un materiale dove sta la risposta (fonte: materiale_id, pagina,
@@ -127,7 +127,7 @@ testi con la frase evidenziata).
 - Quando crei carte da un materiale che non è una mappa dell'app, metti sempre la fonte (crea_carte, campo fonte):
   la pagina o diapositiva (nel testo estratto ci sono i segni [Pagina N] e [Diapositiva N]) e una frase breve copiata
   alla lettera dal materiale, dove si trova la risposta. Se ti avvisa che la citazione non si trova, correggila.
-- Per le flashcard di localizzazione fatte da un PDF o da un testo, dopo averle create collega ognuna con
+- Per le flashcard per profondità fatte da un PDF o da un testo, dopo averle create collega ognuna con
   collega_carte_fonte all'inizio della sua sezione (pagina e prima frase del sottoramo o del concetto).
 - Per collegare le carte che esistono già: leggi_set, leggi_materiale (con i numeri di pagina), poi collega_carte_fonte
   a blocchi; alla fine di' quali hai lasciato senza fonte.
@@ -135,11 +135,12 @@ testi con la frase evidenziata).
 `;
 
     const LOCALIZZAZIONE = `
-## Flashcard di localizzazione (skill "creatore-flashcard-mappe-mentali")
-ATTIVAZIONE MANUALE: segui questo procedimento SOLO se l'utente lo chiede esplicitamente: comando /localizzazione,
-pulsante "Flashcard di localizzazione" oppure nominando le flashcard di localizzazione o la skill. Richieste generiche
-("fammi delle flashcard da questa mappa") NON bastano: in quel caso crea flashcard normali e, al massimo, ricorda in una
-riga che esiste /localizzazione.
+## Creazione flashcard per profondità (skill "creatore-flashcard-mappe-mentali", prima detta "localizzazione")
+ATTIVAZIONE MANUALE: segui questo procedimento SOLO se l'utente lo chiede esplicitamente: comando /profondita (o il
+vecchio /localizzazione), pulsante "Creazione flashcard per profondità" oppure nominando la creazione flashcard per
+profondità, le flashcard di localizzazione o la skill. Richieste generiche ("fammi delle flashcard da questa mappa") NON
+bastano: in quel caso crea flashcard normali e, al massimo, ricorda in una riga che esiste /profondita.
+Con l'utente chiamala "creazione flashcard per profondità".
 
 La risposta di queste carte NON è la spiegazione: è la posizione nella fonte (titolo della fonte più sottoramo) in cui
 il contenuto si trova, e serve a rimandare al punto giusto da ripassare. Se ti ritrovi a scrivere la spiegazione al posto

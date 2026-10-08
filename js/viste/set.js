@@ -151,6 +151,7 @@ Viste.set = {
                         ${Ui.titoloApribile('revisioni', `Revisioni ${lista.length ? `<span class="conteggio">${lista.length}</span>` : ''}<span data-conto-revisioni>${contoRevisioni()}</span>`)}
                         <div class="azioni-riga">
                             <a class="btn btn-fantasma btn-piccolo" href="#/revisioni">${ico('calendario-spunta')}Tutte le revisioni</a>
+                            ${perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="studio-libero-set" title="Hai un po' di tempo? Scegli quanto e quali flashcard studiare">${ico('orologio')}Studio libero</button>` : ''}
                             ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set" title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareCarte})</button>` : ''}
                             ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
                         </div>
@@ -158,7 +159,7 @@ Viste.set = {
                     <div class="sezione-corpo">
                         ${lista.length ? `
                         <div class="pannelli-rev pannelli-rev-set" role="tablist" aria-label="Pannello delle revisioni">
-                            <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('cartella')}Per set</button>
+                            <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('documento')}Per argomento</button>
                             <button type="button" role="tab" class="pannello-rev${perCarte ? ' attivo' : ''}" data-pannello-rev="carte" aria-selected="${perCarte}">
                                 ${ico('carte')}Per flashcard${sfasate.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}" title="Flashcard sfasate${daFareCarte ? ' da ripassare' : ''}">${daFareCarte || sfasate.length}</span>` : ''}</button>
                         </div>` : ''}
@@ -176,6 +177,8 @@ Viste.set = {
                 this.pannelloRevisioni = b.dataset.pannelloRev;
                 disegnaRevisioni();
             });
+            const studioLibero = $('[data-azione="studio-libero-set"]', boxRevisioni);
+            if (studioLibero) studioLibero.addEventListener('click', () => StudioLibero.apri({ voci: Revisioni.tutteLeVoci({ setIds }) }));
             const ripassaCarte = $('[data-azione="ripassa-carte-set"]', boxRevisioni);
             if (ripassaCarte) ripassaCarte.addEventListener('click', () => Revisioni.avviaRipassoCarte(Revisioni.carteDevianti({ setIds }).filter(Revisioni.cartaDaRipassare)));
             const filtro = $('.filtro-carte-set', boxRevisioni);

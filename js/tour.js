@@ -16,7 +16,7 @@ const Tour = (() => {
     const mappa = () => Mappe.tutte().find(m => m.prova) || null;
     const riga = nome => { const a = arg(nome); return a ? $(`tr[data-id="${a.id}"]`) : null; };
     const data = (giorno, intervallo) => Revisioni.dataBreve(aggiungiGiorni(daChiaveGiorno(giorno), intervallo));
-    // Se lo ripassi oggi e conta: { tra, il } della prossima revisione
+    // Se lo ripassi oggi con un ripasso effettivo: { tra, il } della prossima revisione
     const seConta = a => {
         const x = Srs.dopoRipasso({ intervallo: Revisioni.intervallo(a), giorno: a.ultimoRipasso });
         return { tra: giorniTra(Date.now(), aggiungiGiorni(daChiaveGiorno(x.giorno), x.intervallo)), il: data(x.giorno, x.intervallo) };
@@ -40,7 +40,7 @@ const Tour = (() => {
                 if (!a) return '<p>Il set «Bowlby» non c\'è più nei dati di prova.</p>';
                 const x = seConta(a);
                 return `<p>«Bowlby» è alla rep ${a.ripetizioni} con un intervallo di ${giorni(Revisioni.intervallo(a))}: ${esc(Revisioni.avviso(a).testo.toLowerCase())}.</p>
-                    <p>Con ${ico('fulmine')} nella colonna Ripasso parte lo studio del set. Il giorno previsto, se anche le sue carte sono in pari, non ti chiede niente: se valuti tutte le
+                    <p>Con ${ico('fulmine')} nella colonna Ripasso parte lo studio del set. Prima di iniziare l'app ti chiede sempre se è un <b>ripasso effettivo</b> o <b>di prova</b>. Se è effettivo e valuti tutte le
                     carte diventa rep ${a.ripetizioni + 1} e la prossima revisione è tra ${giorni(x.tra)} (il ${x.il}).</p>`;
             },
         },
@@ -52,7 +52,7 @@ const Tour = (() => {
                 if (!a) return '<p>Il set «Ainsworth» non c\'è più nei dati di prova.</p>';
                 const e = Revisioni.esitiSeConta(a);
                 return `<p>«Ainsworth» doveva essere ripassato ${esc(distanzaGiorni(Revisioni.prossima(a)))}. Premendo ${ico('fulmine')} l'app te lo dice e chiede se
-                    il ripasso conta. Se conta, la prossima revisione dipende da com'è andata:</p>
+                    è un ripasso effettivo o di prova. Se è effettivo, la prossima revisione dipende da com'è andata:</p>
                     <ul class="tour-elenco"><li>set <b>Ottimo</b>: tra ${giorni(e.perfetto.tra)}, perché ricordare dopo più tempo dice che la memoria è solida;</li>
                     <li>set <b>Buono</b>: tra ${giorni(e.buono.tra)};</li>
                     <li>set <b>Ok, Scarso o incompleto</b>: tra ${giorni(e.male.tra)}, perché nel frattempo hai dimenticato qualcosa.</li></ul>
@@ -67,20 +67,20 @@ const Tour = (() => {
                 if (!a) return '<p>Il set del Capitolo 3 non c\'è più nei dati di prova.</p>';
                 const x = seConta(a);
                 return `<p>Il Capitolo 3 andrebbe ripassato ${esc(distanzaGiorni(Revisioni.prossima(a)))} (il ${Revisioni.dataBreve(Revisioni.prossima(a))}).
-                    Se lo ripassi adesso e conta, la prossima revisione sarà il ${x.il}: la data va avanti, ma meno che aspettando,
+                    Se lo ripassi adesso con un ripasso effettivo, la prossima revisione sarà il ${x.il}: la data va avanti, ma meno che aspettando,
                     perché il ripasso vale solo per la parte di intervallo che hai aspettato.</p>`;
             },
         },
         {
             titolo: 'Già ripassato oggi',
             rotta: '/revisioni', trova: () => riga('Capitolo 4 – Teoria della mente'),
-            testo: () => `<p>Il Capitolo 4 è già stato ripassato oggi. Se lo ripassi di nuovo e scegli che conta, il N° Rep sale di 1 ma la data resta:
+            testo: () => `<p>Il Capitolo 4 è già stato ripassato oggi. Se lo ripassi di nuovo e scegli <b>Ripasso effettivo</b>, il N° Rep sale di 1 ma la data resta:
                 un secondo ripasso nello stesso giorno non allunga la memoria. Se vuoi solo esercitarti, scegli <b>Ripasso di prova</b>.</p>`,
         },
         {
             titolo: 'Mai ripassato: si parte dalla rep 1',
             rotta: '/revisioni', trova: () => riga('Capitolo 1 – Il temperamento'),
-            testo: () => `<p>Il Capitolo 1 non è mai stato ripassato: la prima volta conta come rep 1 e la revisione successiva è il giorno dopo.</p>
+            testo: () => `<p>Il Capitolo 1 non è mai stato ripassato: con un ripasso effettivo diventa rep 1 e la revisione successiva è il giorno dopo.</p>
                 <p>Le sue flashcard sono ad albero: nello studio a cascata le domande figlie arrivano dopo che hai imparato la madre. I tag
                 (generale, sottoramo, concetto 1, dettaglio) dicono a che livello sta ogni carta.</p>`,
         },
@@ -122,7 +122,7 @@ const Tour = (() => {
             rotta: () => { const s = setDi('Capitolo 3 – Sviluppo delle emozioni'); return s ? '/set/' + s.id : '/libreria'; },
             prima: () => Object.assign(Viste.set, { pannelloRevisioni: 'carte', soloSfasate: false }),
             trova: () => $('.sezione-revisioni'),
-            testo: () => `<p>Ogni set ha la sua sezione Revisioni, con <b>Per set</b> e <b>Per flashcard</b> (anche qui c'è «Solo sfasate»): vedi e
+            testo: () => `<p>Ogni set ha la sua sezione Revisioni, con <b>Per argomento</b> e <b>Per flashcard</b> (anche qui c'è «Solo sfasate»): vedi e
                 cambi solo le righe e le carte di questo set e dei suoi sotto-set.</p>`,
         },
         {
@@ -130,7 +130,7 @@ const Tour = (() => {
             rotta: () => { const m = mappa(); return m ? '/mappa/' + m.id : '/mappe'; },
             trova: () => $('[data-a="flashcard"]'),
             testo: () => `<p>Seleziona uno o più nodi (Maiusc o Ctrl + clic, oppure Maiusc + trascina) e premi questo pulsante: l'assistente IA
-                scrive le flashcard di quei nodi, con tag e rientri come la localizzazione, già collegate alla mappa. Serve la chiave di Gemini
+                scrive le flashcard di quei nodi, con tag e rientri come la creazione flashcard per profondità, già collegate alla mappa. Serve la chiave di Gemini
                 (Impostazioni → Assistente IA).</p>
                 <p>Con il pulsante Immagine puoi anche mettere un'immagine <b>fluttuante</b>: segue il suo nodo, ma spostandola non sposti i nodi.</p>`,
         },
@@ -144,7 +144,7 @@ const Tour = (() => {
             titolo: 'Ora tocca a te',
             rotta: '/revisioni', prima: () => Object.assign(Viste.revisioni, { pannello: 'set', scheda: 'tutte' }),
             testo: () => `<ol class="tour-elenco">
-                    <li>Ripassa «Bowlby» con ${ico('fulmine')}: è puntuale, conta senza domande.</li>
+                    <li>Ripassa «Bowlby» con ${ico('fulmine')}: è puntuale, scegli «Ripasso effettivo».</li>
                     <li>Prova <b>Ripassa più set</b> (in alto, nelle Revisioni) con le carte mescolate.</li>
                     <li>Ripassa «Ainsworth»: guarda l'avviso del ritardo e, alla fine, la nuova data.</li>
                     <li>Ripassa il Capitolo 4 scegliendo «Ripasso di prova»: non cambia niente.</li>
@@ -238,6 +238,8 @@ const Tour = (() => {
     function avvia(da = 0) {
         if (!DatiProva.presenti()) { Ui.toast('Il tutorial usa i dati di prova: caricali da Impostazioni → Dati di prova', 'info', 5000); return; }
         esci();
+        // Le tabelle si mostrano intere: niente filtri di set e stato
+        FiltriRevisioni.azzera('set'); FiltriRevisioni.azzera('carte');
         luce = document.createElement('div');
         luce.className = 'tour-luce';
         luce.hidden = true;

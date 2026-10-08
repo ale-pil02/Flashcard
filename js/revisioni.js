@@ -333,29 +333,33 @@ const Revisioni = (() => {
         }));
     }
 
-    // Set e carte della sessione che non cadono nel giorno previsto. Se la sessione è il ripasso completo di qualche set
-    // (ha tutte le sue carte e non è il ripasso delle sole carte da sistemare o delle singole carte) conta solo il set:
-    // le sue carte fuori giorno seguono le loro regole senza chiedere. Altrimenti contano le carte, solo quelle con una
-    // data loro (non le nuove e non le Scarso da rifare, che sono da ripassare e basta)
-    function fuoriGiorno(carte, { parziale = false, perCarta = false } = {}) {
+    // Com'è messa la sessione rispetto ai giorni previsti. Se è il ripasso completo di qualche set (ha tutte le sue carte e
+    // non è il ripasso delle sole carte da sistemare o delle singole carte) contano i set: { a, tipo: 'mai' | 'puntuale' |
+    // 'anticipo' | 'ritardo' | 'stesso-giorno', giorni, prevista, esiti }; le loro carte seguono le loro regole. Altrimenti
+    // contano le carte: quelle con una data loro fuori giorno (flashcard) e i conti di quelle puntuali e senza data
+    function situazioniAvvio(carte, { parziale = false, perCarta = false } = {}) {
         const oggi = chiaveGiorno();
         const ids = new Set(carte.map(c => c.id));
         const coperti = parziale || perCarta ? [] : [...new Set(carte.map(c => c.setId))].flatMap(setId => Dati.argomentiDiSet(setId).filter(automatico))
             .filter(a => { const sue = carteDi(a) || []; return sue.length && sue.every(c => ids.has(c.id)); });
-        const argomenti = coperti.filter(a => a.ultimoRipasso).map(a => {
+        const argomenti = coperti.map(a => {
+            if (!a.ultimoRipasso) return { a, tipo: 'mai', giorni: 0 };
             const x = Srs.situazione({ giorno: a.ultimoRipasso, intervallo: intervallo(a) }, oggi);
-            return x.tipo === 'puntuale' ? null : { a, ...x, esiti: esitiSeConta(a, oggi) };
-        }).filter(Boolean);
+            return { a, ...x, esiti: esitiSeConta(a, oggi) };
+        });
+        const conti = { puntuali: 0, senzaData: 0 };
         const flashcard = coperti.length ? [] : carte.map(c => {
             const s = c.srs;
-            if (!s || !s.giorno || s.daRifareDal || (s.ultimaValutazione == null && !s.allineata)) return null;
+            if (!s || !s.giorno || s.daRifareDal || (s.ultimaValutazione == null && !s.allineata)) { conti.senzaData++; return null; }
             const x = Srs.situazione({ giorno: s.giorno, intervallo: Srs.intervalloDi(s.intervallo, s.rep) }, oggi);
-            return x.tipo === 'puntuale' ? null : { c, ...x };
+            if (x.tipo === 'puntuale') { conti.puntuali++; return null; }
+            return { c, ...x };
         }).filter(Boolean);
-        return { argomenti, flashcard };
+        return { argomenti, flashcard, conti, carte: carte.length };
     }
 
-    const BADGE = { ritardo: 'In ritardo', anticipo: 'In anticipo', 'stesso-giorno': 'Già ripassato oggi' };
+    const BADGE = { ritardo: 'In ritardo', anticipo: 'In anticipo', 'stesso-giorno': 'Già ripassato oggi', puntuale: 'Puntuale', mai: 'Prima volta' };
+    const fuoriGiornoTipo = x => ['ritardo', 'anticipo', 'stesso-giorno'].includes(x.tipo);
 
     function testoSituazione(x, femminile = false) {
         if (x.tipo === 'stesso-giorno') return `già ripassat${femminile ? 'a' : 'o'} oggi`;
@@ -373,15 +377,18 @@ const Revisioni = (() => {
         return tappa('ultimo ripasso', ultimo) + tratto(plurale(I, 'giorno', 'giorni')) + tappa('prevista', prevista) + tratto(`+${plurale(x.giorni, 'giorno', 'giorni')}`, 'ritardo') + tappa('oggi', oggi, 'oggi');
     }
 
+    function traGiorni(x, e) {
+        return `tra ${plurale(x.esiti[e].tra, 'giorno', 'giorni')} <small>(${x.esiti[e].il})</small>${esamePrima(x.a.setId, aggiungiGiorni(Date.now(), x.esiti[e].tra)) ? ` <span class="dopo-esame">${ico('avviso')}dopo l'esame</span>` : ''}`;
+    }
+
     function esitiSet(x) {
-        const g = e => `tra ${plurale(x.esiti[e].tra, 'giorno', 'giorni')} <small>(${x.esiti[e].il})</small>${esamePrima(x.a.setId, aggiungiGiorni(Date.now(), x.esiti[e].tra)) ? ` <span class="dopo-esame">${ico('avviso')}dopo l'esame</span>` : ''}`;
-        if (x.tipo === 'stesso-giorno') return `<p class="conta-se">Se conta: N° Rep ${(x.a.ripetizioni || 0) + 1}, la prossima revisione resta il <b>${dataBreve(prossima(x.a))}</b>.</p>`;
-        if (x.tipo === 'anticipo') return `<p class="conta-se">Se conta: prossima revisione <b>${g('buono')}</b>. La data va avanti, ma meno che aspettando.</p>`;
-        return `<div class="conta-se"><span>Se conta, la prossima revisione dipende da com'è andata:</span>
+        if (x.tipo === 'stesso-giorno') return `<p class="conta-se">Se è effettivo: N° Rep ${(x.a.ripetizioni || 0) + 1}, la prossima revisione resta il <b>${dataBreve(prossima(x.a))}</b>.</p>`;
+        if (x.tipo === 'anticipo') return `<p class="conta-se">Se è effettivo: prossima revisione <b>${traGiorni(x, 'buono')}</b>. La data va avanti, ma meno che aspettando.</p>`;
+        return `<div class="conta-se"><span>Se è effettivo, la prossima revisione dipende da com'è andata:</span>
             <div class="conta-esiti">
-                <span class="conta-esito stato-perfetto"><b>Ottimo</b>${g('perfetto')}</span>
-                <span class="conta-esito stato-buono"><b>Buono</b>${g('buono')}</span>
-                <span class="conta-esito stato-ok"><b>Ok, Scarso o incompleto</b>${g('male')}</span>
+                <span class="conta-esito stato-perfetto"><b>Ottimo</b>${traGiorni(x, 'perfetto')}</span>
+                <span class="conta-esito stato-buono"><b>Buono</b>${traGiorni(x, 'buono')}</span>
+                <span class="conta-esito stato-ok"><b>Ok, Scarso o incompleto</b>${traGiorni(x, 'male')}</span>
             </div></div>`;
     }
 
@@ -396,11 +403,14 @@ const Revisioni = (() => {
         }).filter(Boolean).join('');
     }
 
-    // Se lo studio non cade nel giorno previsto chiede se conta o se è un ripasso di prova (che non cambia niente).
-    // Restituisce 'conta' (anche quando non c'è niente da chiedere), 'prova' o null (annullato)
+    // A ogni avvio dello studio chiede se è un ripasso effettivo o di prova (che non cambia niente), e dice com'è messo
+    // rispetto ai giorni previsti: i set fuori giorno con la linea del tempo e la prossima revisione per ogni esito,
+    // quelli puntuali o alla prima volta in breve; nelle sessioni di carte quante sono fuori giorno.
+    // Restituisce 'conta' (effettivo), 'prova' o null (annullato)
     function chiediSeConta(carte, opzioni = {}) {
-        const { argomenti, flashcard } = fuoriGiorno(carte, opzioni);
-        if (!argomenti.length && !flashcard.length) return Promise.resolve('conta');
+        const { argomenti, flashcard, conti } = situazioniAvvio(carte, opzioni);
+        const fuori = argomenti.filter(fuoriGiornoTipo);
+        const inPari = argomenti.filter(x => !fuoriGiornoTipo(x));
         const voceSet = x => `
             <div class="conta-set conta-${x.tipo}">
                 <div class="conta-set-testa"><b>${esc(x.a.nome || nomeSet(x.a.setId))}</b>
@@ -408,6 +418,16 @@ const Revisioni = (() => {
                 <div class="conta-linea">${lineaDelTempo(x)}</div>
                 ${esitiSet(x)}
             </div>`;
+        const solo = inPari.length === 1 && !fuori.length;
+        const primo = Srs.sequenza()[0];
+        const bloccoInPari = inPari.length ? `
+            <div class="conta-set conta-${solo ? inPari[0].tipo : 'puntuale'}">
+                <div class="conta-set-testa"><b>${solo ? esc(inPari[0].a.nome || nomeSet(inPari[0].a.setId)) : 'Nel giorno previsto o alla prima volta'}</b>
+                    ${solo ? `<span class="conta-badge conta-${inPari[0].tipo}">${BADGE[inPari[0].tipo]}</span>` : ''}</div>
+                <ul class="conta-righe">${inPari.map(x => `<li>${solo ? '' : `<span><b>${esc(x.a.nome || nomeSet(x.a.setId))}</b> <span class="conta-badge conta-${x.tipo}">${BADGE[x.tipo]}</span></span>`}
+                    <span>${x.tipo === 'mai' ? `Se è effettivo: N° Rep 1, prossima revisione ${primo === 1 ? 'domani' : `tra ${plurale(primo, 'giorno', 'giorni')}`}`
+                        : `Se è effettivo: N° Rep ${(x.a.ripetizioni || 0) + 1}, prossima revisione ${traGiorni(x, 'buono')}`}</span></li>`).join('')}</ul>
+            </div>` : '';
         const una = flashcard.length === 1 ? flashcard[0] : null;
         const bloccoCarte = flashcard.length ? `
             <div class="conta-set conta-carte">
@@ -415,28 +435,34 @@ const Revisioni = (() => {
                 <div class="conta-pastiglie">${riepilogoCarte(flashcard)}</div>
                 ${una ? '' : `<details class="conta-dettagli"><summary>Quali sono</summary><ul>${flashcard.map(x =>
                     `<li><span>${esc(Ui.tronca(testoDaHtml(x.c.domanda), 90)) || '(senza domanda)'}</span><small>${testoSituazione(x, true)}</small></li>`).join('')}</ul></details>`}
-                <p class="conta-se">Se ${una ? 'conta' : 'contano'}: ${[
+                <p class="conta-se">Se è effettivo: ${[
                     flashcard.some(x => x.tipo === 'ritardo') && `${una ? '' : 'in ritardo, '}se la sai bene l'intervallo si allunga, se la sai così così si accorcia`,
                     flashcard.some(x => x.tipo === 'anticipo') && `${una ? '' : 'in anticipo, '}la data va avanti, ma meno che aspettando`,
                     flashcard.some(x => x.tipo === 'stesso-giorno') && `${una ? '' : 'già ripassate oggi, '}N° Rep +1 e la data resta`,
                 ].filter(Boolean).join('; ')}.</p>
             </div>` : '';
-        const intro = argomenti.length
-            ? (argomenti.length === 1 ? 'Questo set non è nel giorno previsto per il ripasso.' : 'Questi set non sono nel giorno previsto per il ripasso.')
-            : flashcard.length === 1 ? 'Questa flashcard non è nel giorno previsto per il ripasso.' : 'Alcune flashcard non sono nel giorno previsto per il ripasso.';
-        const soloStessoGiorno = argomenti.every(x => x.tipo === 'stesso-giorno') && flashcard.every(x => x.tipo === 'stesso-giorno');
+        const altreCarte = !argomenti.length && (conti.puntuali || conti.senzaData)
+            ? `<p class="conta-se">${[conti.puntuali && `${plurale(conti.puntuali, 'flashcard nel giorno previsto', 'flashcard nel giorno previsto')}`,
+                conti.senzaData && `${plurale(conti.senzaData, 'nuova o da rifare', 'nuove o da rifare')}`].filter(Boolean).join(' · ')}${flashcard.length ? '' : ': valutazioni, N° Rep e date seguono le solite regole.'}</p>` : '';
+        const intro = fuori.length ? (argomenti.length === 1 ? 'Questo set non è nel giorno previsto.' : fuori.length === 1 ? 'Un set non è nel giorno previsto.' : 'Alcuni set non sono nel giorno previsto.')
+            : flashcard.length ? (una ? 'Questa flashcard non è nel giorno previsto.' : 'Alcune flashcard non sono nel giorno previsto.')
+                : argomenti.length ? (argomenti.every(x => x.tipo === 'mai') ? (argomenti.length === 1 ? 'È il primo ripasso di questo set.' : 'È il primo ripasso di questi set.')
+                    : 'Il ripasso è nel giorno previsto.') : `Stai per studiare ${plurale(carte.length, 'flashcard', 'flashcard')}.`;
+        const soloStessoGiorno = (fuori.length || flashcard.length) && argomenti.every(x => x.tipo === 'stesso-giorno') && flashcard.every(x => x.tipo === 'stesso-giorno');
         return new Promise(risolvi => {
             let scelta = null;
             Ui.modale({
-                titolo: 'Conta come ripasso?', classe: 'modale-conta',
+                titolo: 'Ripasso effettivo o di prova?', classe: 'modale-conta',
                 corpo: `
                     <p class="conta-intro">${intro}</p>
-                    ${argomenti.map(voceSet).join('')}
+                    ${fuori.map(voceSet).join('')}
+                    ${bloccoInPari}
                     ${bloccoCarte}
+                    ${altreCarte}
                     <div class="conta-scelte">
                         <button type="button" class="conta-scelta conta-scelta-primaria" data-scelta="conta" autofocus>
                             <span class="conta-scelta-icona">${ico('spunta')}</span>
-                            <span><b>Conta come ripasso</b><small>${soloStessoGiorno ? 'N° Rep +1, le date restano' : argomenti.length ? 'N° Rep +1 e le nuove date qui sopra' : 'Valutazioni, N° Rep e date si aggiornano'}</small></span>
+                            <span><b>Ripasso effettivo</b><small>${soloStessoGiorno ? 'N° Rep +1, le date restano' : argomenti.length ? 'Conta: N° Rep +1 e le nuove date qui sopra' : 'Conta: valutazioni, N° Rep e date si aggiornano'}</small></span>
                         </button>
                         <button type="button" class="conta-scelta" data-scelta="prova">
                             <span class="conta-scelta-icona">${ico('occhio')}</span>
@@ -582,7 +608,7 @@ const Revisioni = (() => {
 
     const COLONNE = [
         { col: 'nome', ordina: 'nome', testo: 'Argomento', icona: 'documento' },
-        { col: 'set', testo: 'Set', icona: 'cartella', conSet: true },
+        { col: 'set', ordina: 'set', testo: 'Set', icona: 'cartella', conSet: true },
         { col: 'fonte', testo: 'Schema / fonte', icona: 'elenco' },
         { col: 'num', ordina: 'ripetizioni', testo: 'N° Rep', icona: 'elenco-num' },
         { col: 'data', ordina: 'ultimo', testo: 'Ultimo ripasso', icona: 'calendario' },
@@ -613,17 +639,57 @@ const Revisioni = (() => {
         try { localStorage.removeItem(CHIAVE_LARGHEZZE); } catch (e) { /* niente da togliere */ }
     }
 
-    function colonne(op) { return COLONNE.filter(c => !c.conSet || op.colonnaSet); }
+    function colonne(op) { return COLONNE.filter(c => (!c.conSet || op.colonnaSet) && !(op.nascoste && op.nascoste.has(c.col))); }
 
-    const COLONNE_ORDINABILI = {
-        nome: (a, b) => a.nome.localeCompare(b.nome, 'it', { numeric: true }),
-        ripetizioni: (a, b) => (a.ripetizioni || 0) - (b.ripetizioni || 0),
-        ultimo: (a, b) => (a.ultimoRipasso || '').localeCompare(b.ultimoRipasso || ''),
-        intervallo: (a, b) => (a.ultimoRipasso ? intervallo(a) : 0) - (b.ultimoRipasso ? intervallo(b) : 0),
-        prossima: perUrgenza,
-        avviso: perUrgenza,
-        stato: (a, b) => Object.keys(STATI).indexOf(statoDi(a)) - Object.keys(STATI).indexOf(statoDi(b)),
+    // Ordinamenti delle tabelle: { confronta, vuoto } — le righe senza quel dato (mai ripassate, senza stato) vanno
+    // sempre in fondo, in ordine crescente e decrescente
+    const perNome = (x, y) => String(x || '').localeCompare(String(y || ''), 'it', { numeric: true });
+    const ORDINI = {
+        set: {
+            nome: { confronta: (a, b) => perNome(a.nome, b.nome) },
+            set: { confronta: (a, b) => perNome(nomeSet(a.setId), nomeSet(b.setId)) },
+            ripetizioni: { confronta: (a, b) => (a.ripetizioni || 0) - (b.ripetizioni || 0) },
+            ultimo: { confronta: (a, b) => a.ultimoRipasso.localeCompare(b.ultimoRipasso), vuoto: a => !a.ultimoRipasso },
+            intervallo: { confronta: (a, b) => intervallo(a) - intervallo(b), vuoto: a => !a.ultimoRipasso },
+            prossima: { confronta: perUrgenza, vuoto: a => prossima(a) == null },
+            avviso: { confronta: perUrgenza, vuoto: a => prossima(a) == null },
+            stato: { confronta: (a, b) => Object.keys(STATI).indexOf(statoDi(b)) - Object.keys(STATI).indexOf(statoDi(a)), vuoto: a => !STATI[statoDi(a)] },
+        },
+        carte: {
+            carta: { confronta: (a, b) => perNome(testoDaHtml(a.carta.domanda), testoDaHtml(b.carta.domanda)) },
+            set: { confronta: (a, b) => perNome(nomeSet(a.carta.setId), nomeSet(b.carta.setId)) },
+            valutazione: { confronta: (a, b) => Srs.valutazione(a.carta) - Srs.valutazione(b.carta), vuoto: v => Srs.valutazione(v.carta) == null },
+            sfasatura: { confronta: (a, b) => ordineSfasatura(a) - ordineSfasatura(b) },
+            ripetizioni: { confronta: (a, b) => a.ripetizioni - b.ripetizioni },
+            ultimo: { confronta: (a, b) => a.ultimoRipasso.localeCompare(b.ultimoRipasso), vuoto: v => !v.ultimoRipasso },
+            intervallo: { confronta: (a, b) => a.intervallo - b.intervallo, vuoto: v => v.intervallo == null },
+            prossima: { confronta: perUrgenza, vuoto: v => prossima(v) == null },
+            avviso: { confronta: perUrgenza, vuoto: v => prossima(v) == null },
+        },
     };
+    // Rispetto al set, dalla più lontana: N giorni prima … al passo … N giorni dopo
+    const ordineSfasatura = v => {
+        const x = v.sfasatura;
+        return { prima: -x.giorni, passo: 0, dopo: x.giorni, scarso: 1e5, mai: 2e5, 'senza-set': 3e5 }[x.tipo] ?? 0;
+    };
+
+    // ord = { colonna, verso: 1 crescente | -1 decrescente }; senza colonna resta l'ordine dato
+    function ordina(tipo, lista, ord) {
+        const o = ord && ord.colonna && ORDINI[tipo][ord.colonna];
+        if (!o) return lista;
+        const vuoto = o.vuoto || (() => false);
+        return [...lista].sort((a, b) => {
+            const va = vuoto(a), vb = vuoto(b);
+            if (va || vb) return va - vb;
+            return o.confronta(a, b) * ord.verso;
+        });
+    }
+
+    // Le colonne che si possono nascondere (la prima, il nome, resta sempre)
+    function colonneDi(tipo) {
+        return (tipo === 'carte' ? COLONNE_CARTE : COLONNE).slice(1).map(c => ({ col: c.col, testo: c.testo }));
+    }
+
     const ordinamenti = new Map();   // chiave della tabella → { colonna, verso }
 
     function nomeSet(setId, conMateria) {
@@ -710,6 +776,13 @@ const Revisioni = (() => {
             </tr>`;
     }
 
+    // Clic ripetuti sull'intestazione: crescente → decrescente → ordine originale
+    function cambiaOrdine(ord, col) {
+        if (ord.colonna !== col) Object.assign(ord, { colonna: col, verso: 1 });
+        else if (ord.verso > 0) ord.verso = -1;
+        else Object.assign(ord, { colonna: null, verso: 1 });
+    }
+
     function intestazione(op, ord) {
         return `<tr>${colonne(op).map(c => {
             const attivo = c.ordina && ord.colonna === c.ordina;
@@ -730,25 +803,23 @@ const Revisioni = (() => {
     function larghezzaTabella(op) { const l = larghezze(); return colonne(op).reduce((n, c) => n + l[c.col], 0); }
 
     // opzioni: { chiave, argomenti: () => [], colonnaSet, setModificabile, nuovo: async () => argomento | null,
-    //            vuoto: html quando non ci sono righe, dopo: () => void dopo ogni modifica }
+    //            vuoto: html quando non ci sono righe, dopo: () => void dopo ogni modifica,
+    //            ordinamento: { colonna, verso } condiviso con i filtri (se no uno per chiave), alOrdinare: () => void,
+    //            nascoste: Set delle colonne nascoste }
     function monta(contenitore, opzioni) {
-        const op = { colonnaSet: false, setModificabile: false, vuoto: '', dopo: () => {}, ...opzioni };
-        if (!ordinamenti.has(op.chiave)) ordinamenti.set(op.chiave, { colonna: null, verso: 1 });
+        const op = { colonnaSet: false, setModificabile: false, vuoto: '', dopo: () => {}, alOrdinare: () => {}, ...opzioni };
+        if (!op.ordinamento && !ordinamenti.has(op.chiave)) ordinamenti.set(op.chiave, { colonna: null, verso: 1 });
+        const ordine = () => op.ordinamento || ordinamenti.get(op.chiave);
 
-        const righe = () => {
-            const lista = op.argomenti();
-            const ord = ordinamenti.get(op.chiave);
-            if (!ord.colonna) return lista;
-            return [...lista].sort((a, b) => COLONNE_ORDINABILI[ord.colonna](a, b) * ord.verso);
-        };
+        const righe = () => ordina('set', op.argomenti(), ordine());
 
         const disegna = (fuoco = null) => {
             const lista = righe();
             contenitore.innerHTML = lista.length ? `
                 <div class="tabella-scorrevole riquadro riquadro-tabella">
-                    <table class="tabella-revisioni" style="width:${larghezzaTabella(op)}px">
+                    <table class="tabella-revisioni" style="width:${larghezzaTabella(op)}px" data-nascoste="${[...(op.nascoste || [])].join(' ')}">
                         ${colgroup(op)}
-                        <thead>${intestazione(op, ordinamenti.get(op.chiave))}</thead>
+                        <thead>${intestazione(op, ordine())}</thead>
                         <tbody>${lista.map(a => rigaHtml(a, op)).join('')}</tbody>
                     </table>
                     ${op.nuovo ? `<button type="button" class="riga-nuova" data-rev="nuovo">${ico('piu')}Nuovo argomento</button>` : ''}
@@ -857,13 +928,9 @@ const Revisioni = (() => {
         contenitore.addEventListener('click', async e => {
             const ordina = e.target.closest('[data-ordina]');
             if (ordina) {
-                const ord = ordinamenti.get(op.chiave);
-                const col = ordina.dataset.ordina;
-                // Clic ripetuti: crescente → decrescente → ordine originale
-                if (ord.colonna !== col) Object.assign(ord, { colonna: col, verso: 1 });
-                else if (ord.verso > 0) ord.verso = -1;
-                else Object.assign(ord, { colonna: null, verso: 1 });
+                cambiaOrdine(ordine(), ordina.dataset.ordina);
                 disegna();
+                op.alOrdinare();
                 return;
             }
             const b = e.target.closest('[data-rev]');
@@ -1137,15 +1204,15 @@ const Revisioni = (() => {
     // ---- Tabella delle flashcard per conto loro (pannello "Per flashcard") ------------------------
 
     const COLONNE_CARTE = [
-        { col: 'carta', testo: 'Flashcard', icona: 'carte', larghezza: 300 },
-        { col: 'set', testo: 'Set', icona: 'cartella', larghezza: 160 },
-        { col: 'stato', testo: 'Valutazione', icona: 'obiettivo', larghezza: 122 },
-        { col: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 176 },
-        { col: 'num', testo: 'N° Rep', icona: 'elenco-num', larghezza: 64 },
-        { col: 'data', testo: 'Ultimo ripasso', icona: 'calendario', larghezza: 134 },
-        { col: 'intervallo', testo: 'Intervallo', icona: 'ruota', larghezza: 92 },
-        { col: 'prossima', testo: 'Prossima revisione', icona: 'orologio', larghezza: 110 },
-        { col: 'avviso', testo: 'Alert', icona: 'avviso', larghezza: 172 },
+        { col: 'carta', ordina: 'carta', testo: 'Flashcard', icona: 'carte', larghezza: 300 },
+        { col: 'set', ordina: 'set', testo: 'Set', icona: 'cartella', larghezza: 160 },
+        { col: 'stato', ordina: 'valutazione', testo: 'Valutazione', icona: 'obiettivo', larghezza: 122 },
+        { col: 'sfasatura', ordina: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 176 },
+        { col: 'num', ordina: 'ripetizioni', testo: 'N° Rep', icona: 'elenco-num', larghezza: 64 },
+        { col: 'data', ordina: 'ultimo', testo: 'Ultimo ripasso', icona: 'calendario', larghezza: 134 },
+        { col: 'intervallo', ordina: 'intervallo', testo: 'Intervallo', icona: 'ruota', larghezza: 92 },
+        { col: 'prossima', ordina: 'prossima', testo: 'Prossima revisione', icona: 'orologio', larghezza: 110 },
+        { col: 'avviso', ordina: 'avviso', testo: 'Alert', icona: 'avviso', larghezza: 172 },
         { col: 'azioni', testo: 'Ripasso', larghezza: 214 },
     ];
 
@@ -1195,25 +1262,40 @@ const Revisioni = (() => {
     }
 
     // opzioni: { voci: () => [voce di tutteLeVoci o carteDevianti], perUrgenza: le più urgenti prima (se no nell'ordine
-    // dato), vuoto: html quando non ci sono righe, dopo: () => void }
+    // dato), vuoto: html quando non ci sono righe, dopo: () => void, chiave: per ricordare l'ordine scelto,
+    // ordinamento: { colonna, verso } condiviso con i filtri, alOrdinare: () => void, nascoste: Set delle colonne nascoste }
+    // Un clic sull'intestazione ordina la colonna (crescente → decrescente → ordine di partenza)
     function montaCarte(contenitore, opzioni) {
-        const op = { vuoto: '', dopo: () => {}, perUrgenza: true, ...opzioni };
-        const larghezza = COLONNE_CARTE.reduce((n, c) => n + c.larghezza, 0);
-        const voci = () => (op.perUrgenza ? [...op.voci()].sort(perUrgenzaCarte) : op.voci());
+        const op = { vuoto: '', dopo: () => {}, alOrdinare: () => {}, perUrgenza: true, ...opzioni };
+        const chiave = 'carte:' + (op.chiave || '');
+        if (!op.ordinamento && !ordinamenti.has(chiave)) ordinamenti.set(chiave, { colonna: null, verso: 1 });
+        const ordine = () => op.ordinamento || ordinamenti.get(chiave);
+        const visibili = () => COLONNE_CARTE.filter(c => !(op.nascoste && op.nascoste.has(c.col)));
+        const voci = () => ordina('carte', op.perUrgenza ? [...op.voci()].sort(perUrgenzaCarte) : op.voci(), ordine());
 
         const disegna = () => {
             const lista = voci();
+            const cols = visibili();
+            const ord = ordine();
             contenitore.innerHTML = lista.length ? `
                 <div class="tabella-scorrevole riquadro riquadro-tabella">
-                    <table class="tabella-revisioni tabella-carte-rev" style="width:${larghezza}px">
-                        <colgroup>${COLONNE_CARTE.map(c => `<col style="width:${c.larghezza}px">`).join('')}</colgroup>
-                        <thead><tr>${COLONNE_CARTE.map(c => `<th class="col-${c.col}"><span class="th-testo">${c.icona ? ico(c.icona) : ''}${c.testo}</span></th>`).join('')}</tr></thead>
+                    <table class="tabella-revisioni tabella-carte-rev" style="width:${cols.reduce((n, c) => n + c.larghezza, 0)}px" data-nascoste="${[...(op.nascoste || [])].join(' ')}">
+                        <colgroup>${cols.map(c => `<col style="width:${c.larghezza}px">`).join('')}</colgroup>
+                        <thead><tr>${cols.map(c => {
+                            const etichetta = `${c.icona ? ico(c.icona) : ''}${c.testo}`;
+                            const attivo = c.ordina && ord.colonna === c.ordina;
+                            return `<th class="col-${c.col}">${c.ordina
+                                ? `<button type="button" class="th-ordina${attivo ? ' attivo' : ''}" data-ordina-carte="${c.ordina}">${etichetta}${attivo ? ico(ord.verso > 0 ? 'giu' : 'su', 'freccia-ordine') : ''}</button>`
+                                : `<span class="th-testo">${etichetta}</span>`}</th>`;
+                        }).join('')}</tr></thead>
                         <tbody>${lista.map(rigaCartaHtml).join('')}</tbody>
                     </table>
                 </div>` : op.vuoto;
         };
 
         contenitore.addEventListener('click', e => {
+            const intestazione = e.target.closest('[data-ordina-carte]');
+            if (intestazione) { cambiaOrdine(ordine(), intestazione.dataset.ordinaCarte); disegna(); op.alOrdinare(); return; }
             const data = e.target.closest('input[type=date].controllo-sovrapposto');
             if (data && data.showPicker) { try { data.showPicker(); } catch (err) { /* il browser lo apre da sé */ } }
             const adegua = e.target.closest('[data-carta-adegua]');
@@ -1278,6 +1360,6 @@ const Revisioni = (() => {
         etichettaAvviso, dataBreve, dataLunga, nomeSet, monta, formNuovo, unoPerOgniSet, ripristinaLarghezze,
         carteDelSet, statoDaCarte, statoDi, rigaDelSet, registraSessione, segnaComunque, descriviEsito,
         daNonAllineare, esitiSeConta, ripassaPiuSet, avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
-        avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, fuoriGiorno,
+        avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, situazioniAvvio, ordina, colonneDi, perUrgenzaCarte,
     };
 })();

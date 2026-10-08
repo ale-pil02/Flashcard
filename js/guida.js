@@ -136,18 +136,19 @@ const Guida = (() => {
                     al passo con il set senza ripassarla.</p>`,
         },
         {
-            titolo: 'Conta o è una prova?',
+            titolo: 'Effettivo o di prova?',
             html: () => `
-                <p>Quando avvii lo studio e qualcosa non è nel giorno previsto (in anticipo, in ritardo o già ripassato oggi), l'app ti chiede:</p>
+                <p>Ogni volta che avvii lo studio l'app ti chiede che ripasso è, e ti dice com'è messo rispetto al giorno previsto
+                    (puntuale, in anticipo, in ritardo, già ripassato oggi o prima volta), con la prossima data che avresti:</p>
                 <div class="guida-pulsanti">
-                    <span class="btn btn-primario btn-piccolo">${ico('spunta')}Conta come ripasso</span>
+                    <span class="btn btn-primario btn-piccolo">${ico('spunta')}Ripasso effettivo</span>
                     <span class="btn btn-secondario btn-piccolo">${ico('occhio')}Ripasso di prova</span>
                 </div>
                 <ul class="guida-elenco">
-                    <li><span><b>Conta</b>: valutazioni, N° Rep e date si aggiornano, con le regole di anticipo e ritardo.</span></li>
-                    <li><span><b>Prova</b>: studi come sempre, ma set e flashcard restano com'erano. Il tempo va lo stesso nelle statistiche.</span></li>
+                    <li><span><b>Effettivo</b>: valutazioni, N° Rep e date si aggiornano, con le regole di anticipo e ritardo.</span></li>
+                    <li><span><b>Di prova</b>: studi come sempre, ma set e flashcard restano com'erano. Il tempo va lo stesso nelle statistiche.</span></li>
                 </ul>
-                <p class="nota">Il giorno previsto non ti chiede niente: conta e basta.</p>`,
+                <p class="nota">Lo <b>Studio libero</b> (pannello Per flashcard) te lo chiede allo stesso modo.</p>`,
         },
         {
             titolo: 'Cambiare a mano',
@@ -171,6 +172,7 @@ const Guida = (() => {
                     <li>Premi <b>Ripassa più set</b>: quelli da ripassare sono già scelti; tienili mescolati, aiuta a distinguere argomenti simili.
                         Oppure ripassa un set alla volta con ${ico('fulmine')}. Prima di girare la carta prova a dire la risposta, poi valuta con sincerità.</li>
                     <li>Passa a <b>Per flashcard</b> → <b>Solo sfasate</b> e premi <b>Ripassa le sfasate da fare</b>.</li>
+                    <li>Hai qualche minuto libero? <b>Per flashcard</b> → ${ico('orologio')} <b>Studio libero</b>: scegli quanto tempo hai e quali carte.</li>
                     <li>Ogni tanto: Impostazioni → <b>Backup</b>.</li>
                 </ol>
                 <p class="nota">Puoi riaprire questa guida da Revisioni o da Impostazioni. Con i dati di prova (Impostazioni → Dati di prova) c'è anche

@@ -1,4 +1,4 @@
-// Flashcard di localizzazione: porta nell'app la skill "creatore-flashcard-mappe-mentali".
+// Creazione flashcard per profondità (prima "localizzazione"): porta nell'app la skill "creatore-flashcard-mappe-mentali".
 //
 // La risposta di queste carte non è la spiegazione ma il punto della fonte dove ripassare
 // (titolo della fonte più sottoramo); il tag colloca la carta nell'albero.

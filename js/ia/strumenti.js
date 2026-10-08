@@ -760,10 +760,10 @@ const Strumenti = (() => {
             },
         },
 
-        // --- Flashcard di localizzazione (skill) ---
+        // --- Creazione flashcard per profondità (skill delle flashcard di localizzazione) ---
         {
             nome: 'prepara_piano_localizzazione',
-            descrizione: "Passi 1-3 della skill delle flashcard di localizzazione: dall'albero della fonte calcola l'elenco esatto delle carte da scrivere (tag, ordine, localizzazioni, foglie assorbite, catene collassate). Se la fonte è una mappa dell'app passa mappa_id (le carte nasceranno collegate ai loro nodi); se è un materiale che è già una mappa o uno schema passa materiale_id; altrimenti trascrivi tu la fonte in 'schema' come elenco puntato rientrato (prima riga '# Titolo della fonte'), senza riassumere né riordinare. Puoi rilanciarlo con le correzioni (override).",
+            descrizione: "Passi 1-3 della creazione flashcard per profondità (skill delle flashcard di localizzazione): dall'albero della fonte calcola l'elenco esatto delle carte da scrivere (tag, ordine, localizzazioni, foglie assorbite, catene collassate). Se la fonte è una mappa dell'app passa mappa_id (le carte nasceranno collegate ai loro nodi); se è un materiale che è già una mappa o uno schema passa materiale_id; altrimenti trascrivi tu la fonte in 'schema' come elenco puntato rientrato (prima riga '# Titolo della fonte'), senza riassumere né riordinare. Puoi rilanciarlo con le correzioni (override).",
             parametri: S.obj({
                 mappa_id: S.str("mappa dell'app (sezione Mappe): la fonte migliore, le carte nascono collegate ai nodi"),
                 materiale_id: S.str('materiale con mappa o schema'),
@@ -777,7 +777,7 @@ const Strumenti = (() => {
                 set_id: S.str('con nodi_mappa: set in cui andranno le carte, per agganciarle alle carte che ha già'),
                 salta_esistenti: S.bool('con nodi_mappa: niente carte per i nodi che nel set hanno già una flashcard'),
             }),
-            etichetta: () => "Preparo il piano delle flashcard di localizzazione",
+            etichetta: () => "Preparo il piano delle flashcard per profondità",
             esegui: a => {
                 let albero = null, fonte = '', mappaId = null, nota;
                 const daMappa = mappa => {
@@ -823,7 +823,7 @@ const Strumenti = (() => {
                 piano_id: S.str('id del piano'),
                 domande: S.arr(S.obj({ id: S.str('id della voce, es. c003'), domanda: S.str('la domanda, aperta, su una riga, che finisce con ?'), target: S.str('che cosa deve ricostruire lo studente (non finisce nella carta)') }, ['id', 'domanda', 'target'])),
             }, ['piano_id', 'domande']),
-            etichetta: a => `Scrivo ${plurale((a.domande || []).length, 'domanda', 'domande')} di localizzazione`,
+            etichetta: a => `Scrivo ${plurale((a.domande || []).length, 'domanda', 'domande')} delle flashcard per profondità`,
             esegui: a => Localizzazione.scriviDomande(a.piano_id, (a.domande || []).map(d => ({ id: d.id, question: d.domanda, target: d.target }))),
         },
         {
@@ -831,7 +831,7 @@ const Strumenti = (() => {
             descrizione: "Passo 5 della skill: controlla tutto il piano (domande mancanti, doppioni…) e, se non ci sono errori, crea le carte nel set già ad albero, con la localizzazione come risposta e il tag. Se ci sono errori non crea niente e li elenca.",
             parametri: S.obj({ piano_id: S.str('id del piano'), set_id: S.str('set in cui creare le carte (crealo prima con crea_set se serve)') }, ['piano_id', 'set_id']),
             modifica: true,
-            etichetta: a => `Creo le flashcard di localizzazione in «${nomeSet(a.set_id)}»`,
+            etichetta: a => `Creo le flashcard per profondità in «${nomeSet(a.set_id)}»`,
             esegui: a => Localizzazione.creaCarte(a.piano_id, a.set_id),
         },
     ];
