@@ -56,12 +56,12 @@ Viste.revisioni = {
                     <div>
                         <h1>Revisioni</h1>
                         <p class="sottotitolo">${carte ? 'Tutte le flashcard e come stanno rispetto al loro set. «Solo sfasate» lascia quelle che non vanno al passo: mai valutate, Scarso o con la prossima revisione in un altro giorno'
-                            : `Ripasso degli argomenti a intervalli crescenti: ${Srs.anteprimaSequenza(6).join(', ')}… giorni (la sequenza si cambia nelle Impostazioni)`}</p>
+                            : `Ripasso dei mazzi a intervalli crescenti: ${Srs.anteprimaSequenza(6).join(', ')}… giorni (la sequenza si cambia nelle Impostazioni)`}</p>
                     </div>
                     <div class="azioni-testa">
                         <button type="button" class="btn btn-fantasma" data-azione="guida" title="Flashcard, valutazioni e revisioni spiegate passo per passo">${ico('lampadina')}<span>Come funziona</span></button>
                         <button type="button" class="btn-icona btn-bordo" data-azione="menu" aria-label="Altre azioni">${ico('altro')}</button>
-                        ${carte ? '' : `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}<span>Nuovo argomento</span></button>`}
+                        ${carte ? '' : `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}<span>Nuovo mazzo</span></button>`}
                     </div>
                 </header>
 
@@ -143,12 +143,12 @@ Viste.revisioni = {
             });
         } else {
             const vuoto = vuotoFiltri() || (this.scheda === 'da-ripassare'
-                ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessun argomento è in ritardo o da ripassare oggi. 🎉' })
+                ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessun mazzo è in ritardo o da ripassare oggi. 🎉' })
                 : Ui.vuoto({
-                    icona: 'calendario', titolo: 'Ancora nessun argomento',
+                    icona: 'calendario', titolo: 'Ancora nessun mazzo',
                     testo: 'Quando finisci di studiare un set, compare qui da solo con la data e il numero del ripasso. Puoi anche aggiungere a mano i capitoli o gli schemi che ripassi.',
-                    azioni: `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}Nuovo argomento</button>
-                             <button type="button" class="btn btn-secondario" data-azione="uno-per-set">${ico('cartella')}Un argomento per ogni set</button>`,
+                    azioni: `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}Nuovo mazzo</button>
+                             <button type="button" class="btn btn-secondario" data-azione="uno-per-set">${ico('cartella')}Un mazzo per ogni set</button>`,
                 }));
 
             Revisioni.monta($('[data-tabella]', el), {
@@ -190,7 +190,7 @@ Viste.revisioni = {
             }),
             'piu-set': () => Revisioni.ripassaPiuSet({ materiaId: materiaScheda }),
             menu: b => Ui.menu(b, [
-                !carte && { testo: materiaScheda ? `Un argomento per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un argomento per ogni set', icona: 'cartella',
+                !carte && { testo: materiaScheda ? `Un mazzo per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un mazzo per ogni set', icona: 'cartella',
                     clic: async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); } },
                 !carte && { testo: 'Larghezze delle colonne predefinite', icona: 'ruota', clic: () => { Revisioni.ripristinaLarghezze(); ridisegna(); } },
                 { testo: 'Modifiche recenti (annulla)', icona: 'annulla', clic: () => Storia.elenco() },

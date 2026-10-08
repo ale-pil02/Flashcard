@@ -29,7 +29,7 @@ Impostazioni → Dati di prova → Tutorial).
 | **Set** | Avanzamento (Perfetto / Buono / Ok / Scarso / Mai studiate), riquadro con le carte da fare e **Personalizza** (il pulsante Studia non c'è più: lo studio parte dalle revisioni), sotto-set, revisioni, materiali, elenco delle carte ad albero. Sotto-set, Revisioni, Materiali e Flashcard si aprono e chiudono con un clic sul titolo (lo stato resta per tutti i set) |
 | **Selezione** | Nel set e nella ricerca: più flashcard insieme → tag, domanda madre, sposta, valutazione, progressi, assistente, elimina |
 | **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni |
-| **Revisioni** | Ripasso dei set e degli argomenti come nel database "Spaced Repetition System" di Notion, a intervalli crescenti (Fibonacci, modificabile) che si adattano a ritardi e anticipi, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set. Guida «Come funziona» con simulatore |
+| **Revisioni** | Ripasso dei set e dei mazzi come nel database "Spaced Repetition System" di Notion, a intervalli crescenti (Fibonacci, modificabile) che si adattano a ritardi e anticipi, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set. Guida «Come funziona» con simulatore |
 | **Sessione personalizzata** | Scegli uno o più set, lo stato delle carte, i tag, quante carte e l'ordine |
 | **Editor** | Domanda, risposta, fonte della risposta, parte della mappa, domanda madre, suggerimento, spiegazione, tag, immagini |
 | **Statistiche** | Carte di oggi, tempo di studio, grafico giornaliero, calendario, avanzamento per materia |
@@ -181,12 +181,13 @@ Le istruzioni dell'assistente (carattere, regole per le flashcard, procedura del
 
 ## Revisioni (dal database di Notion)
 
-I set (e, a mano, anche altri argomenti: capitoli, schemi) si ripassano con lo stesso metodo del database
-"Spaced Repetition System" di Notion. Ogni riga ha:
+I set (e, a mano, anche altri **mazzi**: capitoli, schemi, gruppi di flashcard) si ripassano con lo stesso metodo del
+database "Spaced Repetition System" di Notion. Ogni riga è un mazzo (nel codice e nel backup si chiamano ancora
+*argomenti*) e ha:
 
 | Colonna | Cosa contiene |
 |---|---|
-| Argomento | Il nome (di solito il set, il capitolo o lo schema) |
+| Mazzo | Il nome (di solito il set, il capitolo o lo schema) |
 | Schema / fonte | Testo libero e i materiali collegati, da aprire con un clic (🔗 per collegarne o toglierne) |
 | N° Rep | Quante volte l'hai ripassato. Cambiandolo a mano l'intervallo torna quello della sequenza per quella rep (come in Notion) |
 | Ultimo ripasso | La data dell'ultimo ripasso |
@@ -195,11 +196,11 @@ I set (e, a mano, anche altri argomenti: capitoli, schemi) si ripassano con lo s
 | Alert | 🔴 *Da ripassare (N giorni)* se è in ritardo, 🟡 *Ripassare oggi*, 🟢 *Attendi N giorni* |
 | Stato | Ottimo, Buono, Ok, Scarso o Incompleto (non cambia gli intervalli) |
 
-**Nuovo argomento**: scegli il set (dalla pagina del set è già scelto), il nome e le sue flashcard: **tutte quelle del
+**Nuovo mazzo**: scegli il set (dalla pagina del set è già scelto), il nome e le sue flashcard: **tutte quelle del
 set** (anche quelle che aggiungerai; una sola riga così per set), **tutte quelle che ci sono adesso** (quelle aggiunte
-dopo no) oppure **solo alcune**, da spuntare nell'elenco ad albero (una domanda porta con sé le sue figlie). Un argomento con le flashcard funziona come la riga del set qui sotto,
+dopo no) oppure **solo alcune**, da spuntare nell'elenco ad albero (una domanda porta con sé le sue figlie). Un mazzo con le flashcard funziona come la riga del set qui sotto,
 ma solo con le sue carte: stato, pulsante Ripasso, N° Rep a fine sessione e pannello «Per flashcard». Accanto al nome
-c'è «N di M flashcard»: clic (o ⋯ → *Flashcard dell'argomento…*) per cambiarle. Un set studiato che ha già argomenti
+c'è «N di M flashcard»: clic (o ⋯ → *Flashcard del mazzo…*) per cambiarle. Un set studiato che ha già mazzi
 con le flashcard non riceve una riga del set in più.
 
 **Riga del set, aggiornata dallo studio.** Ogni set con flashcard ha la sua riga (la crea lo studio, oppure prende
@@ -253,13 +254,21 @@ nel menu c'è anche la cronologia dei ripassi.
 del set (vedi *Ripetizione spaziata*), con il suo N° Rep. Il pannello mostra **tutte** le flashcard, nell'ordine dei set,
 con la colonna **Rispetto al set**: *Al passo con il set*, *Set mai ripassato*, *Mai valutata*, *Scarso: da rifare*,
 oppure *N giorni prima / dopo il set* (con *(Ok)* se è stata valutata Ok). **Solo sfasate** lascia le carte dei set già
-ripassati che non vanno al passo con il loro set (o argomento), le più urgenti prima: mai ripassate (aggiunte dopo) o
+ripassati che non vanno al passo con il loro set (o mazzo), le più urgenti prima: mai ripassate (aggiunte dopo) o
 con la prossima revisione in un giorno diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro,
 cambiate a mano). Si modificano come le righe (valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione),
 ⚡ ripassa una carta, **Ripassa le sfasate da fare** le prende tutte, **Studio libero** ti fa scegliere cosa studiare. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
 quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
 prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
 valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
+**Carte in più mazzi.** Una flashcard sta sempre in un solo set, ma può stare in più mazzi dello stesso
+set: la riga di tutto il set e quelli con alcune flashcard. Ha una sola data, quindi **segue un mazzo solo**: quello
+scelto con *Riadegua…*, se no il primo mazzo con alcune flashcard che la contiene (già ripassato), se no la riga del set.
+Si allinea solo al mazzo che segue, e *Solo sfasate* guarda lui. La colonna *Rispetto al set* lo nomina («2 giorni
+prima di «Mazzo A»») e sotto, più piccolo, dice come sta rispetto agli altri mazzi (*anche in «Bowlby» (tutto il set):
+al passo*). In questi casi il pulsante diventa **Riadegua…** e fa scegliere il mazzo: la carta prende la sua data e da
+lì in poi segue lui (`srs.segue`). Quando scegli le flashcard di un mazzo, l'app avvisa se alcune sono già in un altro
+mazzo con alcune carte.
 - Tutte le celle si modificano sul posto, come in Notion; un clic sull'intestazione ordina la colonna (crescente →
   decrescente → ordine di partenza), anche nel pannello *Per flashcard*.
 - **Studio libero** (pannello *Per flashcard*, nella sezione Revisioni e nella pagina di ogni set): per quando hai un
@@ -280,12 +289,12 @@ valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non camb
   larghezza predefinita (tutte insieme: menu ⋯ della sezione Revisioni). Valgono in ogni tabella delle revisioni.
 - **Sezione Revisioni** (nel menu, con il numero di quelli da fare, flashcard comprese): pannelli *Per set* e
   *Per flashcard*, schede *Tutte*, una per materia e *Da ripassare*. È l'unico posto dove si cambia il set di una
-  riga; dal menu ⋯ *Un argomento per ogni set* crea in un colpo le righe dei set che non ne hanno.
-- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per argomento* e
+  riga; dal menu ⋯ *Un mazzo per ogni set* crea in un colpo le righe dei set che non ne hanno.
+- **Nella pagina di un set** ci sono solo i mazzi di quel set e dei suoi sotto-set, con i pannelli *Per mazzo* e
   *Per flashcard*: lì si modificano, ma non si vedono né si toccano quelli degli altri set.
 - **Come funziona** (in alto nella sezione Revisioni, o Impostazioni → Revisioni) apre una guida a passi su
   flashcard, valutazioni e revisioni, con un simulatore della prossima data (`js/guida.js`).
-- In **Home** compaiono gli argomenti da rivedere oggi e quante flashcard sono da ripassare per conto loro.
+- In **Home** compaiono i mazzi da rivedere oggi e quante flashcard sono da ripassare per conto loro.
   L'assistente sa leggerli (anche il pannello delle flashcard), crearli, modificarli e segnare un ripasso
   ("ho ripassato il capitolo 2").
 
@@ -377,6 +386,12 @@ dalla domanda generale su un ramo a quelle sui singoli concetti, fino ai dettagl
 - **Nello studio**, in ordine del set si va sempre dalla madre alle figlie. Con lo *studio a
   cascata* attivo, una domanda figlia mai vista compare solo dopo che hai imparato la madre;
   appena succede, le figlie arrivano subito dopo nella stessa sessione.
+- **Sorelle mescolate** (Impostazioni → Studio → *Ordine delle carte*: *Ordine del set, sorelle mescolate*): la madre
+  resta prima delle sue figlie e di tutto il suo ramo, ma le domande con la stessa madre (es. i sottorami) escono in
+  ordine casuale: 4, poi il suo ramo, poi 1, poi 3… I set restano uno dopo l'altro (o alternati, con *Ripassa più set*
+  mescolati). Vale anche per la singola sessione: nella finestra di avvio c'è la casella **Mescola le domande
+  sorelle**, spuntata se l'impostazione è quella; c'è quando la sessione va nell'ordine del set, quindi anche nei
+  ripassi delle Revisioni e nello Studio libero *Come nei set*.
 - **All'import** l'albero viene dal file: nel testo dell'app dalle tabulazioni prima di `D:`, nell'Excel
   dell'app dalla colonna *Livello*.
 - **Nascondi dettagli** (pagina del set, oppure Impostazioni → Studio → *Carte di dettaglio*): le carte

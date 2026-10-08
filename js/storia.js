@@ -134,7 +134,7 @@ const Storia = (() => {
 
     const NOMI = {
         carte: ['flashcard', 'flashcard', 'f'], set: ['set', 'set', 'm'], materie: ['materia', 'materie', 'f'],
-        materiali: ['materiale', 'materiali', 'm'], esami: ['esame', 'esami', 'm'], argomenti: ['argomento', 'argomenti', 'm'],
+        materiali: ['materiale', 'materiali', 'm'], esami: ['esame', 'esami', 'm'], argomenti: ['mazzo', 'mazzi', 'm'],
         mappe: ['mappa', 'mappe', 'f'],
     };
 

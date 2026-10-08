@@ -101,6 +101,38 @@ Viste.studio = (() => {
             .map(x => x.c);
     }
 
+    // Le carte raggruppate per madre: per ognuna la madre più vicina che sta nella lista (dello stesso set), oppure il
+    // set se non ce l'ha. Restituisce { gruppi: chiave → [carte nell'ordine dato], set: [setId in ordine] }
+    function gruppiSorelle(lista) {
+        const dentro = new Set(lista.map(c => c.id));
+        const madreIn = c => {
+            let m = c.genitoreId ? Dati.carta(c.genitoreId) : null;
+            while (m && m.setId === c.setId && !dentro.has(m.id)) m = m.genitoreId ? Dati.carta(m.genitoreId) : null;
+            return m && m.setId === c.setId ? m.id : null;
+        };
+        const gruppi = new Map(), set = [];
+        lista.forEach(c => {
+            const k = madreIn(c) || 'set:' + c.setId;
+            if (k.startsWith('set:') && !set.includes(c.setId)) set.push(c.setId);
+            if (!gruppi.has(k)) gruppi.set(k, []);
+            gruppi.get(k).push(c);
+        });
+        return { gruppi, set };
+    }
+
+    // Ci sono domande sorelle da mescolare (almeno due con la stessa madre, o due senza madre nello stesso set)?
+    function haSorelle(lista) { return [...gruppiSorelle(lista).gruppi.values()].some(g => g.length > 1); }
+
+    // Ordine del set con le sorelle mescolate: la madre resta prima delle sue figlie (e di tutto il suo ramo), ma le
+    // domande con la stessa madre escono in ordine casuale (es. i sottorami 4, 1, 3, 2). I set restano uno dopo l'altro
+    function mescolaSorelle(lista) {
+        const { gruppi, set } = gruppiSorelle(lista);
+        const fuori = [];
+        const visita = k => mescola(gruppi.get(k) || []).forEach(c => { fuori.push(c); visita(c.id); });
+        set.forEach(s => visita('set:' + s));
+        return fuori.length === lista.length ? fuori : lista;
+    }
+
     // Prepara la sessione: { lista, riserva, quotaNuove, max }
     // "riserva" = carte nuove bloccate dalla cascata, che si sbloccano durante la sessione
     function preparaSessione(ambito, query, opzioni) {
@@ -483,10 +515,19 @@ Viste.studio = (() => {
             el.innerHTML = `<div class="studio"><header class="studio-testa"><div class="studio-titolo"><b>Studio</b><span>${esc(ambito.titolo)}</span></div></header></div>`;
             // Le carte della riserva (figlie bloccate dalla cascata) entrano durante la sessione: contano per dire se è il
             // ripasso di tutto il set
-            Revisioni.chiediSeConta([...preparata.lista, ...preparata.riserva], { parziale: !!(opzioni && opzioni.parziale), perCarta: !!(opzioni && opzioni.perCarta) }).then(scelta => {
+            // Nell'ordine del set (non casuale né scelto carta per carta) si può mescolare le domande sorelle per questa
+            // sessione: si parte dall'impostazione (o dalla scelta della sessione personalizzata)
+            const casuale = opzioni ? !!opzioni.ordineCasuale : Dati.impostazioni().ordineCasuale;
+            const sorelle = !casuale && !(opzioni && opzioni.ordineIds) && haSorelle(preparata.lista)
+                ? { attivo: opzioni && opzioni.mescolaSorelle != null ? !!opzioni.mescolaSorelle : !!Dati.impostazioni().mescolaSorelle } : null;
+            Revisioni.chiediSeConta([...preparata.lista, ...preparata.riserva], { parziale: !!(opzioni && opzioni.parziale), perCarta: !!(opzioni && opzioni.perCarta), sorelle }).then(r => {
                 if (!document.contains(el)) return;   // nel frattempo sei andato altrove
-                if (!scelta) { Router.vai(ambito.ritorno); return; }
-                studia(el, preparata, ambito, { ...(opzioni || {}), diProva: scelta === 'prova' });
+                if (!r) { Router.vai(ambito.ritorno); return; }
+                if (sorelle && r.sorelle) {
+                    preparata.lista = mescolaSorelle(preparata.lista);
+                    if (opzioni && opzioni.mescolaSet) preparata.lista = alternaSet(preparata.lista);
+                }
+                studia(el, preparata, ambito, { ...(opzioni || {}), diProva: r.scelta === 'prova' });
             });
             return;
         }
@@ -548,7 +589,7 @@ Viste.studio = (() => {
         const scelti = new Set(iniziali);
         const escluse = new Set();          // stati delle carte tolti dall'utente
         const tagScelti = new Set();
-        let quante = 0, ordineCasuale = imp.ordineCasuale;
+        let quante = 0, ordineCasuale = imp.ordineCasuale, mescolaSorelle = !imp.ordineCasuale && !!imp.mescolaSorelle;
 
         // La materia da cui si parte viene per prima e aperta
         const materie = Dati.materie().filter(m => Dati.setRadice(m.id).length)
@@ -593,7 +634,8 @@ Viste.studio = (() => {
                         <input type="number" name="quante" min="0" step="1" value="0"></label>
                     <label class="campo"><span class="etichetta">Ordine</span>
                         <select name="ordine">
-                            <option value="set" ${ordineCasuale ? '' : 'selected'}>Ordine del set (a cascata)</option>
+                            <option value="set" ${ordineCasuale || mescolaSorelle ? '' : 'selected'}>Ordine del set (a cascata)</option>
+                            <option value="sorelle" ${mescolaSorelle ? 'selected' : ''}>Ordine del set, sorelle mescolate</option>
                             <option value="casuale" ${ordineCasuale ? 'selected' : ''}>Casuale</option>
                         </select></label>
                 </div>
@@ -606,7 +648,7 @@ Viste.studio = (() => {
                     if (!filtrate().length) return;
                     salvaOpzioni({
                         setIds: [...scelti], categorie: CATEGORIE.filter(k => !escluse.has(k)),
-                        tag: [...tagScelti].filter(t => tagPresenti.has(t)), quante, ordineCasuale,
+                        tag: [...tagScelti].filter(t => tagPresenti.has(t)), quante, ordineCasuale, mescolaSorelle,
                     });
                     m.chiudi();
                     const parametro = setId ? 'set=' + setId : materiaId ? 'materia=' + materiaId : 'ambito=tutto';
@@ -662,7 +704,7 @@ Viste.studio = (() => {
                     aggiorna();
                 });
                 $('[name=quante]', el).addEventListener('input', e => { quante = Math.max(0, parseInt(e.target.value, 10) || 0); aggiorna(); });
-                $('[name=ordine]', el).addEventListener('change', e => { ordineCasuale = e.target.value === 'casuale'; });
+                $('[name=ordine]', el).addEventListener('change', e => { ordineCasuale = e.target.value === 'casuale'; mescolaSorelle = e.target.value === 'sorelle'; });
                 aggiorna();
             },
         });

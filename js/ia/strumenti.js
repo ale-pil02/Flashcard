@@ -134,7 +134,7 @@ const Strumenti = (() => {
                     })),
                     esami: Dati.esami().map(e => ({ id: e.id, nome: e.nome, data: e.data, materia_id: e.materiaId, tra_giorni: giorniTra(Date.now(), daChiaveGiorno(e.data)) })),
                     studio_oggi: Dati.oggi(attivita),
-                    impostazioni: { nuove_per_sessione: imp.nuovePerSessione == null ? 'senza limite' : imp.nuovePerSessione, max_per_sessione: imp.maxPerSessione == null ? 'senza limite' : imp.maxPerSessione, ordine_casuale: imp.ordineCasuale, studio_a_cascata: imp.cascata, dettagli_nascosti: imp.nascondiDettagli, tema: imp.tema },
+                    impostazioni: { nuove_per_sessione: imp.nuovePerSessione == null ? 'senza limite' : imp.nuovePerSessione, max_per_sessione: imp.maxPerSessione == null ? 'senza limite' : imp.maxPerSessione, ordine_casuale: imp.ordineCasuale, sorelle_mescolate: imp.mescolaSorelle, studio_a_cascata: imp.cascata, dettagli_nascosti: imp.nascondiDettagli, tema: imp.tema },
                 };
             },
         },
@@ -613,7 +613,7 @@ const Strumenti = (() => {
                 intervallo_giorni: S.int('giorni dall\'ultimo ripasso alla prossima revisione'), prossima_revisione: S.str('AAAA-MM-GG, dopo l\'ultimo ripasso: l\'intervallo si adegua'),
             }, ['argomento_id']),
             modifica: true,
-            etichetta: a => `Modifico «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,
+            etichetta: a => `Modifico «${(Dati.argomento(a.argomento_id) || {}).nome || 'un mazzo'}»`,
             esegui: a => {
                 const x = Dati.argomento(a.argomento_id);
                 if (!x) throw new Error('Argomento non trovato: usa elenca_revisioni.');
@@ -639,7 +639,7 @@ const Strumenti = (() => {
             descrizione: "Segna che l'utente ha ripassato un argomento (come il suo 'Ripassato' in Notion): N° Rep +1, ultimo ripasso = oggi (o la data indicata) e nuovo intervallo secondo la sequenza, adattato se è in anticipo, in ritardo o lo stesso giorno; con lo stato se lo dice.",
             parametri: S.obj({ argomento_id: S.str('id'), stato: S.str('ottimo | buono | ok | scarso'), giorno: S.str('AAAA-MM-GG, predefinito oggi') }, ['argomento_id']),
             modifica: true,
-            etichetta: a => `Segno il ripasso di «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,
+            etichetta: a => `Segno il ripasso di «${(Dati.argomento(a.argomento_id) || {}).nome || 'un mazzo'}»`,
             esegui: a => {
                 if (!Dati.argomento(a.argomento_id)) throw new Error('Argomento non trovato: usa elenca_revisioni.');
                 return { aggiornato: argomentoPerIA(Dati.segnaRipasso(a.argomento_id, Revisioni.STATI[a.stato] ? a.stato : '', dataValida(a.giorno) || chiaveGiorno())) };
@@ -650,7 +650,7 @@ const Strumenti = (() => {
             descrizione: "Toglie un argomento dalle revisioni (flashcard e materiali restano). Chiede conferma all'utente.",
             parametri: S.obj({ argomento_id: S.str('id') }, ['argomento_id']),
             modifica: true,
-            etichetta: () => 'Tolgo un argomento dalle revisioni',
+            etichetta: () => 'Tolgo un mazzo dalle revisioni',
             esegui: async (a, ctx) => {
                 const x = Dati.argomento(a.argomento_id);
                 if (!x) throw new Error('Argomento non trovato.');
@@ -709,7 +709,7 @@ const Strumenti = (() => {
             descrizione: "Cambia le impostazioni: nome dell'utente, carte nuove e massime per sessione, ordine casuale, studio a cascata, dettagli nascosti (le carte con tag dettaglio spariscono da elenchi, conteggi e studio), tema (sistema | chiaro | scuro).",
             parametri: S.obj({
                 nome: S.str('nome'), nuove_per_sessione: S.int('carte nuove per sessione (-1 = senza limite)'),
-                max_per_sessione: S.int('carte massime per sessione (-1 = senza limite)'), ordine_casuale: S.bool('ordine casuale'), studio_a_cascata: S.bool('studio a cascata'), nascondi_dettagli: S.bool('nascondi le carte con tag dettaglio'), tema: S.str('sistema | chiaro | scuro'),
+                max_per_sessione: S.int('carte massime per sessione (-1 = senza limite)'), ordine_casuale: S.bool('ordine casuale'), sorelle_mescolate: S.bool("nell'ordine del set, le domande sorelle (stessa madre) in ordine casuale"), studio_a_cascata: S.bool('studio a cascata'), nascondi_dettagli: S.bool('nascondi le carte con tag dettaglio'), tema: S.str('sistema | chiaro | scuro'),
             }),
             modifica: true,
             etichetta: () => 'Cambio le impostazioni',
@@ -719,6 +719,7 @@ const Strumenti = (() => {
                 if (a.nuove_per_sessione != null) mod.nuovePerSessione = a.nuove_per_sessione < 0 ? null : limita(a.nuove_per_sessione, 0, 500);
                 if (a.max_per_sessione) mod.maxPerSessione = a.max_per_sessione < 0 ? null : limita(a.max_per_sessione, 1, 1000);
                 if (a.ordine_casuale != null) mod.ordineCasuale = !!a.ordine_casuale;
+                if (a.sorelle_mescolate != null) mod.mescolaSorelle = !!a.sorelle_mescolate;
                 if (a.studio_a_cascata != null) mod.cascata = !!a.studio_a_cascata;
                 if (a.nascondi_dettagli != null) mod.nascondiDettagli = !!a.nascondi_dettagli;
                 if (['sistema', 'chiaro', 'scuro'].includes(a.tema)) { mod.tema = a.tema; App.applicaTema(a.tema); }

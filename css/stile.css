@@ -2241,3 +2241,17 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .sl-carta small { color: var(--testo-3); font-size: .78rem; }
 .sl-avvia { align-self: stretch; justify-content: center; padding: 12px; font-size: .95rem; }
 .sl-avvia:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Carte in più mazzi: come stanno rispetto ai mazzi che non seguono, e avviso nella scelta delle flashcard */
+.col-sfasatura .sfasatura-altro { display: block; margin-top: 4px; color: color-mix(in srgb, var(--ok) 62%, var(--testo)); font-size: .76rem; line-height: 1.3; }
+.col-sfasatura .sfasatura-altro.al-passo { color: var(--testo-3); }
+.avviso-mazzi { display: flex; gap: 8px; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--testo); font-size: .85rem; line-height: 1.45; }
+.avviso-mazzi .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--ok-testo); }
+
+/* Finestra di avvio: mescolare le domande sorelle per questa sessione */
+.conta-sorelle { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--bordo); border-radius: 12px; background: var(--superficie); cursor: pointer; }
+.conta-sorelle input { flex: none; width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--primario); }
+.conta-sorelle span { display: flex; flex-direction: column; gap: 2px; }
+.conta-sorelle b { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
+.conta-sorelle b .ico { width: 15px; height: 15px; color: var(--primario-testo); }
+.conta-sorelle small { color: var(--testo-2); font-size: .8rem; line-height: 1.4; }

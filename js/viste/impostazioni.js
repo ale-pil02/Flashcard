@@ -40,10 +40,11 @@ Viste.impostazioni = {
                     ${limiteCampo('nuovePerSessione', 'Carte nuove per sessione', 'Quante carte mai viste entrano in una sessione di studio', 0, 500, IMPOSTAZIONI_PREDEFINITE.nuovePerSessione)}
                     ${limiteCampo('maxPerSessione', 'Carte massime per sessione', 'Limite complessivo di una sessione', 1, 1000, IMPOSTAZIONI_PREDEFINITE.maxPerSessione)}
                     <label class="impostazione">
-                        <span><b>Ordine delle carte</b><small>Nell'ordine del set le domande seguono l'albero: prima la madre, poi le figlie</small></span>
-                        <select name="ordineCasuale">
-                            <option value="false" ${imp.ordineCasuale ? '' : 'selected'}>Ordine del set</option>
-                            <option value="true" ${imp.ordineCasuale ? 'selected' : ''}>Casuale</option>
+                        <span><b>Ordine delle carte</b><small>Nell'ordine del set le domande seguono l'albero: prima la madre, poi le figlie. Con le sorelle mescolate la madre resta prima delle figlie, ma le domande allo stesso livello (es. i sottorami) escono in ordine casuale. Si cambia anche per la singola sessione, all'avvio</small></span>
+                        <select name="ordineCarte">
+                            <option value="set" ${!imp.ordineCasuale && !imp.mescolaSorelle ? 'selected' : ''}>Ordine del set</option>
+                            <option value="sorelle" ${!imp.ordineCasuale && imp.mescolaSorelle ? 'selected' : ''}>Ordine del set, sorelle mescolate</option>
+                            <option value="casuale" ${imp.ordineCasuale ? 'selected' : ''}>Casuale</option>
                         </select>
                     </label>
                     <label class="impostazione">
@@ -229,6 +230,11 @@ Viste.impostazioni = {
         // Salvataggio automatico dei campi
         $$('input[name], select[name]', el).forEach(campo => {
             campo.addEventListener('change', () => {
+                if (campo.name === 'ordineCarte') {
+                    Dati.salvaImpostazioni({ ordineCasuale: campo.value === 'casuale', mescolaSorelle: campo.value === 'sorelle' });
+                    Ui.toast('Salvato', 'successo', 1200);
+                    return;
+                }
                 let valore = campo.value;
                 if (campo.type === 'number') {
                     valore = limita(parseInt(valore, 10) || 0, +campo.min, +campo.max);
@@ -272,7 +278,7 @@ Viste.impostazioni = {
                 let n = null;
                 await Storia.esegui('Sequenza degli intervalli applicata alle revisioni', () => { n = Dati.ricalcolaIntervalli(); });
                 App.aggiornaPiede();
-                if (n) Ui.toast(`Ricalcolati ${plurale(n.argomenti, 'argomento', 'argomenti')} e ${plurale(n.carte, 'flashcard', 'flashcard')}`, 'successo', 3500);
+                if (n) Ui.toast(`Ricalcolati ${plurale(n.argomenti, 'mazzo', 'mazzi')} e ${plurale(n.carte, 'flashcard', 'flashcard')}`, 'successo', 3500);
             },
             'mostra-chiave': () => { campoChiave.type = campoChiave.type === 'password' ? 'text' : 'password'; },
             'aggiorna-modelli': async b => {

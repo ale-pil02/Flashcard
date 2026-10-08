@@ -130,7 +130,7 @@ Viste.set = {
 
         Materiali.monta($('[data-materiali-set]', el), s.id);
 
-        // ---- Revisioni: solo gli argomenti di questo set e dei suoi sotto-set, "Per set" o "Per flashcard" ----
+        // ---- Revisioni: solo gli argomenti di questo set e dei suoi sotto-set, "Per mazzo" o "Per flashcard" ----
         const boxRevisioni = $('[data-revisioni-set]', el);
         const argomentiDelSet = () => Dati.argomentiDiSet(s.id, { conSottoSet: true });
         const setIds = [s.id, ...Dati.discendentiSet(s.id)];
@@ -153,13 +153,13 @@ Viste.set = {
                             <a class="btn btn-fantasma btn-piccolo" href="#/revisioni">${ico('calendario-spunta')}Tutte le revisioni</a>
                             ${perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="studio-libero-set" title="Hai un po' di tempo? Scegli quanto e quali flashcard studiare">${ico('orologio')}Studio libero</button>` : ''}
                             ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set" title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareCarte})</button>` : ''}
-                            ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
+                            ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo mazzo</button>` : ''}
                         </div>
                     </div>
                     <div class="sezione-corpo">
                         ${lista.length ? `
                         <div class="pannelli-rev pannelli-rev-set" role="tablist" aria-label="Pannello delle revisioni">
-                            <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('documento')}Per argomento</button>
+                            <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('documento')}Per mazzo</button>
                             <button type="button" role="tab" class="pannello-rev${perCarte ? ' attivo' : ''}" data-pannello-rev="carte" aria-selected="${perCarte}">
                                 ${ico('carte')}Per flashcard${sfasate.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}" title="Flashcard sfasate${daFareCarte ? ' da ripassare' : ''}">${daFareCarte || sfasate.length}</span>` : ''}</button>
                         </div>` : ''}

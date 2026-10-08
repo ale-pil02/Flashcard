@@ -44,6 +44,7 @@ const IMPOSTAZIONI_PREDEFINITE = {
     nuovePerSessione: 10,       // carte nuove in una sessione (null = senza limite)
     maxPerSessione: 30,         // carte totali in una sessione (null = senza limite)
     ordineCasuale: false,       // false = ordine del set (quello dell'albero e dell'import)
+    mescolaSorelle: false,      // nell'ordine del set, le domande sorelle (stessa madre) escono in ordine casuale
     cascata: true,              // le domande figlie entrano solo dopo aver imparato la madre
     nascondiDettagli: false,    // le carte con il tag "dettaglio" (e i loro rami) spariscono da elenchi, conteggi e studio
     sequenzaRevisioni: [1, 2, 3, 5, 8, 13, 21],   // giorni dopo la rep 1, 2, 3… ripassando puntuale (js/srs.js)
@@ -467,12 +468,13 @@ const Dati = (() => {
     // Riadeguamento al set: la carta prende ultimo ripasso e intervallo della riga del suo set (già ripassato), quindi
     // la stessa prossima revisione; valutazione e N° Rep restano i suoi. a = l'argomento (se no quello della carta).
     // Restituisce le carte cambiate
-    function allineaAlSet(carte, a = null) {
+    // segui = da qui in poi la carta segue questo mazzo (se ne ha più di uno): si allinea a lui quando lo ripassi
+    function allineaAlSet(carte, a = null, { segui = false } = {}) {
         const cambiate = [];
         carte.forEach(c => {
             const riga = a || Revisioni.argomentoDi(c);
             if (!riga || !riga.ultimoRipasso) return;
-            c.srs = { ...Srs.normalizza(c.srs), giorno: riga.ultimoRipasso, intervallo: Revisioni.intervallo(riga), allineata: true, daRifareDal: null };
+            c.srs = { ...Srs.normalizza(c.srs), giorno: riga.ultimoRipasso, intervallo: Revisioni.intervallo(riga), allineata: true, daRifareDal: null, ...(segui ? { segue: riga.id } : {}) };
             cambiate.push(c);
         });
         if (cambiate.length) Archivio.salvaMolti('carte', cambiate);

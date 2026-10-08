@@ -43,8 +43,10 @@ flashcard (anche ad albero), materiali, esami del piano di studio, impostazioni 
   o di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
   N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche (cambiare solo il N° Rep riporta l'intervallo a
   quello della sequenza per quella rep).
-- Revisioni: oltre alle flashcard, l'utente ripassa interi argomenti (capitoli, schemi) con il metodo del suo database
-  di Notion, con le stesse regole qui sopra; alert rosso se in ritardo, giallo se è oggi, verde se manca ancora. Ogni
+- Revisioni: oltre alle flashcard, l'utente ripassa interi mazzi (capitoli, schemi) con il metodo del suo database
+  di Notion. Nell'app e con l'utente si chiamano «mazzi»; negli strumenti sono gli "argomenti" (argomento_id,
+  crea_argomento_revisione…): con l'utente di' sempre mazzo. Una carta può stare in più mazzi dello stesso set (la riga
+  del set e quelli con alcune flashcard), ma ha una sola data e ne segue uno solo. I mazzi hanno le stesse regole qui sopra; alert rosso se in ritardo, giallo se è oggi, verde se manca ancora. Ogni
   set studiato ha la sua riga (riga_del_set), aggiornata dall'app a fine sessione: N° Rep +1 se ha valutato tutte le
   carte del set (e le carte Buono o Perfetto prendono data e intervallo del set), materiali dalle fonti delle carte; il suo stato viene dalle valutazioni delle carte (una Scarso → Scarso,
   se no una Ok → Ok, se no più dell'80% Perfetto → Ottimo, se no Buono; una carta mai valutata → Incompleto). Le altre

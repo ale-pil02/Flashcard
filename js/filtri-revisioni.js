@@ -26,7 +26,7 @@ const FiltriRevisioni = (() => {
     }
 
     const ORDINI = {
-        set: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['nome', 'Argomento'], ['set', 'Set'], ['stato', 'Stato']],
+        set: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['nome', 'Mazzo'], ['set', 'Set'], ['stato', 'Stato']],
         carte: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['carta', 'Flashcard'], ['set', 'Set'], ['valutazione', 'Valutazione'], ['sfasatura', 'Rispetto al set']],
     };
     const nomeOrdine = (tipo, col) => ((ORDINI[tipo].find(o => o[0] === col) || [])[1]) || (col === 'avviso' ? 'Alert' : col);
