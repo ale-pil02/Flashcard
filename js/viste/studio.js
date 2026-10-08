@@ -88,11 +88,23 @@ Viste.studio = (() => {
         return lista;
     }
 
+    // Carte di più set mescolate: ogni carta prende un posto in proporzione alla sua posizione nel suo set, così i set si
+    // alternano lungo tutta la sessione anche se hanno grandezze diverse; dentro ogni set l'ordine (e la cascata) resta
+    function alternaSet(carte) {
+        const gruppi = new Map();
+        carte.forEach(c => { if (!gruppi.has(c.setId)) gruppi.set(c.setId, []); gruppi.get(c.setId).push(c); });
+        const ordineSet = [...gruppi.keys()];
+        return [...gruppi.values()].flatMap(g => g.map((c, i) => ({ c, chiave: (i + 0.5) / g.length })))
+            .sort((a, b) => (a.chiave - b.chiave) || (ordineSet.indexOf(a.c.setId) - ordineSet.indexOf(b.c.setId)))
+            .map(x => x.c);
+    }
+
     // Prepara la sessione: { lista, riserva, quotaNuove, max }
     // "riserva" = carte nuove bloccate dalla cascata, che si sbloccano durante la sessione
     function preparaSessione(ambito, query, opzioni) {
         const imp = Dati.impostazioni();
-        const pool = opzioni ? filtraPerOpzioni(ambito.carte, opzioni) : ambito.carte;
+        let pool = opzioni ? filtraPerOpzioni(ambito.carte, opzioni) : ambito.carte;
+        if (opzioni && opzioni.mescolaSet) pool = alternaSet(pool);
         const posizione = new Map(pool.map((c, i) => [c.id, i]));
         const inSessione = id => posizione.has(id);
         const bloccata = c => imp.cascata && Srs.stato(c) === 'nuova' && c.genitoreId && inSessione(c.genitoreId)
@@ -201,6 +213,8 @@ Viste.studio = (() => {
             prime: new Map(),   // cartaId → prima valutazione della sessione (quella che muove le date)
             senzaDate: new Set(),   // carte partite con Scarso: la prima volta che arrivano almeno a Ok prendono rep e data
             giaImparate: new Set([...preparata.lista, ...preparata.riserva].filter(x => Srs.stato(x) === 'imparata').map(x => x.id)),
+            // Nuove o Scarso all'inizio: alla fine non prendono la data del set anche se le valuti Buono (js/revisioni.js)
+            nonAllineare: Revisioni.daNonAllineare([...preparata.lista, ...preparata.riserva]),
             finita: false,
         };
         let c, fase, ordine, selezionate, suggerita, inizioCarta;
@@ -350,7 +364,7 @@ Viste.studio = (() => {
             }
             let esiti = [];
             try {
-                esiti = await Revisioni.registraSessione({ valutate: sessione.prime, parziale: !!opzioniSessione.parziale, perCarta: !!opzioniSessione.perCarta });
+                esiti = await Revisioni.registraSessione({ valutate: sessione.prime, parziale: !!opzioniSessione.parziale, perCarta: !!opzioniSessione.perCarta, nonAllineare: sessione.nonAllineare });
             } catch (e) {
                 console.error(e);
                 Ui.toast(`Non sono riuscito ad aggiornare le revisioni: ${e.message || e}`, 'errore', 10000);
@@ -431,7 +445,7 @@ Viste.studio = (() => {
                 b.disabled = true;
                 const prima = Dati.argomento(b.dataset.argomento);
                 const stessoGiorno = !!prima && prima.ultimoRipasso === chiaveGiorno();
-                const a = await Revisioni.segnaComunque(b.dataset.argomento, sessione.prime);
+                const a = await Revisioni.segnaComunque(b.dataset.argomento, sessione.prime, sessione.nonAllineare);
                 const box = b.closest('.esito-rev');
                 if (a && box) {
                     const esito = { setId: a.setId, argomentoId: a.id, esito: 'rep', stessoGiorno };
@@ -513,9 +527,10 @@ Viste.studio = (() => {
     }
 
     // Ripasso deciso da fuori (revisioni): carte precise di uno o più set.
-    // parziale = solo le carte da sistemare, perCarta = dal pannello delle flashcard: N° Rep dei set non cambia
-    function avvia({ setIds, ids, titolo = '', ritorno = '', parziale = false, perCarta = false }) {
-        salvaOpzioni({ setIds, ids, ordineCasuale: false, titolo, ritorno, parziale, perCarta });
+    // parziale = solo le carte da sistemare, perCarta = dal pannello delle flashcard: N° Rep dei set non cambia;
+    // mescolaSet = le carte dei set si alternano (Ripassa più set)
+    function avvia({ setIds, ids, titolo = '', ritorno = '', parziale = false, perCarta = false, mescolaSet = false }) {
+        salvaOpzioni({ setIds, ids, ordineCasuale: false, titolo, ritorno, parziale, perCarta, mescolaSet });
         Router.vai(`/studio?${setIds.length === 1 ? 'set=' + setIds[0] : 'ambito=tutto'}&personalizzata=1`);
     }
 

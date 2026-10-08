@@ -45,16 +45,18 @@ const Tour = (() => {
             },
         },
         {
-            titolo: 'In ritardo: la prossima si avvicina',
+            titolo: 'In ritardo: dipende da com\'è andata',
             rotta: '/revisioni', trova: () => riga('Ainsworth e la Strange Situation'),
             testo: () => {
                 const a = arg('Ainsworth e la Strange Situation');
                 if (!a) return '<p>Il set «Ainsworth» non c\'è più nei dati di prova.</p>';
-                const x = seConta(a), I = Revisioni.intervallo(a);
-                const puntuale = Srs.dopoRipasso({ intervallo: I, giorno: chiaveGiorno(aggiungiGiorni(Date.now(), -I)) });
-                return `<p>«Ainsworth» doveva essere ripassato ${esc(distanzaGiorni(Revisioni.prossima(a)))}. Premendo ${ico('fulmine')} l'app te lo dice e chiede:</p>
-                    <p><b>Conta come ripasso</b>: la prossima revisione sarà tra ${giorni(x.tra)}, invece dei ${puntuale.intervallo} di un ripasso puntuale,
-                    perché nel frattempo hai dimenticato qualcosa.<br><b>Ripasso di prova</b>: studi, ma set e carte restano com'erano.</p>`;
+                const e = Revisioni.esitiSeConta(a);
+                return `<p>«Ainsworth» doveva essere ripassato ${esc(distanzaGiorni(Revisioni.prossima(a)))}. Premendo ${ico('fulmine')} l'app te lo dice e chiede se
+                    il ripasso conta. Se conta, la prossima revisione dipende da com'è andata:</p>
+                    <ul class="tour-elenco"><li>set <b>Ottimo</b>: tra ${giorni(e.perfetto.tra)}, perché ricordare dopo più tempo dice che la memoria è solida;</li>
+                    <li>set <b>Buono</b>: tra ${giorni(e.buono.tra)};</li>
+                    <li>set <b>Ok, Scarso o incompleto</b>: tra ${giorni(e.male.tra)}, perché nel frattempo hai dimenticato qualcosa.</li></ul>
+                    <p>Con <b>Ripasso di prova</b> invece studi, ma set e carte restano com'erano.</p>`;
             },
         },
         {
@@ -143,6 +145,7 @@ const Tour = (() => {
             rotta: '/revisioni', prima: () => Object.assign(Viste.revisioni, { pannello: 'set', scheda: 'tutte' }),
             testo: () => `<ol class="tour-elenco">
                     <li>Ripassa «Bowlby» con ${ico('fulmine')}: è puntuale, conta senza domande.</li>
+                    <li>Prova <b>Ripassa più set</b> (in alto, nelle Revisioni) con le carte mescolate.</li>
                     <li>Ripassa «Ainsworth»: guarda l'avviso del ritardo e, alla fine, la nuova data.</li>
                     <li>Ripassa il Capitolo 4 scegliendo «Ripasso di prova»: non cambia niente.</li>
                     <li>Apri «Per flashcard» → «Solo sfasate» e guarda dove sono finite le carte Ok e Scarso.</li>

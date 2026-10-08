@@ -16,7 +16,9 @@
 // - finita una sessione in cui hai valutato tutte le carte del set: N° Rep +1, ultimo ripasso e intervallo con la
 //   formula (lo stesso giorno di un altro ripasso: solo N° Rep +1); se ne hai valutate solo una parte, la fine della
 //   sessione chiede se segnarlo lo stesso. Le carte valutate Buono o Perfetto a quel ripasso prendono ultimo ripasso e
-//   intervallo del set e restano al suo passo; le Ok e Scarso seguono le loro regole (js/srs.js);
+//   intervallo del set e restano al suo passo, tranne quelle che all'inizio della sessione erano nuove (mai valutate) o
+//   Scarso: dopo un primo incontro o un errore servono intervalli corti, quindi seguono le loro regole come le Ok e
+//   Scarso (js/srs.js);
 // - il ripasso delle sole carte "da sistemare" (mai valutate, Ok, Scarso) e quello delle singole carte non contano per
 //   il N° Rep del set, ma aggiornano le carte (se le carte da sistemare sono tutte, per esempio al primo ripasso, non si
 //   chiede niente ed è un ripasso vero);
@@ -80,6 +82,22 @@ const Revisioni = (() => {
     }
 
     function daRipassare(a) { const g = giorniMancanti(a); return g != null && g <= 0; }
+
+    // Il prossimo esame della materia del set (Piano di studio) se la revisione p cade dopo di lui: { nome, data } o null
+    function esamePrima(setId, p) {
+        const s = Dati.set(setId);
+        if (!s || !s.materiaId || p == null) return null;
+        const giorno = chiaveGiorno(p);
+        return Dati.prossimiEsami().find(e => e.materiaId === s.materiaId && e.data < giorno) || null;
+    }
+
+    const dataEsame = e => e.data.split('-').reverse().join('/');
+
+    // Segno "dopo l'esame" accanto a una prossima revisione che cade dopo l'esame della materia
+    function avvisoEsame(setId, p) {
+        const e = esamePrima(setId, p);
+        return e ? `<span class="dopo-esame" title="L'esame «${esc(e.nome)}» è il ${dataEsame(e)}: questa revisione cade dopo">${ico('avviso')}dopo l'esame</span>` : '';
+    }
 
     function dataBreve(ts) { const d = new Date(ts); return `${due(d.getDate())}/${due(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`; }
     // Nella tabella le date vanno a capo dopo le barre, non a metà numero
@@ -193,12 +211,13 @@ const Revisioni = (() => {
     // ---- Fine di una sessione di studio ------------------------------------------------
 
     // valutate: Map cartaId → prima valutazione della sessione. parziale = ripasso delle sole carte da sistemare,
-    // perCarta = ripasso dal pannello delle flashcard: N° Rep dei set non cambia.
+    // perCarta = ripasso dal pannello delle flashcard: N° Rep dei set non cambia. nonAllineare = carte che all'inizio
+    // della sessione erano nuove o Scarso: non prendono la data del set.
     // Restituisce per ogni set studiato { setId, argomentoId, esito, fatte, totale }, esito =
     // 'rep' (ripasso segnato) | 'oggi' (già segnato oggi) | 'parziale' | 'da-chiedere' (non tutte le carte valutate)
     // Ogni argomento con flashcard di cui hai valutato almeno una carta ha il suo esito; un set senza argomenti con
     // flashcard riceve la sua riga del set
-    async function registraSessione({ valutate, parziale = false, perCarta = false }) {
+    async function registraSessione({ valutate, parziale = false, perCarta = false, nonAllineare = new Set() }) {
         const setIds = [...new Set([...valutate.keys()].map(Dati.carta).filter(c => c && Dati.set(c.setId)).map(c => c.setId))];
         if (!setIds.length) return [];
         const oggi = chiaveGiorno();
@@ -220,7 +239,7 @@ const Revisioni = (() => {
                     else {
                         stessoGiorno = a.ultimoRipasso === oggi;
                         Dati.segnaRipasso(a.id, statoDi(a));
-                        allineaValutate(a, carte, valutate);
+                        allineaValutate(a, carte, valutate, nonAllineare);
                         esito = 'rep';
                     }
                     esiti.push({ setId, argomentoId: a.id, esito, stessoGiorno, fatte, totale: carte.length });
@@ -231,20 +250,26 @@ const Revisioni = (() => {
     }
 
     // Dopo il ripasso del set che conta: le carte valutate Buono o Perfetto (alla prima valutazione della sessione)
-    // prendono ultimo ripasso e intervallo del set e restano al suo passo
-    function allineaValutate(a, carte, valutate) {
-        const bene = carte.filter(c => valutate.has(c.id) && valutate.get(c.id) >= Srs.BUONO && argomentoDi(c) === a);
+    // prendono ultimo ripasso e intervallo del set e restano al suo passo. Non quelle in nonAllineare (nuove o Scarso
+    // all'inizio della sessione): l'intervallo lungo del set sarebbe troppo per loro
+    function allineaValutate(a, carte, valutate, nonAllineare = new Set()) {
+        const bene = carte.filter(c => valutate.has(c.id) && valutate.get(c.id) >= Srs.BUONO && !nonAllineare.has(c.id) && argomentoDi(c) === a);
         if (bene.length) Dati.allineaAlSet(bene, a);
     }
 
+    // Le carte che non prenderanno la data del set alla fine della sessione: nuove (mai valutate) o Scarso adesso
+    function daNonAllineare(carte) {
+        return new Set(carte.filter(c => { const v = Srs.valutazione(c); return v == null || v === Srs.SCARSO; }).map(c => c.id));
+    }
+
     // Ripasso segnato lo stesso dopo una sessione che non ha valutato tutte le carte del set
-    async function segnaComunque(argomentoId, valutate = new Map()) {
+    async function segnaComunque(argomentoId, valutate = new Map(), nonAllineare = new Set()) {
         const a = Dati.argomento(argomentoId);
         if (!a) return null;
-        const dopo = Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso });
+        const dopo = Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }, undefined, { esito: Srs.esitoDaStato(statoDi(a)) });
         await Storia.esegui(`«${a.nome || 'Argomento'}» ripassato: prossima revisione ${quando(dopo)}`, () => {
             Dati.segnaRipasso(a.id, statoDi(a));
-            allineaValutate(a, carteDi(a) || [], valutate);
+            allineaValutate(a, carteDi(a) || [], valutate, nonAllineare);
         });
         return Dati.argomento(argomentoId);
     }
@@ -255,7 +280,10 @@ const Revisioni = (() => {
         const st = a ? STATI[statoDi(a)] : null;
         const stato = st ? ` · stato <span class="pill-stato stato-${st.classe}">${st.nome}</span>` : '';
         switch (e.esito) {
-            case 'rep': return `Ripasso n° ${a.ripetizioni} segnato${e.stessoGiorno ? ' (era già stato ripassato oggi: la data non cambia)' : ''} · prossima revisione ${esc(distanzaGiorni(prossima(a)))}${stato}`;
+            case 'rep': {
+                const esame = esamePrima(a.setId, prossima(a));
+                return `Ripasso n° ${a.ripetizioni} segnato${e.stessoGiorno ? ' (era già stato ripassato oggi: la data non cambia)' : ''} · prossima revisione ${esc(distanzaGiorni(prossima(a)))}${esame ? ` <span class="dopo-esame">${ico('avviso')}dopo l'esame «${esc(esame.nome)}» del ${dataEsame(esame)}</span>` : ''}${stato}`;
+            }
             case 'parziale': return `Ripasso di alcune carte: aggiornate le flashcard, N° Rep del set invariato${stato}`;
             default: return `Hai valutato ${e.fatte} carte su ${e.totale}: non lo segno come ripasso${stato}`;
         }
@@ -295,23 +323,30 @@ const Revisioni = (() => {
 
     // ---- Avvio dello studio: conta come ripasso o è una prova? -----------------------------
 
-    // Argomenti e carte della sessione che non cadono nel giorno previsto. Un argomento conta solo se la sessione ha tutte
-    // le sue carte e non è il ripasso delle sole carte da sistemare o delle singole carte; una carta solo se ha già una
-    // data sua (non le nuove e non le Scarso da rifare, che sono da ripassare e basta)
+    // Se lo ripassi oggi e conta: { tra, il } della prossima revisione, per ogni esito possibile (js/srs.js, dopoRipasso)
+    function esitiSeConta(a, oggi = chiaveGiorno()) {
+        const st = { giorno: a.ultimoRipasso, intervallo: intervallo(a) };
+        return Object.fromEntries(['perfetto', 'buono', 'male'].map(esito => {
+            const x = Srs.dopoRipasso(st, oggi, { esito });
+            const p = aggiungiGiorni(daChiaveGiorno(x.giorno), x.intervallo);
+            return [esito, { tra: giorniTra(daChiaveGiorno(oggi), p), il: dataBreve(p) }];
+        }));
+    }
+
+    // Set e carte della sessione che non cadono nel giorno previsto. Se la sessione è il ripasso completo di qualche set
+    // (ha tutte le sue carte e non è il ripasso delle sole carte da sistemare o delle singole carte) conta solo il set:
+    // le sue carte fuori giorno seguono le loro regole senza chiedere. Altrimenti contano le carte, solo quelle con una
+    // data loro (non le nuove e non le Scarso da rifare, che sono da ripassare e basta)
     function fuoriGiorno(carte, { parziale = false, perCarta = false } = {}) {
         const oggi = chiaveGiorno();
         const ids = new Set(carte.map(c => c.id));
-        const argomenti = [];
-        if (!parziale && !perCarta) {
-            [...new Set(carte.map(c => c.setId))].forEach(setId => Dati.argomentiDiSet(setId).filter(automatico).forEach(a => {
-                const sue = carteDi(a) || [];
-                if (!a.ultimoRipasso || !sue.length || !sue.every(c => ids.has(c.id))) return;
-                const st = { giorno: a.ultimoRipasso, intervallo: intervallo(a) };
-                const x = Srs.situazione(st, oggi);
-                if (x.tipo !== 'puntuale') argomenti.push({ a, ...x, dopo: Srs.dopoRipasso(st, oggi) });
-            }));
-        }
-        const flashcard = carte.map(c => {
+        const coperti = parziale || perCarta ? [] : [...new Set(carte.map(c => c.setId))].flatMap(setId => Dati.argomentiDiSet(setId).filter(automatico))
+            .filter(a => { const sue = carteDi(a) || []; return sue.length && sue.every(c => ids.has(c.id)); });
+        const argomenti = coperti.filter(a => a.ultimoRipasso).map(a => {
+            const x = Srs.situazione({ giorno: a.ultimoRipasso, intervallo: intervallo(a) }, oggi);
+            return x.tipo === 'puntuale' ? null : { a, ...x, esiti: esitiSeConta(a, oggi) };
+        }).filter(Boolean);
+        const flashcard = coperti.length ? [] : carte.map(c => {
             const s = c.srs;
             if (!s || !s.giorno || s.daRifareDal || (s.ultimaValutazione == null && !s.allineata)) return null;
             const x = Srs.situazione({ giorno: s.giorno, intervallo: Srs.intervalloDi(s.intervallo, s.rep) }, oggi);
@@ -320,20 +355,45 @@ const Revisioni = (() => {
         return { argomenti, flashcard };
     }
 
+    const BADGE = { ritardo: 'In ritardo', anticipo: 'In anticipo', 'stesso-giorno': 'Già ripassato oggi' };
+
     function testoSituazione(x, femminile = false) {
         if (x.tipo === 'stesso-giorno') return `già ripassat${femminile ? 'a' : 'o'} oggi`;
         return `in ${x.tipo === 'anticipo' ? 'anticipo' : 'ritardo'} di ${plurale(x.giorni, 'giorno', 'giorni')} (prevista il ${dataBreve(x.prevista)})`;
     }
 
-    // Quante carte per situazione: "3 in ritardo (da 1 a 9 giorni) · 1 già ripassata oggi"
+    // Linea del tempo di un set: ultimo ripasso, prevista e oggi, nell'ordine in cui vengono
+    function lineaDelTempo(x) {
+        const tappa = (etichetta, data, classe = '') => `<span class="conta-tappa ${classe}"><small>${etichetta}</small><b>${data}</b></span>`;
+        const tratto = (testo, classe = '') => `<span class="conta-tratto ${classe}"><i></i><small>${testo}</small></span>`;
+        const ultimo = dataBreve(daChiaveGiorno(x.a.ultimoRipasso)), prevista = dataBreve(x.prevista), oggi = dataBreve(Date.now());
+        const I = intervallo(x.a);
+        if (x.tipo === 'stesso-giorno') return tappa('ultimo ripasso', 'oggi', 'oggi') + tratto(plurale(I, 'giorno', 'giorni')) + tappa('prevista', prevista);
+        if (x.tipo === 'anticipo') return tappa('ultimo ripasso', ultimo) + tratto(plurale(I - x.giorni, 'giorno', 'giorni')) + tappa('oggi', oggi, 'oggi') + tratto(`mancano ${x.giorni}`) + tappa('prevista', prevista);
+        return tappa('ultimo ripasso', ultimo) + tratto(plurale(I, 'giorno', 'giorni')) + tappa('prevista', prevista) + tratto(`+${plurale(x.giorni, 'giorno', 'giorni')}`, 'ritardo') + tappa('oggi', oggi, 'oggi');
+    }
+
+    function esitiSet(x) {
+        const g = e => `tra ${plurale(x.esiti[e].tra, 'giorno', 'giorni')} <small>(${x.esiti[e].il})</small>${esamePrima(x.a.setId, aggiungiGiorni(Date.now(), x.esiti[e].tra)) ? ` <span class="dopo-esame">${ico('avviso')}dopo l'esame</span>` : ''}`;
+        if (x.tipo === 'stesso-giorno') return `<p class="conta-se">Se conta: N° Rep ${(x.a.ripetizioni || 0) + 1}, la prossima revisione resta il <b>${dataBreve(prossima(x.a))}</b>.</p>`;
+        if (x.tipo === 'anticipo') return `<p class="conta-se">Se conta: prossima revisione <b>${g('buono')}</b>. La data va avanti, ma meno che aspettando.</p>`;
+        return `<div class="conta-se"><span>Se conta, la prossima revisione dipende da com'è andata:</span>
+            <div class="conta-esiti">
+                <span class="conta-esito stato-perfetto"><b>Ottimo</b>${g('perfetto')}</span>
+                <span class="conta-esito stato-buono"><b>Buono</b>${g('buono')}</span>
+                <span class="conta-esito stato-ok"><b>Ok, Scarso o incompleto</b>${g('male')}</span>
+            </div></div>`;
+    }
+
+    // Quante carte per situazione, come pastiglie: "3 in ritardo (da 1 a 9 giorni)"
     function riepilogoCarte(voci) {
         return [['ritardo', 'in ritardo', 'in ritardo'], ['anticipo', 'in anticipo', 'in anticipo'], ['stesso-giorno', 'già ripassata oggi', 'già ripassate oggi']].map(([tipo, uno, piu]) => {
             const g = voci.filter(v => v.tipo === tipo).map(v => v.giorni);
             if (!g.length) return '';
             const min = Math.min(...g), max = Math.max(...g);
             const quanti = tipo === 'stesso-giorno' ? '' : min === max ? ` (${plurale(min, 'giorno', 'giorni')})` : ` (da ${min} a ${max} giorni)`;
-            return `<b>${g.length}</b> ${g.length === 1 ? uno : piu}${quanti}`;
-        }).filter(Boolean).join(' · ');
+            return `<span class="conta-badge conta-${tipo}"><b>${g.length}</b> ${g.length === 1 ? uno : piu}${quanti}</span>`;
+        }).filter(Boolean).join('');
     }
 
     // Se lo studio non cade nel giorno previsto chiede se conta o se è un ripasso di prova (che non cambia niente).
@@ -341,32 +401,129 @@ const Revisioni = (() => {
     function chiediSeConta(carte, opzioni = {}) {
         const { argomenti, flashcard } = fuoriGiorno(carte, opzioni);
         if (!argomenti.length && !flashcard.length) return Promise.resolve('conta');
-        const voceSet = x => {
-            const se = x.tipo === 'stesso-giorno'
-                ? `N° Rep ${(x.a.ripetizioni || 0) + 1}, la prossima revisione resta il ${dataBreve(prossima(x.a))}`
-                : `prossima revisione ${quando(x.dopo)} (il ${dataBreve(aggiungiGiorni(daChiaveGiorno(x.dopo.giorno), x.dopo.intervallo))}), N° Rep ${(x.a.ripetizioni || 0) + 1}`;
-            return `<div class="conta-voce"><b>${esc(x.a.nome || nomeSet(x.a.setId))}</b><span>${testoSituazione(x)}</span><small>Se conta: ${se}</small></div>`;
-        };
+        const voceSet = x => `
+            <div class="conta-set conta-${x.tipo}">
+                <div class="conta-set-testa"><b>${esc(x.a.nome || nomeSet(x.a.setId))}</b>
+                    <span class="conta-badge conta-${x.tipo}">${BADGE[x.tipo]}${x.giorni ? ` di ${plurale(x.giorni, 'giorno', 'giorni')}` : ''}</span></div>
+                <div class="conta-linea">${lineaDelTempo(x)}</div>
+                ${esitiSet(x)}
+            </div>`;
+        const una = flashcard.length === 1 ? flashcard[0] : null;
+        const bloccoCarte = flashcard.length ? `
+            <div class="conta-set conta-carte">
+                <div class="conta-set-testa"><b>${una ? esc(Ui.tronca(testoDaHtml(una.c.domanda), 110)) || 'Flashcard' : `${ico('carte')}${flashcard.length} flashcard fuori dal giorno previsto`}</b></div>
+                <div class="conta-pastiglie">${riepilogoCarte(flashcard)}</div>
+                ${una ? '' : `<details class="conta-dettagli"><summary>Quali sono</summary><ul>${flashcard.map(x =>
+                    `<li><span>${esc(Ui.tronca(testoDaHtml(x.c.domanda), 90)) || '(senza domanda)'}</span><small>${testoSituazione(x, true)}</small></li>`).join('')}</ul></details>`}
+                <p class="conta-se">Se ${una ? 'conta' : 'contano'}: ${[
+                    flashcard.some(x => x.tipo === 'ritardo') && `${una ? '' : 'in ritardo, '}se la sai bene l'intervallo si allunga, se la sai così così si accorcia`,
+                    flashcard.some(x => x.tipo === 'anticipo') && `${una ? '' : 'in anticipo, '}la data va avanti, ma meno che aspettando`,
+                    flashcard.some(x => x.tipo === 'stesso-giorno') && `${una ? '' : 'già ripassate oggi, '}N° Rep +1 e la data resta`,
+                ].filter(Boolean).join('; ')}.</p>
+            </div>` : '';
+        const intro = argomenti.length
+            ? (argomenti.length === 1 ? 'Questo set non è nel giorno previsto per il ripasso.' : 'Questi set non sono nel giorno previsto per il ripasso.')
+            : flashcard.length === 1 ? 'Questa flashcard non è nel giorno previsto per il ripasso.' : 'Alcune flashcard non sono nel giorno previsto per il ripasso.';
+        const soloStessoGiorno = argomenti.every(x => x.tipo === 'stesso-giorno') && flashcard.every(x => x.tipo === 'stesso-giorno');
         return new Promise(risolvi => {
             let scelta = null;
             Ui.modale({
-                titolo: 'Conta come ripasso?', classe: 'modale-piccola modale-conta',
+                titolo: 'Conta come ripasso?', classe: 'modale-conta',
                 corpo: `
-                    <p>${argomenti.length && flashcard.length ? 'Il set e alcune flashcard non sono' : argomenti.length ? (argomenti.length === 1 ? 'Il set non è' : 'Alcuni set non sono') : flashcard.length === 1 ? 'Una flashcard non è' : 'Alcune flashcard non sono'} nel giorno previsto per il ripasso.</p>
-                    ${argomenti.length ? `<div class="conta-gruppo"><span class="etichetta">${ico('cartella')}Set</span>${argomenti.map(voceSet).join('')}</div>` : ''}
-                    ${flashcard.length ? `<div class="conta-gruppo"><span class="etichetta">${ico('carte')}Flashcard</span>
-                        <p>${riepilogoCarte(flashcard)}</p>
-                        <details class="conta-dettagli"><summary>Quali sono</summary><ul>${flashcard.map(x =>
-                            `<li><span>${esc(Ui.tronca(testoDaHtml(x.c.domanda), 90)) || '(senza domanda)'}</span><small>${testoSituazione(x, true)}</small></li>`).join('')}</ul></details>
-                        <small class="nota">Se contano: quelle in ritardo tornano prima del solito, quelle in anticipo un po' dopo la data prevista, quelle già ripassate oggi prendono N° Rep +1 e la data resta.</small></div>` : ''}
-                    <p class="nota"><b>Ripasso di prova</b>: studi come sempre, ma set e flashcard restano come sono (N° Rep, date, valutazioni e stato). Il tempo e le risposte vanno lo stesso nelle statistiche.</p>`,
-                azioni: [
-                    { testo: 'Annulla', classe: 'btn-fantasma' },
-                    { testo: `${ico('occhio')}Ripasso di prova`, classe: 'btn-secondario', clic: m => { scelta = 'prova'; m.chiudi(); } },
-                    { testo: `${ico('spunta')}Conta come ripasso`, classe: 'btn-primario', principale: true, clic: m => { scelta = 'conta'; m.chiudi(); } },
-                ],
+                    <p class="conta-intro">${intro}</p>
+                    ${argomenti.map(voceSet).join('')}
+                    ${bloccoCarte}
+                    <div class="conta-scelte">
+                        <button type="button" class="conta-scelta conta-scelta-primaria" data-scelta="conta" autofocus>
+                            <span class="conta-scelta-icona">${ico('spunta')}</span>
+                            <span><b>Conta come ripasso</b><small>${soloStessoGiorno ? 'N° Rep +1, le date restano' : argomenti.length ? 'N° Rep +1 e le nuove date qui sopra' : 'Valutazioni, N° Rep e date si aggiornano'}</small></span>
+                        </button>
+                        <button type="button" class="conta-scelta" data-scelta="prova">
+                            <span class="conta-scelta-icona">${ico('occhio')}</span>
+                            <span><b>Ripasso di prova</b><small>Studi come sempre, ma set e flashcard restano com'erano. Il tempo va nelle statistiche</small></span>
+                        </button>
+                    </div>`,
+                azioni: [{ testo: 'Annulla', classe: 'btn-fantasma' }],
+                alApri: (el, m) => el.addEventListener('click', e => {
+                    const b = e.target.closest('[data-scelta]');
+                    if (!b) return;
+                    scelta = b.dataset.scelta;
+                    m.chiudi();
+                }),
                 alChiudere: () => risolvi(scelta),
             });
+        });
+    }
+
+    // ---- Ripasso di più set insieme ---------------------------------------------------------
+
+    // Scegli quali set (quelli da ripassare sono già spuntati) e se le carte vanno in ordine (un set dopo l'altro) o
+    // mescolate (si alternano: aiuta a distinguere argomenti simili; dentro ogni set l'ordine e la cascata restano).
+    // Ogni set di cui valuti tutte le carte conta come ripasso del set. materiaId limita i set a una materia
+    function ripassaPiuSet({ materiaId = null } = {}) {
+        const righe = Dati.tuttiGliArgomenti().filter(a => conCarte(a) && (!materiaId || (Dati.set(a.setId) || {}).materiaId === materiaId));
+        if (!righe.length) { Ui.toast('Non ci sono ancora set con flashcard nelle revisioni', 'info', 4000); return; }
+        const ordinati = [...righe.filter(daRipassare).sort(perUrgenza), ...righe.filter(a => !daRipassare(a)).sort(perUrgenza)];
+        const scelti = new Set(ordinati.filter(daRipassare).map(a => a.id));
+        const carteScelte = () => [...new Set(ordinati.filter(a => scelti.has(a.id)).flatMap(a => (carteDi(a) || []).map(c => c.id)))];
+        Ui.modale({
+            titolo: 'Ripassa più set', classe: 'modale-piccola modale-piu-set',
+            corpo: `
+                <div class="campo"><span class="etichetta">Quali set <em>quelli da ripassare oggi sono già spuntati</em></span>
+                    <div class="scelta-set lista-piu-set">${ordinati.map(a => `
+                        <label class="voce-set"><input type="checkbox" value="${a.id}" ${scelti.has(a.id) ? 'checked' : ''}>
+                            <span>${esc(a.nome || nomeSet(a.setId))}</span>${etichettaAvviso(a)}<small>${(carteDi(a) || []).length}</small></label>`).join('')}</div>
+                    <div class="azioni-riga azioni-scelta-set">
+                        <button type="button" class="btn btn-fantasma btn-piccolo" data-piu-set="da-fare">Quelli da ripassare</button>
+                        <button type="button" class="btn btn-fantasma btn-piccolo" data-piu-set="tutti">Tutti</button>
+                        <button type="button" class="btn btn-fantasma btn-piccolo" data-piu-set="nessuno">Nessuno</button>
+                    </div>
+                </div>
+                <div class="campo"><span class="etichetta">Le carte</span>
+                    <div class="scelte-ordine">
+                        <label class="scelta-radio"><input type="radio" name="ordine-piu-set" value="mescolato" checked>
+                            <span><b>Mescolate</b> (consigliato)<small>Le carte dei set si alternano: aiuta a distinguere argomenti simili. Dentro ogni set l'ordine e la cascata restano.</small></span></label>
+                        <label class="scelta-radio"><input type="radio" name="ordine-piu-set" value="set"><span><b>In ordine</b><small>Un set dopo l'altro.</small></span></label>
+                    </div>
+                </div>
+                <p class="conteggio-sessione" data-conto-piu-set></p>`,
+            alApri: el => {
+                const aggiorna = () => {
+                    const n = carteScelte().length;
+                    $('[data-conto-piu-set]', el).innerHTML = n ? `<b>${plurale(scelti.size, 'set', 'set')}</b>, ${plurale(n, 'flashcard', 'flashcard')}` : 'Scegli almeno un set';
+                    $('.modale-piede .btn-primario', el).disabled = !n;
+                };
+                el.addEventListener('change', e => {
+                    const x = e.target.closest('.lista-piu-set input');
+                    if (!x) return;
+                    if (x.checked) scelti.add(x.value); else scelti.delete(x.value);
+                    aggiorna();
+                });
+                el.addEventListener('click', e => {
+                    const b = e.target.closest('[data-piu-set]');
+                    if (!b) return;
+                    scelti.clear();
+                    ordinati.forEach(a => { if (b.dataset.piuSet === 'tutti' || (b.dataset.piuSet === 'da-fare' && daRipassare(a))) scelti.add(a.id); });
+                    $$('.lista-piu-set input', el).forEach(x => { x.checked = scelti.has(x.value); });
+                    aggiorna();
+                });
+                aggiorna();
+            },
+            azioni: [
+                { testo: 'Annulla', classe: 'btn-fantasma' },
+                { testo: `${ico('fulmine')}Inizia`, classe: 'btn-primario', principale: true, clic: m => {
+                    const ids = carteScelte();
+                    if (!ids.length) return;
+                    const scelte = ordinati.filter(a => scelti.has(a.id));
+                    const mescola = $('[name=ordine-piu-set]:checked', m.el).value === 'mescolato';
+                    m.chiudi();
+                    Viste.studio.avvia({
+                        setIds: [...new Set(scelte.map(a => a.setId))], ids, mescolaSet: mescola,
+                        titolo: scelte.length === 1 ? (scelte[0].nome || nomeSet(scelte[0].setId)) : `${scelte.length} set${mescola ? ' mescolati' : ''}`,
+                        ritorno: Router.corrente.replace(/^#/, ''),
+                    });
+                } },
+            ],
         });
     }
 
@@ -535,7 +692,7 @@ const Revisioni = (() => {
                 <td class="col-data"><label class="sovrapposto"><span class="testo-sovrapposto" data-testo-data>${a.ultimoRipasso ? dataLunga(a.ultimoRipasso) : '<span class="tenue">—</span>'}</span>
                     <input class="controllo-sovrapposto" type="date" data-campo="ultimoRipasso" value="${a.ultimoRipasso || ''}" max="${oggi}" aria-label="Ultimo ripasso"></label></td>
                 <td class="col-intervallo">${campoIntervallo('data-campo', a.ultimoRipasso ? intervallo(a) : null)}</td>
-                <td class="col-prossima">${campoProssima('data-campo', p, a.ultimoRipasso, !a.ultimoRipasso)}</td>
+                <td class="col-prossima">${campoProssima('data-campo', p, a.ultimoRipasso, !a.ultimoRipasso)}${avvisoEsame(a.setId, p)}</td>
                 <td class="col-avviso" data-calcolato="avviso">${etichettaAvviso(a)}</td>
                 <td class="col-stato">
                     ${conCarte(a)
@@ -609,7 +766,7 @@ const Revisioni = (() => {
             const tr = $(`tr[data-id="${id}"]`, contenitore);
             if (!a || !tr) return;
             const p = prossima(a);
-            $('.col-prossima', tr).innerHTML = campoProssima('data-campo', p, a.ultimoRipasso, !a.ultimoRipasso);
+            $('.col-prossima', tr).innerHTML = campoProssima('data-campo', p, a.ultimoRipasso, !a.ultimoRipasso) + avvisoEsame(a.setId, p);
             $('.col-intervallo', tr).innerHTML = campoIntervallo('data-campo', a.ultimoRipasso ? intervallo(a) : null);
             $('[data-calcolato="avviso"]', tr).innerHTML = etichettaAvviso(a);
             tr.classList.toggle('scaduto', avviso(a).tipo === 'scaduto');
@@ -745,7 +902,7 @@ const Revisioni = (() => {
     function menuRipasso(ancora, a, dopo) {
         if (!a) return;
         const segna = async stato => {
-            await Storia.esegui(`«${a.nome || 'Argomento'}» ripassato: prossima revisione ${quando(Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }))}`,
+            await Storia.esegui(`«${a.nome || 'Argomento'}» ripassato: prossima revisione ${quando(Srs.dopoRipasso({ intervallo: intervallo(a), giorno: a.ultimoRipasso }, undefined, { esito: Srs.esitoDaStato(stato || a.stato) }))}`,
                 () => Dati.segnaRipasso(a.id, stato));
             dopo();
         };
@@ -1026,7 +1183,7 @@ const Revisioni = (() => {
                 <td class="col-data"><label class="sovrapposto"><span class="testo-sovrapposto">${v.ultimoRipasso ? dataLunga(v.ultimoRipasso) : '<span class="tenue">—</span>'}</span>
                     <input class="controllo-sovrapposto" type="date" data-carta-campo="giorno" value="${v.ultimoRipasso || ''}" max="${chiaveGiorno()}" aria-label="Ultimo ripasso"></label></td>
                 <td class="col-intervallo">${campoIntervallo('data-carta-campo', v.intervallo)}</td>
-                <td class="col-prossima">${campoProssima('data-carta-campo', p, val === Srs.SCARSO ? null : v.ultimoRipasso, !datata)}</td>
+                <td class="col-prossima">${campoProssima('data-carta-campo', p, val === Srs.SCARSO ? null : v.ultimoRipasso, !datata)}${datata ? avvisoEsame(c.setId, p) : ''}</td>
                 <td class="col-avviso">${mai ? '<span class="avviso-rev avviso-mai"><i></i>Mai ripassata</span>' : etichettaAvviso(v)}</td>
                 <td class="col-azioni">
                     <button type="button" class="btn-ripassato con-studio${v.ultimoRipasso === chiaveGiorno() ? ' fatto' : ''}" data-carta-ripassa
@@ -1117,10 +1274,10 @@ const Revisioni = (() => {
     }
 
     return {
-        STATI, intervallo, prossima, giorniMancanti, avviso, daRipassare, perUrgenza, conteggi, quanteDaRipassare,
+        STATI, intervallo, prossima, esamePrima, avvisoEsame, giorniMancanti, avviso, daRipassare, perUrgenza, conteggi, quanteDaRipassare,
         etichettaAvviso, dataBreve, dataLunga, nomeSet, monta, formNuovo, unoPerOgniSet, ripristinaLarghezze,
         carteDelSet, statoDaCarte, statoDi, rigaDelSet, registraSessione, segnaComunque, descriviEsito,
-        avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
+        daNonAllineare, esitiSeConta, ripassaPiuSet, avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
         avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, fuoriGiorno,
     };
 })();

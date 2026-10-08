@@ -47,7 +47,7 @@ Viste.home = {
             Ui.collegaAzioni(el, {
                 'nuovo-set': async () => { const s = await Ui.nuovoSet(); if (s) Router.vai('/carta/nuova?set=' + s.id); },
                 importa: () => Importa.apriDialogo(),
-                prova: () => { if (DatiProva.carica()) App.ridisegna(); },
+                prova: () => { if (DatiProva.carica()) { App.ridisegna(); Tour.proponi(); } },
             });
             return;
         }
@@ -57,7 +57,9 @@ Viste.home = {
                 ${testa}
                 ${argomenti.length ? `
                 <section class="sezione">
-                    <div class="sezione-testa"><h2>Revisioni di oggi ${daRivedere.length ? `<span class="conteggio">${daRivedere.length}</span>` : ''}</h2><a href="#/revisioni" class="link">Revisioni${ico('destra')}</a></div>
+                    <div class="sezione-testa"><h2>Revisioni di oggi ${daRivedere.length ? `<span class="conteggio">${daRivedere.length}</span>` : ''}</h2>
+                        <div class="azioni-riga">${daRivedere.length ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="piu-set" title="Scegli quali set ripassare e se tenerli in ordine o mescolare le carte">${ico('fulmine')}Ripassa più set</button>` : ''}
+                            <a href="#/revisioni" class="link">Revisioni${ico('destra')}</a></div></div>
                     ${daRivedere.length ? `<div class="riquadro lista-revisioni-home">${daRivedere.slice(0, 6).map(a => `
                         <a class="riga-revisione-home" href="#/set/${a.setId}">
                             <b>${esc(a.nome || 'Argomento')}</b><small>${esc(Revisioni.nomeSet(a.setId, true))}</small>${Revisioni.etichettaAvviso(a)}
@@ -82,7 +84,8 @@ Viste.home = {
         Ui.collegaAzioni(el, {
             'nuovo-esame': async () => { const d = await Ui.formEsame(); if (d) { Dati.creaEsame(d); App.ridisegna(); } },
             'menu-esame': b => Viste.piano.menuEsame(b),
-            'carte-devianti': () => { Viste.revisioni.pannello = 'carte'; Router.vai('/revisioni'); },
+            'carte-devianti': () => { Viste.revisioni.pannello = 'carte'; Viste.revisioni.soloSfasate = true; Router.vai('/revisioni'); },
+            'piu-set': () => Revisioni.ripassaPiuSet(),
         });
     },
 };

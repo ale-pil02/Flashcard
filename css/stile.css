@@ -1378,20 +1378,56 @@ a.tessera:hover, .tessera-materia:hover {
 .esito-rev .pill-stato { margin-left: 2px; }
 
 /* Avvio dello studio fuori dal giorno previsto: conta o è una prova */
-.modale-conta { width: min(560px, 100%); }
+.modale-conta { width: min(580px, 100%); }
 .modale-conta .modale-corpo { display: flex; flex-direction: column; gap: 12px; }
-.modale-conta .modale-corpo > p { margin: 0; }
-.conta-gruppo { display: flex; flex-direction: column; gap: 6px; }
-.conta-gruppo > .etichetta { display: flex; align-items: center; gap: 6px; font-weight: 700; }
-.conta-gruppo > .etichetta .ico { width: 16px; height: 16px; color: var(--primario-testo); }
-.conta-gruppo > p { margin: 0; }
-.conta-voce { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--superficie-2); font-size: .9rem; }
-.conta-voce span { color: var(--testo-2); }
-.conta-voce small { color: var(--testo-3); }
+.conta-intro { margin: 0; font-weight: 600; }
+.conta-set { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--bordo); border-left: 4px solid var(--bordo); border-radius: 14px; background: var(--superficie-2); }
+.conta-set.conta-ritardo { border-left-color: var(--scarso); }
+.conta-set.conta-anticipo { border-left-color: var(--ok); }
+.conta-set.conta-stesso-giorno { border-left-color: var(--primario); }
+.conta-set-testa { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.conta-set-testa > b { display: inline-flex; align-items: center; gap: 6px; }
+.conta-set-testa .ico { width: 16px; height: 16px; color: var(--primario-testo); }
+.conta-badge { display: inline-block; padding: 3px 10px; border-radius: 99px; background: var(--superficie); font-size: .8rem; font-weight: 700; }
+.conta-badge.conta-ritardo { background: color-mix(in srgb, var(--scarso) 14%, transparent); color: color-mix(in srgb, var(--scarso) 78%, var(--testo)); }
+.conta-badge.conta-anticipo { background: color-mix(in srgb, var(--ok) 18%, transparent); color: color-mix(in srgb, var(--ok) 62%, var(--testo)); }
+.conta-badge.conta-stesso-giorno { background: var(--primario-tenue); color: var(--primario-testo); }
+.conta-linea { display: flex; align-items: center; gap: 4px; }
+.conta-tappa { display: flex; flex: none; flex-direction: column; align-items: center; padding: 4px 8px; border-radius: 10px; background: var(--superficie); line-height: 1.2; }
+.conta-tappa small { color: var(--testo-3); font-size: .7rem; }
+.conta-tappa b { font-size: .88rem; font-variant-numeric: tabular-nums; }
+.conta-tappa.oggi { outline: 2px solid var(--primario); }
+.conta-tratto { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+.conta-tratto i { width: 100%; height: 2px; border-radius: 2px; background: var(--bordo); }
+.conta-tratto.ritardo i { background: var(--scarso); }
+.conta-tratto small { color: var(--testo-3); font-size: .72rem; white-space: nowrap; }
+.conta-tratto.ritardo small { color: color-mix(in srgb, var(--scarso) 78%, var(--testo)); font-weight: 700; }
+.conta-se { margin: 0; color: var(--testo-2); font-size: .88rem; }
+.conta-se > span { display: block; margin-bottom: 6px; }
+.conta-esiti { display: flex; flex-wrap: wrap; gap: 6px; }
+.conta-esito { display: flex; flex: 1 1 140px; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px; background: var(--superficie); font-size: .82rem; }
+.conta-esito b { font-size: .78rem; }
+.conta-esito.stato-perfetto b { color: var(--perfetto-testo); }
+.conta-esito.stato-buono b { color: color-mix(in srgb, var(--buono) 60%, var(--testo)); }
+.conta-esito.stato-ok b { color: color-mix(in srgb, var(--ok) 62%, var(--testo)); }
+.conta-esito small { color: var(--testo-3); }
+.conta-pastiglie { display: flex; flex-wrap: wrap; gap: 6px; }
 .conta-dettagli summary { color: var(--primario-testo); font-size: .88rem; cursor: pointer; }
-.conta-dettagli ul { display: flex; flex-direction: column; gap: 4px; max-height: 220px; margin: 6px 0 0; padding: 0; overflow-y: auto; list-style: none; }
-.conta-dettagli li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 8px; background: var(--superficie-2); font-size: .85rem; }
+.conta-dettagli ul { display: flex; flex-direction: column; gap: 4px; max-height: 200px; margin: 6px 0 0; padding: 0; overflow-y: auto; list-style: none; }
+.conta-dettagli li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 8px; background: var(--superficie); font-size: .85rem; }
 .conta-dettagli li small { color: var(--testo-3); }
+.conta-scelte { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 4px; }
+.conta-scelta { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 2px solid var(--bordo); border-radius: 14px; background: var(--superficie); color: var(--testo); text-align: left; cursor: pointer; transition: border-color .15s, background .15s, transform .1s; }
+.conta-scelta:hover { border-color: var(--primario); transform: translateY(-1px); }
+.conta-scelta:focus-visible { outline: 3px solid var(--primario-tenue); }
+.conta-scelta > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.conta-scelta b { font-size: .95rem; }
+.conta-scelta small { color: var(--testo-2); font-size: .8rem; line-height: 1.4; }
+.conta-scelta-icona { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--superficie-2); color: var(--testo-2); }
+.conta-scelta-icona .ico { width: 17px; height: 17px; }
+.conta-scelta-primaria { border-color: var(--primario); background: var(--primario-tenue); }
+.conta-scelta-primaria .conta-scelta-icona { background: var(--primario); color: #fff; }
+@media (max-width: 480px) { .conta-tratto small { white-space: normal; text-align: center; } .conta-tappa { padding: 4px 6px; } }
 .chip-prova { margin-left: 6px; }
 
 /* ---- 8. Materiali e assistente IA ----------------------------------------- */
@@ -2109,3 +2145,18 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .tour-elenco { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 20px; }
 .tour-piede { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--bordo); }
 .tour-piede .ico { width: 15px; height: 15px; }
+
+/* Revisione che cade dopo l'esame della materia (Piano di studio) */
+.dopo-esame { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; color: color-mix(in srgb, var(--scarso) 80%, var(--testo)); font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.dopo-esame .ico { width: 13px; height: 13px; }
+.col-prossima .dopo-esame { display: flex; padding: 0 4px; white-space: normal; }
+.dopo-esame-nota { grid-column: 1 / -1; color: color-mix(in srgb, var(--scarso) 80%, var(--testo)); }
+
+/* Ripassa più set */
+.lista-piu-set { max-height: 300px; }
+.lista-piu-set .voce-set { flex-wrap: wrap; row-gap: 2px; }
+.lista-piu-set .avviso-rev { font-size: .76rem; }
+.scelte-ordine { display: flex; flex-direction: column; gap: 8px; }
+.scelte-ordine .scelta-radio { align-items: flex-start; }
+.scelte-ordine .scelta-radio input { margin-top: 3px; accent-color: var(--primario); }
+.scelte-ordine .scelta-radio small { display: block; margin-top: 2px; color: var(--testo-2); font-weight: 400; }
