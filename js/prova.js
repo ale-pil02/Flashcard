@@ -118,8 +118,13 @@ const DatiProva = (() => {
         return Archivio.tutti('materie').some(m => m.prova);
     }
 
-    // N° Rep e ultimo ripasso come nelle revisioni (prossima = ultimo + 2^(rep − 1) giorni)
+    // N° Rep, ultimo ripasso e intervallo come nelle revisioni (prossima = ultimo ripasso + intervallo della sequenza)
     function statoSrs(tipo, k, ora) {
+        const s = statoSrsBase(tipo, k, ora);
+        return s.giorno ? { ...s, intervallo: Srs.intervalloPerRep(s.rep) } : s;
+    }
+
+    function statoSrsBase(tipo, k, ora) {
         const base = Srs.statoIniziale();
         const giorno = n => chiaveGiorno(aggiungiGiorni(ora, n));
         const ts = n => aggiungiGiorni(ora, n);
@@ -242,7 +247,8 @@ const DatiProva = (() => {
                 .map((v, j, tutte) => ({ ...v, prima: { ripetizioni: j, ultimoRipasso: j ? tutte[j - 1].giorno : null, stato: j ? stato : '' } }));
             return {
                 id: uid(), setId: s.id, nome: s.nome, fonte: i % 2 ? '' : `Schema ${i + 1}`, materialeIds: [], fontiTolte: [], ripetizioni,
-                ultimoRipasso: giorni == null ? null : chiaveGiorno(aggiungiGiorni(ora, giorni)), stato, delSet: true, ordine: 1, creato: ora + i, storico, prova: true,
+                ultimoRipasso: giorni == null ? null : chiaveGiorno(aggiungiGiorni(ora, giorni)), intervallo: Srs.intervalloPerRep(ripetizioni),
+                stato, delSet: true, ordine: 1, creato: ora + i, storico, prova: true,
             };
         });
         Archivio.salvaMolti('argomenti', argomentiProva);

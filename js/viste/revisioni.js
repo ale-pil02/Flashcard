@@ -37,10 +37,11 @@ Viste.revisioni = {
                 <header class="pagina-testa">
                     <div>
                         <h1>Revisioni</h1>
-                        <p class="sottotitolo">${carte ? 'Flashcard che non vanno al passo con il loro set: mai valutate, rimaste indietro o con un N° Rep diverso'
-                            : "Ripasso degli argomenti a intervalli che raddoppiano: 1, 2, 4, 8… giorni dall'ultimo ripasso"}</p>
+                        <p class="sottotitolo">${carte ? 'Flashcard che non vanno al passo con il loro set: mai valutate o con la prossima revisione in un altro giorno'
+                            : `Ripasso degli argomenti a intervalli crescenti: ${Srs.anteprimaSequenza(6).join(', ')}… giorni (la sequenza si cambia nelle Impostazioni)`}</p>
                     </div>
                     <div class="azioni-testa">
+                        <button type="button" class="btn btn-fantasma" data-azione="guida" title="Flashcard, valutazioni e revisioni spiegate passo per passo">${ico('lampadina')}<span>Come funziona</span></button>
                         <button type="button" class="btn-icona btn-bordo" data-azione="menu" aria-label="Altre azioni">${ico('altro')}</button>
                         ${carte ? '' : `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}<span>Nuovo argomento</span></button>`}
                     </div>
@@ -86,7 +87,7 @@ Viste.revisioni = {
                     ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard è rimasta indietro rispetto al suo set. 🎉' })
                     : Ui.vuoto({
                         icona: 'carte', titolo: 'Nessuna flashcard per conto suo',
-                        testo: 'Qui compaiono le carte dei set già ripassati che vanno riviste prima del loro set: quelle rimaste indietro (per esempio con Scarso), quelle aggiunte dopo e mai valutate e quelle con un N° Rep diverso da quello del set.',
+                        testo: 'Qui compaiono le carte dei set già ripassati che non vanno al passo con il loro set: quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate e quelle ripassate per conto loro.',
                     }),
             });
         } else {
@@ -133,6 +134,7 @@ Viste.revisioni = {
             nuovo: async () => { if (await Revisioni.formNuovo({ materiaId: materiaScheda })) ridisegna(); },
             'uno-per-set': async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); },
             'ripassa-carte': () => Revisioni.avviaRipassoCarte(vociCarte().filter(Revisioni.cartaDaRipassare)),
+            guida: () => Guida.apri(),
             menu: b => Ui.menu(b, [
                 !carte && { testo: materiaScheda ? `Un argomento per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un argomento per ogni set', icona: 'cartella',
                     clic: async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); } },

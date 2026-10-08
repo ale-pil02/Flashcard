@@ -743,6 +743,11 @@ a.tessera:hover, .tessera-materia:hover {
 /* Valutazione della carta nell'editor */
 .scelta-valutazione { display: flex; flex-wrap: wrap; gap: 8px; }
 .campo-valutazione .nota { margin: 8px 0 0; }
+.griglia-ripasso { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.campo-mini { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.campo-mini > span { color: var(--testo-2); font-size: .82rem; font-weight: 600; }
+.campo-mini input { width: 100%; min-width: 0; }
+.campo-mini input:disabled { opacity: .55; cursor: not-allowed; }
 .conteggio-sessione { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--superficie-2); color: var(--testo-2); text-align: center; }
 
 /* Menu a tendina */
@@ -1169,6 +1174,10 @@ a.tessera:hover, .tessera-materia:hover {
 .impostazione b { font-weight: 600; }
 .impostazione small { color: var(--testo-3); font-size: .82rem; line-height: 1.4; }
 .impostazione input[type=number] { width: 96px; text-align: center; }
+.campo-sequenza { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 0; }
+.campo-sequenza input { width: 240px; max-width: 100%; font-variant-numeric: tabular-nums; }
+.anteprima-sequenza { margin: -4px 0 4px; font-variant-numeric: tabular-nums; }
+.anteprima-sequenza span { font-weight: 700; color: var(--testo); }
 .impostazione input[type=text] { max-width: 240px; }
 .impostazione select { width: auto; }
 .tabella-tasti td { padding: 7px 0; border: none; }
@@ -1363,6 +1372,23 @@ a.tessera:hover, .tessera-materia:hover {
 .esito-rev b { flex: 1 1 100%; }
 .esito-rev span { flex: 1 1 auto; color: var(--testo-2); }
 .esito-rev .pill-stato { margin-left: 2px; }
+
+/* Avvio dello studio fuori dal giorno previsto: conta o è una prova */
+.modale-conta { width: min(560px, 100%); }
+.modale-conta .modale-corpo { display: flex; flex-direction: column; gap: 12px; }
+.modale-conta .modale-corpo > p { margin: 0; }
+.conta-gruppo { display: flex; flex-direction: column; gap: 6px; }
+.conta-gruppo > .etichetta { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.conta-gruppo > .etichetta .ico { width: 16px; height: 16px; color: var(--primario-testo); }
+.conta-gruppo > p { margin: 0; }
+.conta-voce { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--superficie-2); font-size: .9rem; }
+.conta-voce span { color: var(--testo-2); }
+.conta-voce small { color: var(--testo-3); }
+.conta-dettagli summary { color: var(--primario-testo); font-size: .88rem; cursor: pointer; }
+.conta-dettagli ul { display: flex; flex-direction: column; gap: 4px; max-height: 220px; margin: 6px 0 0; padding: 0; overflow-y: auto; list-style: none; }
+.conta-dettagli li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 8px; background: var(--superficie-2); font-size: .85rem; }
+.conta-dettagli li small { color: var(--testo-3); }
+.chip-prova { margin-left: 6px; }
 
 /* ---- 8. Materiali e assistente IA ----------------------------------------- */
 
@@ -1719,7 +1745,9 @@ button.link { padding: 0; border: none; background: none; font: inherit; font-we
 .tabella-revisioni tr.scaduto .cella-nome { color: var(--pericolo); }
 /* Colonne fisse; il nome dell'argomento prende lo spazio che resta */
 .col-prossima { font-weight: 600; }
-.tabella-revisioni td.col-prossima, .tabella-revisioni td.col-avviso { padding: 11px 8px 0 12px; }
+.tabella-revisioni td.col-avviso { padding: 11px 8px 0 12px; }
+.sovrapposto:has(.controllo-sovrapposto:disabled) { cursor: default; }
+.sovrapposto:has(.controllo-sovrapposto:disabled):hover { border-color: transparent; }
 .tabella-revisioni th.col-prossima { white-space: normal; }
 .col-azioni { text-align: right; white-space: nowrap; }
 .tabella-revisioni td { overflow: hidden; }
@@ -2013,3 +2041,42 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .lista-scelte-ragionamento { display: grid; gap: 6px; margin-top: 10px; }
 .scelta-radio { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1.5px solid var(--bordo); border-radius: 10px; cursor: pointer; }
 .scelta-radio:has(input:checked) { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); font-weight: 600; }
+
+/* Guida: flashcard e revisioni passo per passo (js/guida.js) */
+.modale-guida { width: min(620px, 100%); }
+.guida { display: flex; flex-direction: column; gap: 12px; }
+.guida h3 { margin: 0; font-size: 1.1rem; }
+.guida-contenuto { display: flex; flex-direction: column; gap: 12px; min-height: 230px; }
+.guida-contenuto p { margin: 0; line-height: 1.55; }
+.guida-contenuto .ico { width: 16px; height: 16px; vertical-align: -3px; }
+.guida-puntini { display: flex; gap: 6px; }
+.guida-puntini button { width: 26px; height: 6px; padding: 0; border: none; border-radius: 99px; background: var(--bordo); cursor: pointer; }
+.guida-puntini button.attivo { background: var(--primario); }
+.guida-piede { display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--bordo); }
+.guida-piede .ico { width: 16px; height: 16px; }
+.guida-schema { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 14px; background: var(--superficie-2); }
+.guida-schema span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; background: var(--superficie); font-weight: 600; }
+.guida-schema > .ico { color: var(--testo-3); }
+.guida-valutazioni { max-width: none; }
+.guida-valutazioni .btn-valuta { padding: 10px 6px; }
+.guida-esito { padding: 12px 14px; border-radius: 12px; background: var(--superficie-2); }
+.guida-esito p + p { margin-top: 6px; }
+.guida-linea { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.guida-tappa { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-left: 3px solid var(--primario); border-radius: 8px; background: var(--superficie-2); }
+.guida-tappa small, .guida-giorno { color: var(--testo-3); font-size: .78rem; }
+.guida-simulatore { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.guida-cursore { grid-column: 1 / -1; }
+.guida-cursore input { accent-color: var(--primario); }
+.guida-barra { position: relative; height: 56px; margin: 4px 36px 0 8px; border-top: 3px solid var(--bordo); }
+.guida-segno { position: absolute; top: -9px; display: flex; flex-direction: column; align-items: center; transform: translateX(-50%); color: var(--testo-2); font-size: .72rem; font-weight: 600; white-space: nowrap; }
+.guida-segno i { width: 14px; height: 14px; margin-bottom: 3px; border: 3px solid var(--superficie); border-radius: 50%; background: var(--testo-3); }
+.guida-previsto i { background: var(--ok); }
+.guida-fatto i { background: var(--primario); }
+.guida-prossima i { background: var(--perfetto); }
+.guida-segno em { font-style: normal; }
+.guida-previsto em { margin-top: 16px; }
+.guida-elenco { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.guida-elenco li { display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+.guida-elenco .pallino { flex: none; margin-top: 7px; }
+.guida-pulsanti { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; }
+.guida-passi { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-left: 22px; line-height: 1.5; }

@@ -29,18 +29,22 @@ flashcard (anche ad albero), materiali, esami del piano di studio, impostazioni 
   L'utente studia "a cascata": dalla domanda generale su un ramo a quelle sui concetti, fino ai dettagli;
   le figlie compaiono nello studio solo dopo che la madre è stata imparata.
 - Una sola modalità di studio con quattro valutazioni: Scarso, Ok, Buono, Perfetto. Ok e Scarso tornano in fondo alla
-  sessione finché non diventano Buono o Perfetto; l'utente può terminare quando vuole. Ripetizione spaziata delle carte
-  come nelle revisioni: Ok, Buono e Perfetto → N° Rep +1 (una al giorno) e ultimo ripasso = oggi; Scarso → N° Rep e
-  date invariati, la carta è da ripassare subito finché non arriva almeno a Ok;
-  prossima = ultimo + 2^(N° Rep − 1) giorni. La valutazione si cambia anche a mano (modifica_carte, valutazione).
+  sessione finché non diventano Buono o Perfetto; l'utente può terminare quando vuole. Ripetizione spaziata uguale per
+  carte e revisioni: ognuna ha N° Rep (conta i ripassi e basta), ultimo ripasso e intervallo; prossima = ultimo ripasso +
+  intervallo. Gli intervalli seguono la sequenza delle impostazioni (predefinita Fibonacci: dopo la rep 1, 2, 3, 4, 5
+  si aspettano 1, 2, 3, 5, 8 giorni…). Ripasso in ritardo: intervallo × ritmo × previsto / passati (più ritardo, più
+  vicina la prossima); in anticipo: la data prevista più la parte di intervallo "guadagnata"; lo stesso giorno: N° Rep +1
+  e date ferme. Ok fa crescere l'intervallo la metà; Scarso → N° Rep fermo, intervallo indietro di un passo, carta da
+  ripassare subito finché non arriva almeno a Ok. Se lo studio parte fuori dal giorno previsto l'utente sceglie se conta
+  o se è un ripasso di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
+  N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche.
 - Revisioni: oltre alle flashcard, l'utente ripassa interi argomenti (capitoli, schemi) con il metodo del suo database
-  di Notion. Ogni argomento ha N° Rep e ultimo ripasso; prossima revisione = ultimo ripasso + 2^(N° Rep − 1) giorni
-  (1, 2, 4, 8…); alert rosso se in ritardo, giallo se è oggi, verde se manca ancora. Ogni set studiato ha la sua riga
-  (riga_del_set), aggiornata dall'app a fine sessione: N° Rep +1 se ha valutato tutte le carte del set (una volta al
-  giorno), materiali dalle fonti delle carte; il suo stato viene dalle valutazioni delle carte (una Scarso → Scarso,
+  di Notion, con le stesse regole qui sopra; alert rosso se in ritardo, giallo se è oggi, verde se manca ancora. Ogni
+  set studiato ha la sua riga (riga_del_set), aggiornata dall'app a fine sessione: N° Rep +1 se ha valutato tutte le
+  carte del set (e le carte Buono o Perfetto prendono data e intervallo del set), materiali dalle fonti delle carte; il suo stato viene dalle valutazioni delle carte (una Scarso → Scarso,
   se no una Ok → Ok, se no più dell'80% Perfetto → Ottimo, se no Buono; una carta mai valutata → Incompleto). Le altre
   righe hanno lo stato scritto dall'utente. Pannello «Per flashcard»: carte non al passo con il loro set (mai
-  valutate, indietro o con N° Rep diverso; elenca_revisioni con flashcard). Strumenti: elenca_revisioni, crea_argomento_revisione, modifica_argomento_revisione,
+  valutate o con la prossima revisione in un altro giorno; elenca_revisioni con flashcard). Strumenti: elenca_revisioni, crea_argomento_revisione, modifica_argomento_revisione,
   segna_ripasso_argomento, elimina_argomento_revisione. "Ho ripassato il capitolo 2" → segna_ripasso_argomento.
 
 ## Come scrivere le flashcard per questo utente

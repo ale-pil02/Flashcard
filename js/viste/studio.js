@@ -4,6 +4,9 @@
 // valutazione. La sessione si termina quando vuoi (✕ o Esc): le carte restano con l'ultima valutazione data.
 // Alla fine le revisioni dei set studiati si aggiornano (Revisioni.registraSessione): ripasso segnato se hai valutato
 // tutte le carte del set, altrimenti si chiede.
+// Prima di cominciare, se set o carte non sono nel giorno previsto (in anticipo, in ritardo o già ripassati oggi), si
+// chiede se il ripasso conta o se è di prova (Revisioni.chiediSeConta): il ripasso di prova non cambia né le carte né
+// le revisioni, ma resta nelle statistiche.
 //
 // Studio a cascata (impostazione "cascata"): una domanda figlia mai vista entra solo dopo che la
 // sua domanda madre è stata imparata. Appena la madre è imparata, le figlie arrivano subito dopo,
@@ -172,7 +175,7 @@ Viste.studio = (() => {
             <div class="studio">
                 <header class="studio-testa">
                     <button type="button" class="btn-icona" data-azione="termina" title="Termina la sessione (Esc)" aria-label="Termina la sessione">${ico('chiudi')}</button>
-                    <div class="studio-titolo"><b>Studio</b><span>${esc(ambito.titolo)}</span></div>
+                    <div class="studio-titolo"><b>Studio${opzioniSessione.diProva ? '<span class="chip chip-ok chip-prova" title="Non cambia né le flashcard né le revisioni">Prova</span>' : ''}</b><span>${esc(ambito.titolo)}</span></div>
                     <div class="studio-barra"><span data-barra></span></div>
                     <span class="studio-contatore" data-contatore></span>
                 </header>
@@ -250,7 +253,7 @@ Viste.studio = (() => {
                 <p class="domanda-valuta">Quanto bene la sapevi?</p>
                 <div class="valutazioni">${Srs.VALUTAZIONI.map(v => `
                     <button type="button" class="btn-valuta valuta-${v.chiave}${suggerita === v.valore ? ' suggerita' : ''}" data-azione="valuta" data-v="${v.valore}">
-                        <b>${v.nome}</b><small>${Srs.anteprima(c.srs, v.valore, { date: !sessione.prime.has(c.id) || sessione.senzaDate.has(c.id) })}</small><kbd>${v.valore + 1}</kbd>
+                        <b>${v.nome}</b><small>${Srs.anteprima(c.srs, v.valore, { date: !opzioniSessione.diProva && (!sessione.prime.has(c.id) || sessione.senzaDate.has(c.id)) })}</small><kbd>${v.valore + 1}</kbd>
                     </button>`).join('')}</div>`;
         }
 
@@ -310,7 +313,7 @@ Viste.studio = (() => {
             const prima = !sessione.prime.has(c.id);
             // Partita con Scarso (date ferme): la prima volta che arriva almeno a Ok prende N° Rep +1 e ultimo ripasso oggi
             const recupero = !prima && sessione.senzaDate.has(c.id) && v >= Srs.OK;
-            Dati.registraRisposta(c, v, Date.now() - inizioCarta, { date: prima || recupero });
+            Dati.registraRisposta(c, v, Date.now() - inizioCarta, { date: prima || recupero, diProva: !!opzioniSessione.diProva });
             if (prima) sessione.prime.set(c.id, v);
             if (prima && v === Srs.SCARSO) sessione.senzaDate.add(c.id);
             if (v >= Srs.OK) sessione.senzaDate.delete(c.id);
@@ -340,6 +343,10 @@ Viste.studio = (() => {
         // Revisioni dei set studiati, una volta sola per sessione
         async function revisioni() {
             const box = $('[data-revisioni-fine]', corpo);
+            if (opzioniSessione.diProva) {
+                if (box) { box.innerHTML = `<h2>${ico('calendario-spunta')}Revisioni</h2><div class="esito-rev"><span>Ripasso di prova: flashcard e revisioni restano com'erano.</span></div>`; box.hidden = false; }
+                return;
+            }
             let esiti = [];
             try {
                 esiti = await Revisioni.registraSessione({ valutate: sessione.prime, parziale: !!opzioniSessione.parziale, perCarta: !!opzioniSessione.perCarta });
@@ -421,10 +428,12 @@ Viste.studio = (() => {
             termina,
             'segna-comunque': async b => {
                 b.disabled = true;
-                const a = await Revisioni.segnaComunque(b.dataset.argomento);
+                const prima = Dati.argomento(b.dataset.argomento);
+                const stessoGiorno = !!prima && prima.ultimoRipasso === chiaveGiorno();
+                const a = await Revisioni.segnaComunque(b.dataset.argomento, sessione.prime);
                 const box = b.closest('.esito-rev');
                 if (a && box) {
-                    const esito = { setId: a.setId, argomentoId: a.id, esito: 'rep' };
+                    const esito = { setId: a.setId, argomentoId: a.id, esito: 'rep', stessoGiorno };
                     $('span', box).innerHTML = Revisioni.descriviEsito(esito);
                     b.remove();
                 }
@@ -452,7 +461,18 @@ Viste.studio = (() => {
         document.title = `Studio · ${ambito.titolo}`;
         const preparata = preparaSessione(ambito, query, opzioni);
 
-        if (preparata.lista.length) { studia(el, preparata, ambito, opzioni || {}); return; }
+        if (preparata.lista.length) {
+            // Fuori dal giorno previsto: prima si sceglie se conta o se è una prova (dietro, la testata dello studio)
+            el.innerHTML = `<div class="studio"><header class="studio-testa"><div class="studio-titolo"><b>Studio</b><span>${esc(ambito.titolo)}</span></div></header></div>`;
+            // Le carte della riserva (figlie bloccate dalla cascata) entrano durante la sessione: contano per dire se è il
+            // ripasso di tutto il set
+            Revisioni.chiediSeConta([...preparata.lista, ...preparata.riserva], { parziale: !!(opzioni && opzioni.parziale), perCarta: !!(opzioni && opzioni.perCarta) }).then(scelta => {
+                if (!document.contains(el)) return;   // nel frattempo sei andato altrove
+                if (!scelta) { Router.vai(ambito.ritorno); return; }
+                studia(el, preparata, ambito, { ...(opzioni || {}), diProva: scelta === 'prova' });
+            });
+            return;
+        }
 
         impostaTasti(e => { if (e.key === 'Escape') Router.vai(ambito.ritorno); });
         const prossima = ambito.carte.map(Srs.prossima).filter(Boolean).sort((a, b) => a - b)[0];

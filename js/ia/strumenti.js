@@ -42,7 +42,7 @@ const Strumenti = (() => {
             materiali: materiali.length ? materiali : undefined,
             riga_del_set: a.delSet ? 'aggiornata dallo studio; stato dalle valutazioni delle carte' : undefined,
             flashcard: Array.isArray(a.carte) ? { solo_alcune: (Revisioni.carteDi(a) || []).map(c => c.id) } : a.delSet ? 'tutte quelle del set' : undefined,
-            ripetizioni: a.ripetizioni || 0, ultimo_ripasso: a.ultimoRipasso, prossima_revisione: p ? chiaveGiorno(p) : null,
+            ripetizioni: a.ripetizioni || 0, ultimo_ripasso: a.ultimoRipasso, intervallo_giorni: a.ultimoRipasso ? Revisioni.intervallo(a) : null, prossima_revisione: p ? chiaveGiorno(p) : null,
             alert: Revisioni.avviso(a).testo, stato: Revisioni.statoDi(a) || undefined, ripassi_registrati: (a.storico || []).length,
         };
     }
@@ -75,7 +75,7 @@ const Strumenti = (() => {
         out.stato = Srs.descrivi(c);
         const v = Srs.valutazione(c);
         if (v != null) out.valutazione = Srs.VALUTAZIONI[v].chiave;
-        if (c.srs && c.srs.giorno) Object.assign(out, { n_rep: c.srs.rep || 0, ultimo_ripasso: c.srs.giorno, prossima_revisione: chiaveGiorno(Srs.prossima(c)) });
+        if (c.srs && c.srs.giorno) Object.assign(out, { n_rep: c.srs.rep || 0, ultimo_ripasso: c.srs.giorno, intervallo_giorni: Srs.intervalloDi(c.srs.intervallo, c.srs.rep), prossima_revisione: chiaveGiorno(Srs.prossima(c)) });
         return out;
     }
 
@@ -333,7 +333,7 @@ const Strumenti = (() => {
         },
         {
             nome: 'modifica_carte',
-            descrizione: "Modifica una o più flashcard: testo, risposta, tag, suggerimento, spiegazione, domanda madre (madre_id vuoto = domanda principale), valutazione (come se l'utente la cambiasse a mano: cambia lo stato del set, non le date) o la sua ripetizione spaziata (n_rep, ultimo_ripasso).",
+            descrizione: "Modifica una o più flashcard: testo, risposta, tag, suggerimento, spiegazione, domanda madre (madre_id vuoto = domanda principale), valutazione (come se l'utente la cambiasse a mano: cambia lo stato del set, non le date) o la sua ripetizione spaziata (n_rep, ultimo_ripasso, intervallo_giorni o prossima_revisione; n_rep conta i ripassi e non sposta le date).",
             parametri: S.obj({
                 modifiche: S.arr(S.obj({
                     carta_id: S.str('id'), domanda: S.str('nuova domanda'), risposta: S.str('nuova risposta (solo carte a risposta aperta)'),
@@ -343,7 +343,8 @@ const Strumenti = (() => {
                     fonte: SCHEMA_FONTE,
                     valutazione: S.str("scarso | ok | buono | perfetto | nessuna (= mai valutata)"),
                     n_rep: S.int('N° Rep della carta'), ultimo_ripasso: S.str('AAAA-MM-GG ("" per svuotare)'),
-                    riadegua_al_set: S.bool('true = la carta prende N° Rep e ultimo ripasso del suo set (già ripassato) ed esce dalle flashcard per conto loro; la valutazione resta'),
+                    intervallo_giorni: S.int('giorni dall\'ultimo ripasso alla prossima revisione'), prossima_revisione: S.str('AAAA-MM-GG, dopo l\'ultimo ripasso: l\'intervallo si adegua'),
+                    riadegua_al_set: S.bool('true = la carta prende ultimo ripasso e intervallo del suo set (già ripassato) ed esce dalle flashcard per conto loro; valutazione e N° Rep restano'),
                 }, ['carta_id'])),
             }, ['modifiche']),
             modifica: true,
@@ -367,7 +368,12 @@ const Strumenti = (() => {
                     }
                     Dati.aggiornaCarta(c.id, dati);
                     if (m.valutazione != null && (m.valutazione in VALUTAZIONE || m.valutazione === 'nessuna')) Dati.impostaValutazione([c], m.valutazione === 'nessuna' ? null : VALUTAZIONE[m.valutazione]);
-                    if (m.n_rep != null || m.ultimo_ripasso != null) Dati.aggiornaSrs(c.id, { rep: m.n_rep, ...(m.ultimo_ripasso != null ? { giorno: dataValida(m.ultimo_ripasso) } : {}) });
+                    if (m.n_rep != null || m.ultimo_ripasso != null || m.intervallo_giorni != null || m.prossima_revisione) {
+                        Dati.aggiornaSrs(c.id, {
+                            rep: m.n_rep, intervallo: m.intervallo_giorni, prossima: dataValida(m.prossima_revisione) || undefined,
+                            ...(m.ultimo_ripasso != null ? { giorno: dataValida(m.ultimo_ripasso) } : {}),
+                        });
+                    }
                     if (m.riadegua_al_set && !Dati.allineaAlSet([Dati.carta(c.id)]).length) return { carta_id: c.id, errore: 'il set della carta non è ancora stato ripassato: non c\'è niente a cui riadeguarla' };
                     let madre;
                     if (m.madre_id != null) madre = Dati.impostaMadre(c.id, m.madre_id || null) ? 'cambiata' : 'invariata (non valida o uguale)';
@@ -578,10 +584,11 @@ const Strumenti = (() => {
         },
         {
             nome: 'crea_argomento_revisione',
-            descrizione: "Aggiunge un argomento alle revisioni di un set (es. un capitolo o uno schema). Le sue flashcard: tutte quelle del set (tutte_le_flashcard, una sola riga così per set) o solo alcune (carte_ids); con le flashcard l'argomento si aggiorna dallo studio e lo stato viene dalle carte. Senza, il ripasso si segna a mano. Se l'utente l'ha già ripassato, indica ripetizioni e ultimo_ripasso.",
+            descrizione: "Aggiunge un argomento alle revisioni di un set (es. un capitolo o uno schema). Le sue flashcard: tutte quelle del set (tutte_le_flashcard, una sola riga così per set) o solo alcune (carte_ids); con le flashcard l'argomento si aggiorna dallo studio e lo stato viene dalle carte. Senza, il ripasso si segna a mano. Se l'utente l'ha già ripassato, indica ripetizioni e ultimo_ripasso (e intervallo_giorni se lo sa; se no vale quello della sequenza per quel N° Rep).",
             parametri: S.obj({
                 set_id: S.str('id del set'), nome: S.str('nome dell\'argomento (di solito capitolo o schema)'), fonte: S.str('schema o fonte (testo libero)'),
                 materiali_ids: S.arr(S.str('id'), 'facoltativo: materiali da collegare'), ripetizioni: S.int('N° Rep'), ultimo_ripasso: S.str('AAAA-MM-GG'),
+                intervallo_giorni: S.int('giorni dall\'ultimo ripasso alla prossima revisione'),
                 tutte_le_flashcard: S.bool("l'argomento comprende tutte le flashcard del set"), carte_ids: S.arr(S.str('id'), "solo queste flashcard del set"),
                 stato: S.str('ottimo | buono | ok | scarso'),
             }, ['set_id', 'nome']),
@@ -592,17 +599,18 @@ const Strumenti = (() => {
                 const x = Dati.creaArgomento({
                     setId: s.id, nome: a.nome, fonte: a.fonte || '', materialeIds: (a.materiali_ids || []).filter(id => Dati.materiale(id)),
                     ...(Array.isArray(a.carte_ids) && a.carte_ids.length ? { carte: a.carte_ids.filter(id => (Dati.carta(id) || {}).setId === s.id) } : a.tutte_le_flashcard ? { delSet: true } : {}),
-                    ripetizioni: a.ripetizioni || 0, ultimoRipasso: dataValida(a.ultimo_ripasso), stato: Revisioni.STATI[a.stato] ? a.stato : '',
+                    ripetizioni: a.ripetizioni || 0, ultimoRipasso: dataValida(a.ultimo_ripasso), intervallo: a.intervallo_giorni, stato: Revisioni.STATI[a.stato] ? a.stato : '',
                 });
                 return { creato: argomentoPerIA(x) };
             },
         },
         {
             nome: 'modifica_argomento_revisione',
-            descrizione: "Modifica un argomento delle revisioni: nome, fonte, materiali collegati, N° Rep, ultimo ripasso, stato o set. Lo stato della riga di un set (riga_del_set) viene dalle valutazioni delle carte: per cambiarlo cambia la valutazione delle carte (modifica_carte).",
+            descrizione: "Modifica un argomento delle revisioni: nome, fonte, materiali collegati, N° Rep (conta i ripassi, non sposta le date), ultimo ripasso, intervallo, prossima revisione, stato o set. Lo stato della riga di un set (riga_del_set) viene dalle valutazioni delle carte: per cambiarlo cambia la valutazione delle carte (modifica_carte).",
             parametri: S.obj({
                 argomento_id: S.str('id'), nome: S.str('nome'), fonte: S.str('fonte'), materiali_ids: S.arr(S.str('id'), 'sostituisce i materiali collegati ([] = nessuno)'),
                 ripetizioni: S.int('N° Rep'), ultimo_ripasso: S.str('AAAA-MM-GG ("" per svuotare)'), stato: S.str('ottimo | buono | ok | scarso | ""'), set_id: S.str('sposta in un altro set'),
+                intervallo_giorni: S.int('giorni dall\'ultimo ripasso alla prossima revisione'), prossima_revisione: S.str('AAAA-MM-GG, dopo l\'ultimo ripasso: l\'intervallo si adegua'),
             }, ['argomento_id']),
             modifica: true,
             etichetta: a => `Modifico «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,
@@ -619,6 +627,8 @@ const Strumenti = (() => {
                 }
                 if (a.ripetizioni != null) mod.ripetizioni = a.ripetizioni;
                 if (a.ultimo_ripasso != null) mod.ultimoRipasso = dataValida(a.ultimo_ripasso);
+                if (a.intervallo_giorni != null) mod.intervallo = a.intervallo_giorni;
+                if (a.prossima_revisione && dataValida(a.prossima_revisione)) mod.prossima = dataValida(a.prossima_revisione);
                 if (a.stato != null) mod.stato = Revisioni.STATI[a.stato] ? a.stato : '';
                 if (a.set_id) mod.setId = richiediSet(a.set_id).id;
                 return { modificato: argomentoPerIA(Dati.aggiornaArgomento(a.argomento_id, mod)) };
@@ -626,7 +636,7 @@ const Strumenti = (() => {
         },
         {
             nome: 'segna_ripasso_argomento',
-            descrizione: "Segna che l'utente ha ripassato un argomento (come il suo 'Ripassato' in Notion): N° Rep +1, ultimo ripasso = oggi (o la data indicata), con lo stato se lo dice.",
+            descrizione: "Segna che l'utente ha ripassato un argomento (come il suo 'Ripassato' in Notion): N° Rep +1, ultimo ripasso = oggi (o la data indicata) e nuovo intervallo secondo la sequenza, adattato se è in anticipo, in ritardo o lo stesso giorno; con lo stato se lo dice.",
             parametri: S.obj({ argomento_id: S.str('id'), stato: S.str('ottimo | buono | ok | scarso'), giorno: S.str('AAAA-MM-GG, predefinito oggi') }, ['argomento_id']),
             modifica: true,
             etichetta: a => `Segno il ripasso di «${(Dati.argomento(a.argomento_id) || {}).nome || 'un argomento'}»`,

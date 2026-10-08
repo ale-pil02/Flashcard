@@ -1,19 +1,36 @@
-// Ripetizione spaziata delle carte: la stessa delle revisioni dei set (js/revisioni.js), come nel database di Notion.
-//   Prossima revisione = ultimo ripasso + 2^(N° Rep − 1) giorni   (N° Rep 0 vale 1: 1, 2, 4, 8, 16… giorni)
+// Ripetizione spaziata delle carte: la stessa delle revisioni dei set (js/revisioni.js). Ogni carta (e ogni riga delle
+// revisioni) ha N° Rep, ultimo ripasso e intervallo; prossima revisione = ultimo ripasso + intervallo.
+// N° Rep conta i ripassi effettivi e basta: non decide l'intervallo.
+//
+// Sequenza degli intervalli (Impostazioni, predefinita Fibonacci 1, 2, 3, 5, 8, 13, 21): ripassando sempre il giorno
+// previsto e bene, dopo la rep 1 si aspetta il primo numero, dopo la rep 2 il secondo, e così via; dopo l'ultimo gli
+// intervalli crescono con il rapporto degli ultimi due. Il "ritmo" r di un intervallo I è il rapporto del tratto della
+// sequenza in cui cade (I = 8 → 13/8): il passo successivo è I × r, e su un numero della sequenza dà il numero dopo.
+//
+// Ripasso che conta, P = giorni passati dall'ultimo ripasso, I = intervallo previsto (dopoRipasso):
+// - il giorno previsto (P = I): I × r;
+// - in ritardo (P > I): I × r × I / P, da oggi: più hai aspettato, più la prossima si avvicina;
+// - in anticipo (P < I): la data prevista più la parte di intervallo "guadagnata", P / I di I × r: I + P × (r − 1) da
+//   oggi; la data va avanti, ma meno che con un ripasso puntuale;
+// - lo stesso giorno dell'ultimo ripasso (P = 0): N° Rep +1, intervallo e date restano.
+// Arrotondato ai giorni, minimo 1. La prima volta: il primo numero della sequenza (1 giorno).
 //
 // Quattro valutazioni: Scarso, Ok, Buono, Perfetto.
-// - Ok, Buono o Perfetto: N° Rep +1 (al massimo una volta al giorno), ultimo ripasso = oggi. Buono e Perfetto
-//   rendono la carta imparata; Ok no (nella sessione torna in fondo, per il set resta "da sistemare").
-// - Scarso: N° Rep e ultimo ripasso restano com'erano e la carta è da ripassare subito (da oggi, daRifareDal),
-//   finché non le dai almeno Ok.
-//   Nella sessione Ok e Scarso tornano in fondo alla coda finché non dai Buono o Perfetto (js/viste/studio.js).
-// Nella stessa sessione solo la prima valutazione di una carta muove N° Rep e date; quelle dopo (i ritorni in fondo)
-// cambiano solo la valutazione. Eccezione: se la prima era Scarso (che non muove niente), la prima volta che arriva
-// almeno a Ok prende N° Rep +1 e ultimo ripasso = oggi. La valutazione della carta è l'ultima data, o quella scelta a mano
-// (editor, pagina del set): con quelle si calcola lo stato del set nelle revisioni. Cambiarla a mano non tocca le date
-// (Scarso a mano rende la carta da ripassare da oggi; "mai valutata" la riporta tra le carte nuove).
-// Riadeguata al set (allineata, dal pannello delle revisioni): N° Rep e ultimo ripasso sono quelli del suo set e la carta
-// li segue anche se è Scarso o mai valutata, finché non la valuti di nuovo nello studio.
+// - Buono o Perfetto: la formula qui sopra; la carta è imparata.
+// - Ok: la stessa formula con metà crescita (r → 1 + (r − 1) / 2): torna un po' prima finché non le dai Buono o Perfetto.
+// - Scarso: N° Rep e ultimo ripasso restano, l'intervallo torna indietro di un passo nella sequenza (con il raddoppio si
+//   dimezza) e la carta è da ripassare subito (daRifareDal) finché non le dai almeno Ok. Quel ripasso la "recupera":
+//   N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da quello ridotto.
+// Nella sessione Ok e Scarso tornano in fondo alla coda finché non dai Buono o Perfetto (js/viste/studio.js); solo la
+// prima valutazione di una carta nella sessione muove N° Rep e date, quelle dopo (i ritorni in fondo) cambiano solo la
+// valutazione. Eccezione: se la prima era Scarso, la prima volta che arriva almeno a Ok la recupera.
+// Il ripasso di prova (scelto all'avvio dello studio) non cambia niente: né valutazione, né N° Rep, né date.
+// La valutazione della carta è l'ultima data, o quella scelta a mano (editor, pagina del set): con quelle si calcola lo
+// stato del set nelle revisioni. Cambiarla a mano non tocca le date (Scarso a mano rende la carta da ripassare da oggi;
+// "mai valutata" la riporta tra le carte nuove). N° Rep, ultimo ripasso, intervallo e prossima revisione si cambiano
+// anche a mano (Dati.aggiornaSrs).
+// Allineata (riadeguata al set o ripassata Buono/Perfetto nel ripasso completo del set): ultimo ripasso e intervallo
+// sono quelli del suo set; vale anche se è mai valutata, finché non la valuti di nuovo nello studio.
 
 const Srs = (() => {
     const SCARSO = 0, OK = 1, BUONO = 2, PERFETTO = 3;
@@ -25,7 +42,97 @@ const Srs = (() => {
         { valore: PERFETTO, chiave: 'perfetto', nome: 'Perfetto' },
     ];
 
-    const MAX_ESPONENTE = 16;   // oltre ~90 anni l'intervallo non cambia più niente
+    const SEQUENZE = {
+        fibonacci: { nome: 'Fibonacci', numeri: [1, 2, 3, 5, 8, 13, 21] },
+        raddoppio: { nome: 'Raddoppio', numeri: [1, 2, 4, 8, 16, 32] },
+    };
+    const SEQUENZA_PREDEFINITA = SEQUENZE.fibonacci.numeri;
+    const MAX_GIORNI = 36500;   // oltre i cent'anni l'intervallo non cambia più niente
+
+    // ---- Sequenza degli intervalli -------------------------------------------------------
+
+    // Almeno due numeri interi da 1 in su, in ordine crescente; se no null
+    function sequenzaValida(lista) {
+        if (!Array.isArray(lista) || lista.length < 2) return null;
+        const numeri = lista.map(Number);
+        if (numeri.some((n, i) => !Number.isInteger(n) || n < 1 || n > MAX_GIORNI || (i && n <= numeri[i - 1]))) return null;
+        return numeri;
+    }
+
+    // "1, 2, 3, 5" (anche con spazi o punti e virgola) → [1, 2, 3, 5], oppure null
+    function leggiSequenza(testo) {
+        const pezzi = String(testo || '').split(/[\s,;]+/).filter(Boolean);
+        return pezzi.every(p => /^\d+$/.test(p)) ? sequenzaValida(pezzi) : null;
+    }
+
+    function sequenza() {
+        const scelta = typeof Dati !== 'undefined' ? sequenzaValida(Dati.impostazioni().sequenzaRevisioni) : null;
+        return scelta || SEQUENZA_PREDEFINITA;
+    }
+
+    function giorni(x) {
+        const n = Math.round(+x);
+        return Number.isFinite(n) && n >= 1 ? Math.min(n, MAX_GIORNI) : null;
+    }
+
+    const arrotonda = x => limita(Math.round(x), 1, MAX_GIORNI);
+
+    // Rapporto del tratto [seq[k], seq[k+1]) in cui cade I (sotto il primo numero il primo tratto, dopo l'ultimo l'ultimo)
+    function ritmo(I, seq = sequenza()) {
+        let k = 0;
+        while (k < seq.length - 2 && I >= seq[k + 1]) k++;
+        return seq[k + 1] / seq[k];
+    }
+
+    // Un passo indietro: il tratto (seq[k], seq[k+1]] che finisce in I
+    function passoIndietro(I, seq = sequenza()) {
+        let k = 0;
+        while (k < seq.length - 2 && I > seq[k + 1]) k++;
+        return arrotonda(I / (seq[k + 1] / seq[k]));
+    }
+
+    // L'intervallo dopo la rep n ripassando sempre puntuale: l'n-esimo numero della sequenza, poi a ritmo costante
+    function intervalloPerRep(rep, seq = sequenza()) {
+        const n = Math.max(1, rep || 0);
+        if (n <= seq.length) return seq[n - 1];
+        let I = seq[seq.length - 1];
+        for (let i = seq.length; i < n && I < MAX_GIORNI; i++) I = arrotonda(I * ritmo(I, seq));
+        return I;
+    }
+
+    // I primi n intervalli ripassando sempre puntuale (per mostrarli nelle impostazioni)
+    function anteprimaSequenza(n = 10, seq = sequenza()) {
+        return Array.from({ length: n }, (_, i) => intervalloPerRep(i + 1, seq));
+    }
+
+    // Intervallo di una carta o di un argomento. I dati di prima di questa versione non l'avevano: era 2^(N° Rep − 1)
+    function intervalloRaddoppio(rep) { return Math.pow(2, Math.min(16, Math.max(1, rep || 0) - 1)); }
+    function intervalloDi(intervallo, rep) { return giorni(intervallo) || intervalloRaddoppio(rep); }
+
+    // ---- Ritardi e anticipi ------------------------------------------------------------
+
+    // Rispetto al giorno previsto: { tipo: 'stesso-giorno' | 'anticipo' | 'puntuale' | 'ritardo', giorni, prevista }
+    function situazione({ giorno, intervallo }, oggi = chiaveGiorno()) {
+        const prevista = aggiungiGiorni(daChiaveGiorno(giorno), intervallo);
+        const passati = giorniTra(daChiaveGiorno(giorno), daChiaveGiorno(oggi));
+        if (passati <= 0) return { tipo: 'stesso-giorno', giorni: 0, prevista };
+        const scarto = passati - intervallo;
+        return { tipo: scarto < 0 ? 'anticipo' : scarto > 0 ? 'ritardo' : 'puntuale', giorni: Math.abs(scarto), prevista };
+    }
+
+    // Dopo un ripasso che conta: { intervallo, giorno } (giorno = l'ultimo ripasso, da cui si conta l'intervallo).
+    // ok = valutazione Ok: metà crescita
+    function dopoRipasso({ intervallo, giorno }, oggi = chiaveGiorno(), { ok = false, seq = sequenza() } = {}) {
+        if (!giorno) return { intervallo: seq[0], giorno: oggi };
+        const I = giorni(intervallo) || seq[0];
+        const P = giorniTra(daChiaveGiorno(giorno), daChiaveGiorno(oggi));
+        if (P <= 0) return { intervallo: I, giorno };
+        let r = ritmo(I, seq);
+        if (ok) r = 1 + (r - 1) / 2;
+        return { intervallo: arrotonda(P < I ? I + P * (r - 1) : r * I * I / P), giorno: oggi };
+    }
+
+    // ---- Stato delle carte ---------------------------------------------------------------
 
     function statoIniziale() {
         return {
@@ -33,9 +140,9 @@ const Srs = (() => {
             ultimaValutazione: null,   // 0-3: la valutazione della carta, guida i colori e lo stato del set
             rep: 0,                    // N° Rep
             giorno: null,              // ultimo ripasso "AAAA-MM-GG" (da qui si conta la prossima revisione)
-            giornoRep: null,           // giorno dell'ultima N° Rep in più: al massimo una al giorno
+            intervallo: null,          // giorni dall'ultimo ripasso alla prossima revisione
             daRifareDal: null,         // valutata Scarso: da ripassare da questo giorno, finché non arriva almeno a Ok
-            allineata: false,          // riadeguata al set: segue N° Rep e data del set fino alla prossima valutazione
+            allineata: false,          // ultimo ripasso e intervallo presi dal set (riadeguata o ripassata con il set)
             ripetizioni: 0,            // risposte date in tutto
             errori: 0,
             ultimoRipasso: null,       // timestamp dell'ultima risposta
@@ -45,25 +152,27 @@ const Srs = (() => {
     // Stato dalla valutazione: chi non è mai stato valutato resta nuovo
     function statoDa(valutazione) { return valutazione == null ? 'nuova' : valutazione >= BUONO ? 'imparata' : 'apprendimento'; }
 
-    // Porta al formato attuale uno stato del vecchio sistema (intervalli in stile Vaia): l'intervallo che aveva
-    // diventa il N° Rep più vicino, così la prossima revisione cade più o meno quando cadeva prima
+    // Porta al formato attuale uno stato delle versioni precedenti. Il primo sistema (intervalli in stile Vaia, senza
+    // N° Rep) aveva un altro "intervallo": diventa il N° Rep più vicino, così la prossima revisione cade più o meno
+    // quando cadeva prima. L'intervallo mancante vale 2^(N° Rep − 1), come nella versione a raddoppio
     function normalizza(srs) {
         const s = { ...statoIniziale(), ...(srs || {}) };
-        if (!('rep' in (srs || {})) && s.ultimaValutazione != null) {
-            s.giorno = s.ultimoRipasso ? chiaveGiorno(s.ultimoRipasso) : chiaveGiorno();
-            s.rep = s.stato === 'imparata' ? 1 + Math.max(0, Math.round(Math.log2(Math.max(1, +s.intervallo || 1)))) : 0;
+        if (!('rep' in (srs || {}))) {
+            if (s.ultimaValutazione != null) {
+                s.giorno = s.ultimoRipasso ? chiaveGiorno(s.ultimoRipasso) : chiaveGiorno();
+                s.rep = s.stato === 'imparata' ? 1 + Math.max(0, Math.round(Math.log2(Math.max(1, +s.intervallo || 1)))) : 0;
+            }
+            s.intervallo = null;
         }
+        s.intervallo = giorni(s.intervallo) || (s.giorno ? intervalloRaddoppio(s.rep) : null);
         s.stato = statoDa(s.ultimaValutazione);
-        ['passi', 'intervallo', 'facilita', 'scadenza'].forEach(k => delete s[k]);
+        ['passi', 'facilita', 'scadenza', 'giornoRep'].forEach(k => delete s[k]);
         return s;
     }
 
-    function intervallo(rep) { return Math.pow(2, Math.min(MAX_ESPONENTE, Math.max(1, rep || 0) - 1)); }
-
     // Applica una valutazione e restituisce il nuovo stato, senza toccare quello di partenza.
-    // date = false: ritorno della carta nella stessa sessione, cambia solo la valutazione;
-    // rep = false: l'ultimo ripasso diventa oggi ma N° Rep non sale (dopo uno Scarso nella stessa sessione)
-    function valuta(srs, valutazione, { date = true, rep = true, ora = Date.now() } = {}) {
+    // date = false: ritorno della carta nella stessa sessione, cambia solo la valutazione
+    function valuta(srs, valutazione, { date = true, ora = Date.now() } = {}) {
         const s = normalizza(srs);
         const oggi = chiaveGiorno(ora);
         s.ripetizioni += 1;
@@ -72,16 +181,19 @@ const Srs = (() => {
         s.stato = statoDa(valutazione);
         s.allineata = false;
         if (valutazione === SCARSO) {
-            // Scarso: N° Rep e date restano, la carta resta da ripassare (da oggi) finché non arriva almeno a Ok
+            // N° Rep e ultimo ripasso restano, l'intervallo torna indietro di un passo; da ripassare da oggi
             s.errori += 1;
+            if (date && s.giorno) s.intervallo = passoIndietro(intervalloDi(s.intervallo, s.rep));
             s.daRifareDal = oggi;
             return s;
         }
+        const recupero = !!s.daRifareDal && !!s.giorno;
         s.daRifareDal = null;
-        if (date) {
-            if (rep && valutazione >= OK && s.giornoRep !== oggi) { s.rep += 1; s.giornoRep = oggi; }
-            s.giorno = oggi;
-        }
+        if (!date) return s;
+        // Recupero dopo uno Scarso: riparte dall'intervallo ridotto, contato da oggi
+        if (recupero) { s.intervallo = intervalloDi(s.intervallo, s.rep); s.giorno = oggi; }
+        else Object.assign(s, dopoRipasso({ intervallo: intervalloDi(s.intervallo, s.rep), giorno: s.giorno }, oggi, { ok: valutazione === OK }));
+        s.rep += 1;
         return s;
     }
 
@@ -102,21 +214,23 @@ const Srs = (() => {
     // Scarso: il giorno da cui è da rifare; valutata ma senza ripasso (a mano): oggi
     function prossima(carta) {
         const s = carta.srs;
-        if (s && s.allineata && s.giorno) return aggiungiGiorni(daChiaveGiorno(s.giorno), intervallo(s.rep));
+        if (s && s.allineata && s.giorno) return aggiungiGiorni(daChiaveGiorno(s.giorno), intervalloDi(s.intervallo, s.rep));
         if (!s || s.ultimaValutazione == null) return null;
         if (s.ultimaValutazione === SCARSO) return daChiaveGiorno(s.daRifareDal || chiaveGiorno(s.ultimoRipasso || Date.now()));
-        return s.giorno ? aggiungiGiorni(daChiaveGiorno(s.giorno), intervallo(s.rep)) : inizioGiorno();
+        return s.giorno ? aggiungiGiorni(daChiaveGiorno(s.giorno), intervalloDi(s.intervallo, s.rep)) : inizioGiorno();
+    }
+
+    function durata(g) {
+        if (g < 30) return `${g} g`;
+        if (g < 365) return `${Math.round(g / 30)} mes${Math.round(g / 30) === 1 ? 'e' : 'i'}`;
+        return `${Math.round(g / 365)} ann${Math.round(g / 365) === 1 ? 'o' : 'i'}`;
     }
 
     // Testo breve sotto i pulsanti di valutazione: quando tornerà la carta
     function anteprima(srs, valutazione, { date = true } = {}) {
         if (valutazione < BUONO) return 'in fondo';
         if (!date) return 'fatta';
-        const s = valuta(srs, valutazione);
-        const g = intervallo(s.rep);
-        if (g < 30) return `${g} g`;
-        if (g < 365) return `${Math.round(g / 30)} mes${Math.round(g / 30) === 1 ? 'e' : 'i'}`;
-        return `${Math.round(g / 365)} ann${Math.round(g / 365) === 1 ? 'o' : 'i'}`;
+        return durata(Math.max(0, giorniTra(Date.now(), prossima({ srs: valuta(srs, valutazione) }))));
     }
 
     function stato(carta) { return (carta.srs && carta.srs.stato) || 'nuova'; }
@@ -139,14 +253,16 @@ const Srs = (() => {
         // Mai studiata ma il suo set è già stato ripassato: è da ripassare (js/revisioni.js, dovutaDal)
         const s = carta.srs;
         if (stato(carta) === 'nuova' && !(s && s.allineata)) return typeof Revisioni !== 'undefined' && Revisioni.dovutaDal(carta) ? 'Mai studiata · da ripassare (il set è già stato ripassato)' : 'Mai studiata';
-        const v = `${s.ultimaValutazione == null ? 'Mai valutata' : `Valutata ${VALUTAZIONI[s.ultimaValutazione].nome}`} · N° Rep ${s.rep || 0}${s.allineata ? ' (come il set)' : ''}`;
+        const v = `${s.ultimaValutazione == null ? 'Mai valutata' : `Valutata ${VALUTAZIONI[s.ultimaValutazione].nome}`} · N° Rep ${s.rep || 0}${s.allineata ? ' (al passo con il set)' : ''}`;
         if (daRipassare(carta)) return v + ' · da ripassare';
         return v + ' · prossima revisione ' + distanzaGiorni(prossima(carta));
     }
 
     return {
-        SCARSO, OK, BUONO, PERFETTO, VALUTAZIONI,
-        statoIniziale, normalizza, intervallo, valuta, conValutazione, prossima, anteprima,
+        SCARSO, OK, BUONO, PERFETTO, VALUTAZIONI, SEQUENZE, SEQUENZA_PREDEFINITA, MAX_GIORNI,
+        sequenzaValida, leggiSequenza, sequenza, giorni, ritmo, passoIndietro, intervalloPerRep, anteprimaSequenza,
+        intervalloRaddoppio, intervalloDi, situazione, dopoRipasso,
+        statoIniziale, normalizza, valuta, conValutazione, prossima, anteprima, durata,
         stato, valutazione, categoria, daRipassare, descrivi,
     };
 })();

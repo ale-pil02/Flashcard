@@ -14,8 +14,9 @@
 //              sottoramo (js/mappe/vista.js); con la mappa la risposta scritta può mancare;
 //              fonte = { materiale, pagina, citazione } punto di un materiale (PDF, slide, testo…) dove sta la risposta:
 //              dallo studio un clic lo apre lì (js/materiali.js);
-//              srs = ripetizione spaziata della carta: valutazione, N° Rep, ultimo ripasso (js/srs.js)
-//   ripasso  { id, cartaId, setId, ts, giorno, valutazione, modo, durata }
+//              srs = ripetizione spaziata della carta: valutazione, N° Rep, ultimo ripasso, intervallo (js/srs.js)
+//   ripasso  { id, cartaId, setId, ts, giorno, valutazione, modo, durata, ripassoDiProva }  ripassoDiProva = fatto in un
+//              ripasso di prova: conta nelle statistiche ma non ha cambiato la carta
 //   esame    { id, nome, data: "AAAA-MM-GG", materiaId, note }
 //   materiale { id, setId, nome, tipo, mime, dimensione, creato, testo, pagine, albero, anteprima,
 //              usaInChat, remoto, cartella, precedente, novita, mappaId }  file di studio di un set; il contenuto sta
@@ -25,7 +26,9 @@
 //              precedente = { testo, albero, modificato } versione di prima dell'ultima modifica del file
 //   chat     { id: "globale" | "set:<id>", storico (formato Gemini), vista, aggiornata }
 //   argomento { id, setId, nome, fonte, materialeIds: [], fontiTolte: [], ripetizioni, ultimoRipasso: "AAAA-MM-GG" | null,
-//              stato, delSet, carte, ordine, creato, storico: [{ giorno, stato, prima: { ripetizioni, ultimoRipasso, stato } }] }
+//              intervallo, stato, delSet, carte, ordine, creato,
+//              storico: [{ giorno, stato, prima: { ripetizioni, ultimoRipasso, intervallo, stato } }] }
+//              intervallo = giorni dall'ultimo ripasso alla prossima revisione (js/srs.js, dopoRipasso)
 //              carte = [id] argomento con solo alcune flashcard del set (null = tutte, se delSet; nessuna, se no)
 //              riga delle revisioni (spaced repetition degli argomenti, js/revisioni.js);
 //              stato = ottimo | buono | ok | scarso | incompleto | ''. delSet = la riga del set, aggiornata dallo studio:
@@ -43,6 +46,7 @@ const IMPOSTAZIONI_PREDEFINITE = {
     ordineCasuale: false,       // false = ordine del set (quello dell'albero e dell'import)
     cascata: true,              // le domande figlie entrano solo dopo aver imparato la madre
     nascondiDettagli: false,    // le carte con il tag "dettaglio" (e i loro rami) spariscono da elenchi, conteggi e studio
+    sequenzaRevisioni: [1, 2, 3, 5, 8, 13, 21],   // giorni dopo la rep 1, 2, 3… ripassando puntuale (js/srs.js)
     tema: 'sistema',
 };
 
@@ -453,29 +457,57 @@ const Dati = (() => {
         return Archivio.salvaMolti('carte', carte);
     }
 
-    // Riadeguamento al set: la carta prende N° Rep e ultimo ripasso della riga del suo set (già ripassato) e li segue;
-    // la valutazione resta quella che ha. Restituisce le carte cambiate
-    function allineaAlSet(carte) {
+    // Riadeguamento al set: la carta prende ultimo ripasso e intervallo della riga del suo set (già ripassato), quindi
+    // la stessa prossima revisione; valutazione e N° Rep restano i suoi. a = l'argomento (se no quello della carta).
+    // Restituisce le carte cambiate
+    function allineaAlSet(carte, a = null) {
         const cambiate = [];
         carte.forEach(c => {
-            const a = Revisioni.argomentoDi(c);
-            if (!a) return;
-            c.srs = { ...Srs.normalizza(c.srs), rep: a.ripetizioni || 0, giorno: a.ultimoRipasso, allineata: true, daRifareDal: null };
+            const riga = a || Revisioni.argomentoDi(c);
+            if (!riga || !riga.ultimoRipasso) return;
+            c.srs = { ...Srs.normalizza(c.srs), giorno: riga.ultimoRipasso, intervallo: Revisioni.intervallo(riga), allineata: true, daRifareDal: null };
             cambiate.push(c);
         });
         if (cambiate.length) Archivio.salvaMolti('carte', cambiate);
         return cambiate;
     }
 
-    // N° Rep e ultimo ripasso di una carta, cambiati a mano nella tabella delle revisioni
-    function aggiornaSrs(id, { rep, giorno } = {}) {
+    // Ripetizione spaziata di una carta cambiata a mano (editor, tabella delle revisioni, assistente): N° Rep, ultimo
+    // ripasso, intervallo in giorni o prossima revisione "AAAA-MM-GG" (cambia l'intervallo; per una carta Scarso il
+    // giorno da cui è da rifare). N° Rep conta i ripassi e basta: cambiarlo non sposta le date
+    function aggiornaSrs(id, { rep, giorno, intervallo, prossima } = {}) {
         const c = carta(id);
         if (!c) return null;
-        c.srs = Srs.normalizza(c.srs);
-        if (rep != null) c.srs.rep = Math.max(0, Math.round(+rep) || 0);
-        if (giorno !== undefined) c.srs.giorno = giorno || null;
+        const s = Srs.normalizza(c.srs);
+        if (rep != null) s.rep = Math.max(0, Math.round(+rep) || 0);
+        if (giorno !== undefined) {
+            s.giorno = giorno || null;
+            if (s.giorno && !s.intervallo) s.intervallo = Srs.intervalloPerRep(s.rep);
+        }
+        if (intervallo != null && Srs.giorni(intervallo)) s.intervallo = Srs.giorni(intervallo);
+        if (prossima) {
+            if (s.ultimaValutazione === Srs.SCARSO) s.daRifareDal = prossima;
+            else {
+                if (!s.giorno) s.giorno = prossima > chiaveGiorno() ? chiaveGiorno() : chiaveGiorno(aggiungiGiorni(daChiaveGiorno(prossima), -1));
+                s.intervallo = Math.max(1, giorniTra(daChiaveGiorno(s.giorno), daChiaveGiorno(prossima)));
+            }
+        }
+        c.srs = s;
         Archivio.salva('carte', c);
         return c;
+    }
+
+    // Nuova sequenza degli intervalli applicata a quello che c'è già: ogni argomento e ogni carta prende l'intervallo
+    // della sequenza per il suo N° Rep, contato dall'ultimo ripasso (le date dell'ultimo ripasso restano).
+    // Restituisce { argomenti, carte } quanti sono cambiati
+    function ricalcolaIntervalli() {
+        const argomenti = Archivio.tutti('argomenti').filter(a => a.ultimoRipasso);
+        argomenti.forEach(a => { a.intervallo = Srs.intervalloPerRep(a.ripetizioni); });
+        const carte = Archivio.tutti('carte').filter(c => c.srs && c.srs.giorno);
+        carte.forEach(c => { c.srs = { ...Srs.normalizza(c.srs), intervallo: Srs.intervalloPerRep(c.srs.rep) }; });
+        if (argomenti.length) Archivio.salvaMolti('argomenti', argomenti);
+        if (carte.length) Archivio.salvaMolti('carte', carte);
+        return { argomenti: argomenti.length, carte: carte.length };
     }
 
     function tagDi(carte) {
@@ -553,12 +585,13 @@ const Dati = (() => {
     function argomentiDiMateria(materiaId) { return setDiMateria(materiaId).flatMap(s => argomentiDiSet(s.id)); }
     function tuttiGliArgomenti() { return materie().flatMap(m => argomentiDiMateria(m.id)); }
 
-    function creaArgomento({ setId, nome = '', fonte = '', materialeIds = [], ripetizioni = 0, ultimoRipasso = null, stato = '', delSet = false, carte = null }) {
+    function creaArgomento({ setId, nome = '', fonte = '', materialeIds = [], ripetizioni = 0, ultimoRipasso = null, intervallo = null, stato = '', delSet = false, carte = null }) {
         if (!set(setId)) throw new Error('Set non trovato');
         const ordine = Math.max(0, ...Archivio.tutti('argomenti').filter(a => a.setId === setId).map(a => a.ordine || 0)) + 1;
         const a = {
             id: uid(), setId, nome: String(nome).trim(), fonte: String(fonte).trim(), materialeIds: [...new Set(materialeIds)], fontiTolte: [],
             ripetizioni: Math.max(0, Math.round(ripetizioni) || 0), ultimoRipasso: ultimoRipasso || null, stato, delSet: !!delSet,
+            intervallo: Srs.giorni(intervallo) || Srs.intervalloPerRep(ripetizioni),
             carte: Array.isArray(carte) ? [...new Set(carte)] : null,
             ordine, creato: Date.now(), storico: [],
         };
@@ -570,6 +603,13 @@ const Dati = (() => {
         const a = argomento(id);
         if (!a) return null;
         if ('ripetizioni' in modifiche) modifiche = { ...modifiche, ripetizioni: Math.max(0, Math.round(+modifiche.ripetizioni) || 0) };
+        if ('intervallo' in modifiche) modifiche = { ...modifiche, intervallo: Srs.giorni(modifiche.intervallo) || Revisioni.intervallo(a) };
+        // Prossima revisione scelta a mano: cambia l'intervallo (senza ultimo ripasso, l'ultimo ripasso diventa oggi)
+        if (modifiche.prossima) {
+            const { prossima, ...resto } = modifiche;
+            const ultimo = resto.ultimoRipasso || a.ultimoRipasso || (prossima > chiaveGiorno() ? chiaveGiorno() : chiaveGiorno(aggiungiGiorni(daChiaveGiorno(prossima), -1)));
+            modifiche = { ...resto, ultimoRipasso: ultimo, intervallo: Math.max(1, giorniTra(daChiaveGiorno(ultimo), daChiaveGiorno(prossima))) };
+        } else if ('prossima' in modifiche) { const { prossima, ...resto } = modifiche; modifiche = resto; }
         if ('setId' in modifiche && modifiche.setId !== a.setId) {
             if (!set(modifiche.setId)) throw new Error('Set non trovato');
             modifiche = { ...modifiche, ordine: Math.max(0, ...Archivio.tutti('argomenti').filter(x => x.setId === modifiche.setId).map(x => x.ordine || 0)) + 1 };
@@ -585,13 +625,17 @@ const Dati = (() => {
 
     function eliminaArgomento(id) { return Archivio.elimina('argomenti', id); }
 
-    // "Ripassato": una ripetizione in più e la data di oggi, come facevi a mano in Notion
+    // "Ripassato": una ripetizione in più, e ultimo ripasso e intervallo secondo il giorno in cui lo fai (in anticipo, in
+    // ritardo o lo stesso giorno: js/srs.js, dopoRipasso)
     function segnaRipasso(id, stato = '', giorno = chiaveGiorno()) {
         const a = argomento(id);
         if (!a) return null;
-        a.storico = [...(a.storico || []), { giorno, stato: stato || a.stato || '', prima: { ripetizioni: a.ripetizioni || 0, ultimoRipasso: a.ultimoRipasso, stato: a.stato || '' } }];
-        a.ripetizioni = (a.ripetizioni || 0) + 1;
-        a.ultimoRipasso = giorno;
+        const prima = { ripetizioni: a.ripetizioni || 0, ultimoRipasso: a.ultimoRipasso, intervallo: Revisioni.intervallo(a), stato: a.stato || '' };
+        a.storico = [...(a.storico || []), { giorno, stato: stato || a.stato || '', prima }];
+        const dopo = Srs.dopoRipasso({ intervallo: prima.intervallo, giorno: a.ultimoRipasso }, giorno);
+        a.ripetizioni = prima.ripetizioni + 1;
+        a.ultimoRipasso = dopo.giorno;
+        a.intervallo = dopo.intervallo;
         if (stato) a.stato = stato;
         Archivio.salva('argomenti', a);
         return a;
@@ -601,7 +645,9 @@ const Dati = (() => {
         const a = argomento(id);
         if (!a || !(a.storico || []).length) return null;
         const ultimo = a.storico[a.storico.length - 1];
-        Object.assign(a, ultimo.prima, { storico: a.storico.slice(0, -1) });
+        // I ripassi segnati prima che l'intervallo fosse un dato a sé: era 2^(N° Rep − 1)
+        const prima = { ...ultimo.prima, intervallo: Srs.intervalloDi(ultimo.prima.intervallo, ultimo.prima.ripetizioni) };
+        Object.assign(a, prima, { storico: a.storico.slice(0, -1) });
         Archivio.salva('argomenti', a);
         return a;
     }
@@ -635,6 +681,29 @@ const Dati = (() => {
             });
             if (daCambiare.length) Archivio.salvaMolti('carte', daCambiare);
             nuove.srsRaddoppio = true;
+        }
+
+        // Revisioni: l'intervallo diventa un dato a sé (prima era 2^(N° Rep − 1)). Ognuno tiene quello che aveva, quindi
+        // nessuna data si sposta. Le carte che il vecchio criterio dava al passo con il set (stesso N° Rep, prossima
+        // revisione non prima di quella del set) prendono data e intervallo del set, come fa adesso il ripasso del set
+        if (!fatte.intervalli) {
+            const argomenti = Archivio.tutti('argomenti');
+            argomenti.forEach(a => { a.intervallo = Srs.intervalloDi(a.intervallo, a.ripetizioni); });
+            if (argomenti.length) Archivio.salvaMolti('argomenti', argomenti);
+            const carte = Archivio.tutti('carte').filter(c => c.srs);
+            carte.forEach(c => { c.srs = Srs.normalizza(c.srs); });
+            if (carte.length) Archivio.salvaMolti('carte', carte);
+            const alPasso = [];
+            argomenti.filter(a => Revisioni.automatico(a) && a.ultimoRipasso && (a.ripetizioni || 0) > 0).forEach(a => {
+                const delSet = chiaveGiorno(Revisioni.prossima(a));
+                (Revisioni.carteDi(a) || []).forEach(c => {
+                    if (Revisioni.argomentoDi(c) !== a || Srs.valutazione(c) == null || Srs.valutazione(c) === Srs.SCARSO) return;
+                    const p = Srs.prossima(c);
+                    if (p && (c.srs.rep || 0) === (a.ripetizioni || 0) && chiaveGiorno(p) > delSet) alPasso.push([c, a]);
+                });
+            });
+            alPasso.forEach(([c, a]) => allineaAlSet([c], a));
+            nuove.intervalli = true;
         }
 
         if (Object.keys(nuove).length) salvaImpostazioni({ migrazioni: { ...fatte, ...nuove } });
@@ -679,14 +748,17 @@ const Dati = (() => {
     // ---- Ripassi (registro di studio) --------------------------------------
 
     // Aggiorna la ripetizione spaziata e registra il ripasso. date = false per i ritorni della carta nella stessa
-    // sessione: cambiano la valutazione, non N° Rep e date; rep = false: ultimo ripasso oggi, N° Rep invariato
-    function registraRisposta(c, valutazione, durata, { date = true, rep = true } = {}) {
-        c.srs = Srs.valuta(c.srs, valutazione, { date, rep });
-        Archivio.salva('carte', c);
+    // sessione: cambiano la valutazione, non N° Rep e date. diProva = ripasso di prova: la carta resta com'è, il ripasso
+    // va lo stesso nelle statistiche
+    function registraRisposta(c, valutazione, durata, { date = true, diProva = false } = {}) {
+        if (!diProva) {
+            c.srs = Srs.valuta(c.srs, valutazione, { date });
+            Archivio.salva('carte', c);
+        }
         const ts = Date.now();
         Archivio.salva('ripassi', {
             id: uid(), cartaId: c.id, setId: c.setId, ts, giorno: chiaveGiorno(ts),
-            valutazione, modo: 'impara', durata: Math.round(limita(durata || 0, 0, 5 * 60 * 1000)),
+            valutazione, modo: 'impara', durata: Math.round(limita(durata || 0, 0, 5 * 60 * 1000)), ...(diProva ? { ripassoDiProva: true } : {}),
         });
         const s = set(c.setId);
         if (s) { s.ultimoStudio = ts; Archivio.salva('set', s); }
@@ -746,7 +818,7 @@ const Dati = (() => {
         creaSet, aggiornaSet, eliminaSet, setRecenti,
         carta, ordinaAlbero, alberoDiSet, carteDiSet, carteConSottoSet, carteDiMateria, carteDiSetMultipli, tutteLeCarte,
         eDettaglio, dettagliNascosti, madre, figlie, discendentiCarta, creaCarta, creaCarte, aggiornaCarta, impostaMadre,
-        aumentaRientro, riduciRientro, spostaTraSorelle, eliminaCarta, spostaCarta, reimpostaProgressi, impostaValutazione, aggiornaSrs, allineaAlSet,
+        aumentaRientro, riduciRientro, spostaTraSorelle, eliminaCarta, spostaCarta, reimpostaProgressi, impostaValutazione, aggiornaSrs, allineaAlSet, ricalcolaIntervalli,
         tagDi, sceltaMultipla, conteggi, migra, correggiTagConcetti,
         materialiDiSet, materiale, creaMateriale, aggiornaMateriale, eliminaMateriale,
         argomento, argomentiDiSet, argomentiDiMateria, tuttiGliArgomenti, creaArgomento, aggiornaArgomento, eliminaArgomento,
