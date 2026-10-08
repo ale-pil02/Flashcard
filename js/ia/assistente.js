@@ -54,7 +54,7 @@ const Assistente = (() => {
             <div class="ia-messaggi" data-ia-messaggi aria-live="polite"></div>
             <div class="ia-allegati" data-ia-allegati hidden></div>
             <form class="ia-scrivi" data-ia-modulo>
-                <textarea rows="1" data-ia-testo placeholder="Chiedi o dai un'istruzione…" title="Invio per mandare, Maiusc+Invio per andare a capo. /localizzazione avvia la skill delle flashcard di localizzazione"></textarea>
+                <textarea rows="1" data-ia-testo placeholder="Chiedi o dai un'istruzione…" title="Invio per mandare, Maiusc+Invio per andare a capo. /profondita avvia la creazione flashcard per profondità"></textarea>
                 <button type="submit" class="ia-invia" data-ia-invia aria-label="Invia">${ico('invia')}</button>
             </form>`;
         document.body.appendChild(el);
@@ -286,7 +286,7 @@ const Assistente = (() => {
         if (setId) {
             const haMateriali = Dati.materialiDiSet(setId).length > 0;
             return haMateriali
-                ? ['Riassumi i materiali di questo set', 'Crea flashcard a cascata dai materiali di questo set', '/localizzazione dalla mappa di questo set', 'Interrogami sui materiali, una domanda alla volta']
+                ? ['Riassumi i materiali di questo set', 'Crea flashcard a cascata dai materiali di questo set', '/profondita dalla mappa di questo set', 'Interrogami sui materiali, una domanda alla volta']
                 : ['Crea 10 flashcard a cascata su…', 'Riorganizza le carte di questo set in un albero dal generale al particolare', 'Quali carte di questo set sbaglio più spesso?'];
         }
         return ["Com'è messo il mio studio questa settimana?", 'Cosa dovrei ripassare oggi?', 'Crea un set con 8 domande a cascata su…', 'Aggiungi al piano di studio un esame il…'];

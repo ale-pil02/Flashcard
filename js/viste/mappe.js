@@ -14,6 +14,8 @@ Viste.mappe = {
         if (this.filtro !== 'tutte' && this.filtro !== 'nessuna' && !materie.some(mat => mat.id === this.filtro)) this.filtro = 'tutte';
         const visibili = this.filtro === 'tutte' ? mappe
             : this.filtro === 'nessuna' ? senza : mappe.filter(x => x.materiaId === this.filtro);
+        // Le materie che hanno mappe ma non più la loro "link argomenti" (eliminata): un riquadro per ricrearla
+        const daRicreare = Panoramica.mancanti().filter(mat => this.filtro === 'tutte' || this.filtro === mat.id);
         const schede = [
             { id: 'tutte', testo: 'Tutte', conto: mappe.length },
             ...materie.map(mat => ({ id: mat.id, testo: `${mat.emoji} ${mat.nome}`, conto: mappe.filter(x => x.materiaId === mat.id).length })),
@@ -34,7 +36,12 @@ Viste.mappe = {
                 </header>
                 ${mappe.length && schede.length > 1 ? `<nav class="schede-rev" role="tablist">${schede.map(s => `
                     <button type="button" role="tab" class="scheda-rev${this.filtro === s.id ? ' attiva' : ''}" data-filtro="${esc(s.id)}" aria-selected="${this.filtro === s.id}">${esc(s.testo)} <span class="conteggio">${s.conto}</span></button>`).join('')}</nav>` : ''}
-                ${visibili.length ? `<div class="griglia-mappe">${visibili.map(x => this.tessera(x)).join('')}</div>`
+                ${visibili.length ? `<div class="griglia-mappe">${visibili.map(x => this.tessera(x)).join('')}${daRicreare.map(mat => `
+                    <button type="button" class="tessera-mappa tessera-ricrea" data-ricrea-panoramica="${mat.id}" title="La mappa d'insieme della materia, tenuta dall'app: titolo, sottorami e concetti principali di tutte le sue mappe">
+                        <span class="tessera-ricrea-icona">${ico('piu')}</span>
+                        <b>Crea «${esc(Panoramica.NOME)}»</b>
+                        <small>${esc(mat.emoji)} ${esc(mat.nome)} · mappa d'insieme della materia, tenuta dall'app</small>
+                    </button>`).join('')}</div>`
                     : Ui.vuoto({
                         icona: 'mappa', titolo: 'Nessuna mappa',
                         testo: 'Una mappa mentale raccoglie un argomento in rami: parti dal tema centrale e aggiungi i nodi con Tab e Invio. Puoi anche importare le mappe di SimpleMind (.smmx), un file OPML o un elenco rientrato.',
@@ -50,6 +57,12 @@ Viste.mappe = {
         el.addEventListener('click', e => {
             const f = e.target.closest('[data-filtro]');
             if (f) { this.filtro = f.dataset.filtro; App.ridisegna(); return; }
+            const r = e.target.closest('[data-ricrea-panoramica]');
+            if (r) {
+                const nuova = Panoramica.crea(r.dataset.ricreaPanoramica);
+                if (nuova) { Ui.toast(`Mappa «${Panoramica.NOME}» creata`, 'successo'); Router.vai('/mappa/' + nuova.id); }
+                return;
+            }
             const b = e.target.closest('[data-menu-mappa]');
             if (b) { e.preventDefault(); this.menu(b, Mappe.mappa(b.dataset.menuMappa)); }
         });
@@ -85,7 +98,8 @@ Viste.mappe = {
             { testo: 'Esporta in OPML', icona: 'scarica', clic: () => scaricaFile(nomeFileSicuro(x.nome) + '.opml', FileMappe.inOpml(x), 'text/x-opml') },
             '-',
             { testo: 'Elimina', icona: 'cestino', pericolo: true, clic: async () => {
-                const ok = await Ui.conferma(`Elimini <b>${esc(x.nome)}</b> con i suoi ${plurale(Mappe.contaNodi(x), 'nodo', 'nodi')}? Non si può annullare.`,
+                const ok = await Ui.conferma(`Elimini <b>${esc(x.nome)}</b> con i suoi ${plurale(Mappe.contaNodi(x), 'nodo', 'nodi')}? Non si può annullare.${x.panoramica
+                    ? ` Potrai ricrearla dalla sezione Mappe (riquadro «Crea ${esc(Panoramica.NOME)}»): i nodi tornano dalle mappe della materia, ma aspetto, posizioni e nodi aggiunti qui si perdono.` : ''}`,
                     { titolo: 'Eliminare la mappa?', ok: 'Elimina', pericolo: true });
                 if (!ok) return;
                 Mappe.elimina(x.id);

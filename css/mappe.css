@@ -19,6 +19,10 @@
     transition: transform .15s ease, box-shadow .15s ease;
 }
 .tessera-mappa:hover { transform: translateY(-2px); box-shadow: var(--ombra-media); }
+.tessera-ricrea { align-items: center; justify-content: center; gap: 6px; min-height: 180px; padding: 18px; border: 2px dashed var(--bordo-forte); background: var(--superficie-2); box-shadow: none; color: var(--testo); font: inherit; text-align: center; cursor: pointer; }
+.tessera-ricrea:hover { border-color: var(--primario); }
+.tessera-ricrea small { color: var(--testo-3); font-size: .8rem; }
+.tessera-ricrea-icona { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--primario-tenue); color: var(--primario-testo); }
 .anteprima-mappa { display: block; aspect-ratio: 32 / 19; border-bottom: 1px solid var(--bordo); background: var(--superficie-2); }
 .anteprima-mappa img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .anteprima-vuota { display: grid; place-items: center; height: 100%; color: var(--testo-3); }
@@ -747,3 +751,12 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .mappa-barra .chip-panoramica { flex: none; cursor: pointer; }
 .tessera-mappa-testo .chip-panoramica { justify-self: start; margin-top: 2px; }
 .nodo-segno.segno-origine { cursor: pointer; opacity: .8; }
+
+/* Miniature delle immagini libere nel pannello Nota, con la × per eliminarle */
+.miniature-figure { display: flex; flex-wrap: wrap; gap: 8px; }
+.miniatura-figura { position: relative; }
+.miniatura-figura-img { display: grid; place-items: center; width: 64px; height: 64px; padding: 0; overflow: hidden; border: 1px solid var(--bordo); border-radius: 10px; background: var(--superficie-2); cursor: pointer; }
+.miniatura-figura-img:hover { border-color: var(--primario); }
+.miniatura-figura-img img { width: 100%; height: 100%; object-fit: cover; }
+.miniatura-figura-togli { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 2px solid var(--superficie); border-radius: 50%; background: var(--pericolo); color: #fff; cursor: pointer; }
+.miniatura-figura-togli .ico { width: 12px; height: 12px; }

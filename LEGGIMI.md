@@ -36,7 +36,7 @@ Impostazioni → Dati di prova → Tutorial).
 | **Piano di studio** | Date degli esami con conto alla rovescia, collegate alle materie |
 | **Impostazioni** | Nome, carte per sessione (anche senza limite), ordine, studio a cascata, carte di dettaglio, sequenza delle revisioni, assistente IA, tema, import, backup, dati di prova e tutorial |
 | **Materiali** | In ogni set: PDF, slide, mappe mentali, Word, PowerPoint, immagini, testi e note, anche da una cartella o da file collegati (Drive) |
-| **Assistente IA** | Gemini: fa le operazioni dell'app, risponde sui materiali, crea flashcard di localizzazione |
+| **Assistente IA** | Gemini: fa le operazioni dell'app, risponde sui materiali, crea flashcard per profondità |
 | **Annulla** | Ogni messaggio dell'assistente e ogni azione su più carte si annulla (e si ripristina) |
 
 ## Risposte con la parte di mappa
@@ -54,7 +54,7 @@ resta anche se lo rinomini o lo sposti. Se il nodo viene cancellato, la carta lo
   ingrandisce.
 - Le carte fatte da materiali in prosa restano senza collegamento.
 - L'assistente collega le carte esistenti ai nodi (`collega_carte_mappa`), collega quelle che crea da una mappa e le
-  flashcard di localizzazione fatte da una mappa dell'app (`prepara_piano_localizzazione` con `mappa_id`, o dal
+  flashcard per profondità fatte da una mappa dell'app (`prepara_piano_localizzazione` con `mappa_id`, o dal
   materiale della mappa) nascono già collegate. Da un file di mappa tra i materiali o da una trascrizione no.
 
 ## Risposte collegate alla fonte
@@ -79,7 +79,7 @@ anche l'albero dei nodi. Ogni materiale si apre in un visualizzatore e si può e
   creandola dal pulsante **Mappa** dei materiali). È un materiale senza file (`mappaId`) che segue la mappa a ogni
   salvataggio: nome, nodi (testo; etichette e nota come corpo del nodo), anteprima. Il clic apre l'editor; dal menu ⋯
   si rinomina o sposta la mappa, la si toglie dal set (resta nella sezione Mappe) o la si elimina. Serve come fonte
-  per la chat del set, per le flashcard di localizzazione e come fonte delle revisioni. All'avvio l'app riallinea
+  per la chat del set, per la creazione flashcard per profondità e come fonte delle revisioni. All'avvio l'app riallinea
   i materiali di tutte le mappe (`Materiali.allineaMappe`).
 
 - **SimpleMind**: dalle mappe `.smmx` l'app legge nodi e note, parte dal tema centrale e aggiunge in fondo i
@@ -160,8 +160,9 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   il livello scelto si vede anche sotto il titolo dell'assistente.
 - **Chat del set**: aperta da un set, usa i suoi materiali come fonti (PDF e immagini li legge
   direttamente) e li cita, come NotebookLM. Altrove c'è la chat generale.
-- **Flashcard di localizzazione** (la skill *creatore-flashcard-mappe-mentali*): si avvia solo su
-  richiesta, con `/localizzazione` nella chat o con il pulsante sul materiale. La parte meccanica
+- **Creazione flashcard per profondità** (la skill *creatore-flashcard-mappe-mentali*, prima chiamata
+  *localizzazione*): si avvia solo su richiesta, con `/profondita` nella chat (va ancora anche il vecchio
+  `/localizzazione`) o con il pulsante **Creazione flashcard per profondità** sul materiale. La parte meccanica
   (albero, tag, piano, foglie assorbite, catene, controlli sulle domande) è in `js/localizzazione.js`
   e dà gli stessi risultati degli script Python della skill; l'IA scrive solo le domande. Le carte
   nascono già ad albero e si studiano a cascata. Unica differenza voluta dalla skill: il numero di
@@ -170,7 +171,7 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   *concetto 2*; le carte già fatte sono state corrette una volta all'avvio, annullabile da Modifiche recenti).
 - **Flashcard dai nodi di una mappa**: nell'editor della mappa scegli uno o più nodi e premi il pulsante delle carte
   nella barra (o *Flashcard* nella finestrella dei nodi scelti, o il menu ⋯ del nodo). Scegli il set, se tenere anche i
-  rami sotto ai nodi e se saltare i nodi che nel set hanno già una carta: l'app prepara il piano della localizzazione
+  rami sotto ai nodi e se saltare i nodi che nel set hanno già una carta: l'app prepara il piano della creazione per profondità
   su tutta la mappa (così tag, risposte e madri restano giusti) e tiene solo le carte di quei nodi; l'assistente scrive
   le domande e crea le carte, collegate ai loro nodi. Una carta la cui madre resta fuori va sotto la carta che il set
   ha già per quel nodo, quindi i rientri restano anche facendo la mappa a pezzi.
@@ -231,14 +232,16 @@ alternano lungo tutta la sessione (in proporzione, anche se i set hanno grandezz
 l'ordine e la cascata restano. Alternare argomenti simili aiuta a distinguerli. Ogni set di cui valuti tutte le carte
 conta come ripasso del set.
 
-**Conta o è una prova?** Quando avvii uno studio e non è il giorno previsto (in anticipo, in ritardo o già ripassato
-oggi), l'app lo dice e chiede: **Conta come ripasso** oppure **Ripasso di prova**. Se la sessione è il ripasso
-completo di uno o più set chiede solo per i set: le loro carte fuori giorno seguono le loro regole senza domande. Nelle
-sessioni per singole carte (⚡ della carta, *Ripassa le sfasate da fare*, *Solo quelle*) chiede per le carte. La
-finestra mostra per ogni set la linea del tempo (ultimo ripasso, data prevista, oggi) e, se è in ritardo, la prossima
-revisione per ogni esito: Ottimo, Buono, oppure Ok, Scarso o incompleto. Il ripasso di prova non cambia niente, né per il set né per le carte (valutazioni, N° Rep, date, stato);
-tempo e risposte vanno lo stesso nelle statistiche. Il giorno previsto non chiede niente. Le modifiche a mano valgono
-sempre.
+**Ripasso effettivo o di prova?** Ogni volta che avvii uno studio l'app chiede: **Ripasso effettivo** oppure **Ripasso
+di prova**, e dice com'è messo rispetto al giorno previsto. Se la sessione è il ripasso completo di uno o più set parla
+dei set: per quelli fuori giorno (in anticipo, in ritardo o già ripassati oggi) mostra la linea del tempo (ultimo
+ripasso, data prevista, oggi) e, se sono in ritardo, la prossima revisione per ogni esito (Ottimo, Buono, oppure Ok,
+Scarso o incompleto); per quelli puntuali o alla prima volta, in breve, il N° Rep e la prossima revisione che avranno.
+Le loro carte seguono le loro regole. Nelle sessioni per singole carte (⚡ della carta, *Ripassa le sfasate da fare*,
+*Solo quelle*, *Studio libero*) parla delle carte: quante sono fuori giorno e quante nel giorno previsto o nuove. Il
+ripasso effettivo aggiorna valutazioni, N° Rep e date; quello di prova non cambia niente, né per il set né per le
+carte (valutazioni, N° Rep, date, stato); tempo e risposte vanno lo stesso nelle statistiche. Le modifiche a mano
+valgono sempre.
 
 **Dopo l'esame.** Se la prossima revisione di un set o di una carta cade dopo il prossimo esame della sua materia
 (Piano di studio), accanto alla data compare «dopo l'esame», e lo stesso nella pagina della carta, a fine sessione e
@@ -253,17 +256,32 @@ oppure *N giorni prima / dopo il set* (con *(Ok)* se è stata valutata Ok). **So
 ripassati che non vanno al passo con il loro set (o argomento), le più urgenti prima: mai ripassate (aggiunte dopo) o
 con la prossima revisione in un giorno diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro,
 cambiate a mano). Si modificano come le righe (valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione),
-⚡ ripassa una carta, **Ripassa le sfasate da fare** le prende tutte. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
+⚡ ripassa una carta, **Ripassa le sfasate da fare** le prende tutte, **Studio libero** ti fa scegliere cosa studiare. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
 quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
 prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
 valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
-- Tutte le celle si modificano sul posto, come in Notion; un clic sull'intestazione ordina la colonna.
+- Tutte le celle si modificano sul posto, come in Notion; un clic sull'intestazione ordina la colonna (crescente →
+  decrescente → ordine di partenza), anche nel pannello *Per flashcard*.
+- **Studio libero** (pannello *Per flashcard*, nella sezione Revisioni e nella pagina di ogni set): per quando hai un
+  po' di tempo. Scegli **quanto** (10, 20, 30, 45 minuti, tutte, oppure un numero di carte: il tempo si stima dalla
+  mediana delle tue ultime risposte, circa 25 secondi a carta se non ce ne sono), **quali** (da ripassare, sfasate,
+  mai valutate, Scarso, Ok, Buono, Perfetto; nessuna scelta = tutte), di **quali set** (nella sezione Revisioni sono già
+  scelti quelli del filtro) e l'**ordine** (prima le più urgenti, prima le più deboli, come nei set, mescolate).
+  L'elenco della sessione si ritocca a mano. All'avvio si sceglie ripasso effettivo (aggiorna le flashcard, non il N°
+  Rep dei set) o di prova.
+- **Filtri** (sezione Revisioni, sopra la tabella, in *Per set* e in *Per flashcard*): **Set** (uno o più),
+  **Stato** (Revisione: in ritardo, da fare oggi, in attesa, mai ripassati; nei set lo Stato, nelle flashcard la
+  Valutazione e *Rispetto al set*; dentro un gruppo basta una scelta, tra gruppi servono tutte), **Ordina** per
+  prossima revisione, ultimo ripasso, intervallo, N° Rep, nome, set, stato, in ordine **crescente o decrescente** (le
+  righe senza quel dato vanno in fondo), **Colonne** da nascondere (la prima resta). Accanto compare *N di M* e
+  **Azzera filtri**. I filtri valgono finché l'app è aperta; ordine e colonne nascoste restano in questo browser.
+  *Ripassa le sfasate da fare* prende solo le carte filtrate.
 - **Larghezza delle colonne**: si trascina il bordo destro dell'intestazione; doppio clic per tornare alla
   larghezza predefinita (tutte insieme: menu ⋯ della sezione Revisioni). Valgono in ogni tabella delle revisioni.
 - **Sezione Revisioni** (nel menu, con il numero di quelli da fare, flashcard comprese): pannelli *Per set* e
   *Per flashcard*, schede *Tutte*, una per materia e *Da ripassare*. È l'unico posto dove si cambia il set di una
   riga; dal menu ⋯ *Un argomento per ogni set* crea in un colpo le righe dei set che non ne hanno.
-- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per set* e
+- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per argomento* e
   *Per flashcard*: lì si modificano, ma non si vedono né si toccano quelli degli altri set.
 - **Come funziona** (in alto nella sezione Revisioni, o Impostazioni → Revisioni) apre una guida a passi su
   flashcard, valutazioni e revisioni, con un simulatore della prossima data (`js/guida.js`).
@@ -288,7 +306,8 @@ primo livello; i nodi più profondi ci vanno se nella loro mappa scegli dal menu
 (icona della mappa sul nodo). Si riallinea da sola a ogni modifica: testi e struttura vengono dalle mappe d'origine
 (lì non si modificano: la freccia accanto a ogni nodo apre la sua mappa in quel punto), mentre aspetto, disposizione,
 tema, posizioni, nodi aggiunti a mano e **collegamenti tra argomenti** di mappe diverse restano. Nell'elenco delle
-mappe e nella barra dell'editor ha l'etichetta *d'insieme*.
+mappe e nella barra dell'editor ha l'etichetta *d'insieme*. Se la elimini, nell'elenco delle mappe compare il riquadro
+**Crea «link argomenti»** per ricrearla (i nodi tornano dalle mappe della materia; aspetto e aggiunte fatte lì no).
 
 La **freccia indietro** dell'editor torna alla pagina da cui si è aperta la mappa (per esempio i materiali del set o la
 «link argomenti»), come il tasto Indietro; dallo studio o senza pagina precedente va all'elenco delle mappe.
@@ -328,15 +347,17 @@ L'editor (rotta `#/mappa/<id>`):
   con **Nuovo tema** partendo dall'aspetto della mappa e salvati nelle impostazioni, quindi validi per tutte le mappe), Stile (carattere, forma, bordo, colori
   del ramo e del riempimento, freccia e linea del collegamento, dimensione minima, copia/incolla stile),
   Icone, Nota (con link, data, casella da spuntare, immagini), Struttura (elenco rientrato).
-- **Immagini**: dal pulsante 🖼 della barra (o dal menu del nodo, o dal pannello Nota) un'immagine va **accanto al
-  nodo** o **dentro il nodo**. Quella accanto è attaccata al nodo e si muove con lui; si trascina dove si vuole, si
-  ridimensiona tirando il quadratino nell'angolo (o con + e −), e la disposizione le fa spazio come alle etichette.
-  Con l'immagine scelta: Canc la elimina, doppio clic la ingrandisce; dalla sua barretta la rimetti sopra il
-  nodo o la porti dentro (e quella dentro si porta fuori dal pannello Nota). Un file trascinato sopra un nodo
-  va dentro il nodo; lasciato in un punto vuoto diventa un'immagine accanto al nodo selezionato, proprio lì.
-  Un'immagine **fluttuante** (scelta dal pulsante 🖼, dal pannello Nota, o con 🔗 nella barretta di un'immagine che
-  c'è già) segue il suo nodo quando il nodo si sposta, ma non occupa spazio nella disposizione: spostandola non sposti
-  i nodi. Nel modello: `figure [{ id, img, larghezza, rapporto, dx, dy, fluttuante }]` sul nodo.
+- **Immagini**: dal pulsante 🖼 della barra (o dal menu del nodo, o dal pannello Nota) un'immagine va **libera,
+  agganciata al nodo**, o **dentro il nodo**. Quella libera segue il suo nodo quando il nodo si sposta, ma non occupa
+  spazio nella disposizione: spostandola non sposti i nodi. Si trascina dove si vuole e si ridimensiona tirando il
+  quadratino nell'angolo (o con + e −). Con l'immagine scelta: Canc la elimina, doppio clic la ingrandisce; dalla sua
+  barretta la porti dentro il nodo (e quella dentro si porta fuori dal pannello Nota). Un file trascinato sopra un
+  nodo va dentro il nodo; lasciato in un punto vuoto diventa un'immagine libera del nodo selezionato, proprio lì. Le
+  immagini delle mappe vecchie che occupano spazio restano come sono; con 🔗 nella loro barretta diventano libere.
+  Per eliminarle: Canc o 🗑 sull'immagine scelta, la × sulla sua miniatura nel pannello Nota, oppure **Elimina le
+  immagini del nodo** (menu del nodo, anche su più nodi scelti) o **Elimina tutte** nel pannello Nota: toglie le
+  immagini libere e quella dentro il nodo (Ctrl+Z annulla).
+  Nel modello: `figure [{ id, img, larghezza, rapporto, dx, dy, fluttuante }]` sul nodo.
 - **Concentrati su questo ramo** (menu del nodo) mostra un solo sottoargomento; **Esporta il ramo come
   immagine** ne fa un PNG. Dal menu ⋯: PNG di tutta la mappa, OPML, copia come elenco rientrato.
 - **Assistente** (✨ nella barra): fa sulla mappa tutto quello che fai tu, vedi *Assistente IA*.
@@ -455,15 +476,17 @@ js/dati.js              modello dei dati: materie, set e sotto-set, carte ad alb
 js/router.js            navigazione con l'indirizzo dopo il #
 js/componenti.js        finestre, menu, avvisi, barre di avanzamento, moduli, riquadro dello studio
 js/storia.js            modifiche annullabili (turni dell'assistente, azioni su più carte)
+js/filtri-revisioni.js  filtri della sezione Revisioni: set, stato, ordine, colonne nascoste
+js/studio-libero.js     studio libero: scegli quanto tempo e quali flashcard studiare
 js/revisioni.js         revisioni: tabella modificabile, riga del set aggiornata dallo studio, stato dalle carte,
-                        pannello delle flashcard per conto loro, avviso «conta o è una prova» all'avvio dello studio
+                        pannello delle flashcard per conto loro, domanda «effettivo o di prova» all'avvio dello studio
 js/guida.js             guida a passi su flashcard e revisioni, con il simulatore della prossima data
 js/tour.js              tutorial interattivo nelle pagine vere, sui dati di prova
 js/selezione.js         selezione di più flashcard e azioni di gruppo
 js/ricco.js             editor di testo formattato e pulizia dell'HTML
 js/importa.js           import ed export (testo dell'app, Excel, CSV) e backup JSON (file dei materiali compresi)
 js/prova.js             dati di prova: un set per ogni scenario delle revisioni, con storico coerente
-js/localizzazione.js    la skill delle flashcard di localizzazione (piano e controlli)
+js/localizzazione.js    la creazione flashcard per profondità (piano e controlli)
 js/materiali.js         materiali dei set: lettura dei file, novità tra versioni, visualizzatore, sezione nel set
 js/cartelle.js          cartelle e file collegati ai set (Drive per desktop), ricontrollati ogni 5 secondi
 js/mappe/modello.js     mappe mentali: dati, temi, stile dei nodi, operazioni sui rami

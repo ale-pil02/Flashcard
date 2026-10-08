@@ -82,6 +82,8 @@ Viste.studio = (() => {
         if (opzioni.ids) {
             const ids = new Set(opzioni.ids);
             lista = lista.filter(c => ids.has(c.id));
+            // Studio libero: le carte nell'ordine scelto (più urgenti, più deboli…), non in quello dei set
+            if (opzioni.ordineIds) { const pos = new Map(opzioni.ids.map((id, i) => [id, i])); lista = [...lista].sort((a, b) => pos.get(a.id) - pos.get(b.id)); }
         }
         if (opzioni.categorie) lista = lista.filter(c => opzioni.categorie.includes(Srs.categoria(c)));
         if (opzioni.tag && opzioni.tag.length) lista = lista.filter(c => c.tag.some(t => opzioni.tag.includes(t)));
@@ -528,9 +530,10 @@ Viste.studio = (() => {
 
     // Ripasso deciso da fuori (revisioni): carte precise di uno o più set.
     // parziale = solo le carte da sistemare, perCarta = dal pannello delle flashcard: N° Rep dei set non cambia;
-    // mescolaSet = le carte dei set si alternano (Ripassa più set)
-    function avvia({ setIds, ids, titolo = '', ritorno = '', parziale = false, perCarta = false, mescolaSet = false }) {
-        salvaOpzioni({ setIds, ids, ordineCasuale: false, titolo, ritorno, parziale, perCarta, mescolaSet });
+    // mescolaSet = le carte dei set si alternano (Ripassa più set); ordineIds = le carte nell'ordine di ids (Studio
+    // libero); ordineCasuale = mescolate
+    function avvia({ setIds, ids, titolo = '', ritorno = '', parziale = false, perCarta = false, mescolaSet = false, ordineIds = false, ordineCasuale = false }) {
+        salvaOpzioni({ setIds, ids, ordineCasuale, titolo, ritorno, parziale, perCarta, mescolaSet, ordineIds });
         Router.vai(`/studio?${setIds.length === 1 ? 'set=' + setIds[0] : 'ambito=tutto'}&personalizzata=1`);
     }
 

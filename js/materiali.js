@@ -3,7 +3,7 @@
 //
 // Al caricamento il file viene conservato così com'è (Archivio "file") e se ne estrae il testo;
 // dalle mappe si ricava anche l'albero { titolo, corpo, figli }, che serve alle flashcard di
-// localizzazione. Nella chat del set i materiali diventano le fonti dell'assistente.
+// creazione flashcard per profondità. Nella chat del set i materiali diventano le fonti dell'assistente.
 // I materiali possono arrivare anche da una cartella o da file collegati al set (js/cartelle.js): restano
 // allineati al file e, quando cambia, il visualizzatore mostra le novità rispetto alla versione prima.
 // Le mappe mentali create nell'app (sezione Mappe) che stanno in un set compaiono tra i suoi materiali: un
@@ -503,7 +503,7 @@ const Materiali = (() => {
         Assistente.invia(
             `Il materiale «${m.nome}» è cambiato: aggiorna le flashcard di questo set con le novità. Crea le carte che mancano agganciandole alla domanda madre giusta, `
             + `correggi quelle superate e, per quello che è stato tolto, dimmi quali carte eliminare prima di farlo.`
-            + (localizzazione ? ' Per i rami nuovi usa la stessa procedura della skill di localizzazione (creatore-flashcard-mappe-mentali) con cui sono fatte le altre.' : ''),
+            + (localizzazione ? ' Per i rami nuovi usa la stessa procedura della creazione flashcard per profondità (skill creatore-flashcard-mappe-mentali) con cui sono fatte le altre.' : ''),
             { dettagli: `[Novità del materiale «${m.nome}» (id ${m.id}) rispetto alla versione precedente]\n${differenzeInTesto(d)}`, etichetta: `Novità di «${m.nome}»` });
     }
 
@@ -683,7 +683,7 @@ const Materiali = (() => {
                 blob ? { testo: `${Ui.ico('scarica')}Scarica`, classe: 'btn-fantasma', clic: () => scaricaFile(m.nome, blob) } : null,
                 m.mappaId ? { testo: `${Ui.ico('mappa')}Apri la mappa`, classe: 'btn-secondario', clic: md => { md.chiudi(); Router.vai('/mappa/' + m.mappaId); } } : null,
                 m.tipo === 'nota' ? { testo: `${Ui.ico('matita')}Modifica`, classe: 'btn-fantasma', clic: async md => { md.chiudi(); if (await formNota(m.setId, m)) aggiorna(); } } : null,
-                puòLocalizzare ? { testo: `${Ui.ico('ramo')}Flashcard di localizzazione`, classe: 'btn-secondario', clic: md => { md.chiudi(); localizzazione(m); } } : null,
+                puòLocalizzare ? { testo: `${Ui.ico('ramo')}Creazione flashcard per profondità`, classe: 'btn-secondario', clic: md => { md.chiudi(); localizzazione(m); } } : null,
                 m.precedente
                     ? { testo: `${Ui.ico('sincronizza')}Aggiorna le flashcard`, classe: 'btn-primario', clic: md => { md.chiudi(); aggiornaFlashcard(Dati.materiale(m.id)); } }
                     : { testo: `${Ui.ico('scintille')}Chiedi all'assistente`, classe: 'btn-primario', clic: md => { md.chiudi(); Assistente.apri({ setId: m.setId }); } },
@@ -778,7 +778,7 @@ const Materiali = (() => {
     // Avvia la skill: la chiede l'utente esplicitamente, premendo il pulsante
     function localizzazione(m) {
         Assistente.apri({ setId: m.setId });
-        Assistente.invia(`/localizzazione Crea le flashcard di localizzazione dal materiale «${m.nome}» (id ${m.id}) e mettile in questo set.`);
+        Assistente.invia(`/profondita Crea le flashcard per profondità dal materiale «${m.nome}» (id ${m.id}) e mettile in questo set.`);
     }
 
     // ---- Sezione nella pagina del set -------------------------------------------------
@@ -913,7 +913,7 @@ const Materiali = (() => {
             !eSimpleMind(m) && m.tipo !== 'nota' && { testo: 'Apri con il programma del computer', icona: 'presentazione', clic: () => apriSulComputer(m) },
             m.precedente && { testo: 'Aggiorna le flashcard con le novità', icona: 'sincronizza', clic: () => aggiornaFlashcard(m) },
             haNovita(m) && { testo: 'Segna come visto', icona: 'spunta', clic: () => segnaVisto(id) },
-            (m.albero || m.tipo === 'pdf' || m.tipo === 'immagine') && { testo: 'Flashcard di localizzazione', icona: 'ramo', clic: () => localizzazione(m) },
+            (m.albero || m.tipo === 'pdf' || m.tipo === 'immagine') && { testo: 'Creazione flashcard per profondità', icona: 'ramo', clic: () => localizzazione(m) },
             { testo: m.usaInChat === false ? 'Includi nella chat del set' : 'Escludi dalla chat del set', icona: 'scintille', clic: () => { Dati.aggiornaMateriale(id, { usaInChat: m.usaInChat === false }); aggiorna(); } },
             collegato && { testo: 'Collega a un altro file', icona: 'collega', clic: async () => {
                 try { if (await Cartelle.ricollegaFile(id)) { Ui.toast('File ricollegato', 'successo'); aggiorna(); } } catch (e) { Ui.toast(e.message, 'errore', 6000); }
@@ -943,7 +943,7 @@ const Materiali = (() => {
         Ui.menu(ancora, [
             { testo: 'Apri la mappa', icona: 'mappa', clic: () => Router.vai('/mappa/' + x.id) },
             { testo: 'Vedi come elenco', icona: 'occhio', clic: () => apri(m.id) },
-            { testo: 'Flashcard di localizzazione', icona: 'ramo', clic: () => localizzazione(m) },
+            { testo: 'Creazione flashcard per profondità', icona: 'ramo', clic: () => localizzazione(m) },
             { testo: m.usaInChat === false ? 'Includi nella chat del set' : 'Escludi dalla chat del set', icona: 'scintille', clic: () => { Dati.aggiornaMateriale(m.id, { usaInChat: m.usaInChat === false }); aggiorna(); } },
             { testo: 'Rinomina la mappa', icona: 'matita', clic: async () => {
                 const nome = await chiediNome(x.nome);

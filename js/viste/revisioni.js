@@ -31,7 +31,10 @@ Viste.revisioni = {
             const lista = Revisioni.tutteLeVoci({ materiaId: materiaScheda });
             return this.soloSfasate ? lista.filter(Revisioni.sfasata) : lista;
         };
-        const mostrate = carte ? vociCarte() : null;
+        // I filtri della barra (set, stato, ordine, colonne): js/filtri-revisioni.js
+        const tipo = carte ? 'carte' : 'set';
+        const filtrate = () => FiltriRevisioni.applica('carte', vociCarte());
+        const mostrate = carte ? filtrate() : null;
         const c = Revisioni.conteggi(carte ? mostrate : tutti);
         const daFare = carte ? devianti.filter(Revisioni.cartaDaRipassare).length : c.scaduto + c.oggi;
         const sfasateMostrate = carte ? mostrate.filter(Revisioni.sfasata) : [];
@@ -77,13 +80,15 @@ Viste.revisioni = {
                     </div>
                 </div>` : ''}
 
-                ${(carte ? mostrate.length : tutti.length) ? `
+                ${(carte ? tutteCarte.length : tutti.length) ? `
                 <div class="riepilogo-rev">
                     <span class="avviso-rev avviso-scaduto"><i></i><b>${c.scaduto}</b> in ritardo</span>
                     <span class="avviso-rev avviso-oggi"><i></i><b>${c.oggi}</b> da fare oggi</span>
                     <span class="avviso-rev avviso-attesa"><i></i><b>${c.attesa}</b> in attesa</span>
                     ${c.mai ? `<span class="avviso-rev avviso-mai"><i></i><b>${c.mai}</b> ${carte ? 'mai ripassate' : 'mai ripassati'}</span>` : ''}
                     ${!carte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="piu-set" title="Scegli quali set ripassare e se tenerli in ordine o mescolare le carte">${ico('fulmine')}Ripassa più set</button>` : ''}
+                    ${carte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="studio-libero"
+                        title="Hai un po' di tempo? Scegli quanto e quali flashcard studiare">${ico('orologio')}Studio libero</button>` : ''}
                     ${carte && daFareMostrate.length ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte"
                         title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il loro set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareMostrate.length})</button>` : ''}
                 </div>` : ''}
@@ -93,25 +98,41 @@ Viste.revisioni = {
                         ${s.rossa ? '<i class="pallino-rosso"></i>' : ''}${esc(s.testo)}${s.conto ? `<span class="conteggio">${s.conto}</span>` : ''}</button>`).join('')}
                 </nav>
 
+                ${(carte ? tutteCarte.length : tutti.length) ? '<div data-filtri></div>' : ''}
                 <div data-tabella></div>
             </div>`;
 
         const ridisegna = () => App.ridisegna();
+        const argomenti = () => {
+            if (this.scheda === 'da-ripassare') return Dati.tuttiGliArgomenti().filter(Revisioni.daRipassare).sort(Revisioni.perUrgenza);
+            if (materiaScheda) return Dati.argomentiDiMateria(materiaScheda);
+            return Dati.tuttiGliArgomenti();
+        };
+        const filtri = FiltriRevisioni.stato(tipo);
+        const boxFiltri = $('[data-filtri]', el);
+        const barra = boxFiltri ? FiltriRevisioni.barra(boxFiltri, { tipo, base: carte ? vociCarte : () => argomenti(), alCambio: ridisegna }) : null;
+        const alOrdinare = () => { FiltriRevisioni.ricorda(tipo); if (barra) barra.disegna(); };
+        // Se i filtri lasciano fuori tutto, lo dice (invece del messaggio di sezione vuota)
+        const vuotoFiltri = () => (FiltriRevisioni.attivi(tipo, carte ? vociCarte() : argomenti()) && (carte ? vociCarte() : argomenti()).length
+            ? Ui.vuoto({ icona: 'cursori', titolo: 'Nessuna riga con questi filtri', testo: 'Cambia i filtri di set e stato, oppure toglili.',
+                azioni: `<button type="button" class="btn btn-secondario" data-azione="azzera-filtri">${ico('chiudi')}Azzera filtri</button>` })
+            : null);
 
         if (carte) {
             Revisioni.montaCarte($('[data-tabella]', el), {
-                voci: vociCarte,
-                // Tutte: nell'ordine dei set e dell'albero; solo le sfasate: le più urgenti prima
+                voci: filtrate,
+                // Tutte: nell'ordine dei set e dell'albero; solo le sfasate: le più urgenti prima (o l'ordine scelto)
                 perUrgenza: this.soloSfasate || this.scheda === 'da-ripassare',
+                ordinamento: filtri.ordine, alOrdinare, nascoste: filtri.nascoste,
                 dopo: ridisegna,
-                vuoto: this.scheda === 'da-ripassare'
+                vuoto: vuotoFiltri() || (this.scheda === 'da-ripassare'
                     ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard sfasata è da ripassare: le altre si ripassano con il loro set. 🎉' })
                     : this.soloSfasate
                         ? Ui.vuoto({
                             icona: 'ok-cerchio', titolo: 'Tutte al passo',
                             testo: 'Nessuna flashcard è sfasata rispetto al suo set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate e quelle ripassate o cambiate per conto loro.',
                         })
-                        : Ui.vuoto({ icona: 'carte', titolo: 'Ancora nessuna flashcard', testo: 'Crea o importa qualche flashcard nei tuoi set.' }),
+                        : Ui.vuoto({ icona: 'carte', titolo: 'Ancora nessuna flashcard', testo: 'Crea o importa qualche flashcard nei tuoi set.' })),
             });
             const filtro = $('.filtro-carte-rev', el);
             if (filtro) filtro.addEventListener('click', e => {
@@ -121,28 +142,24 @@ Viste.revisioni = {
                 ridisegna();
             });
         } else {
-            const argomenti = () => {
-                if (this.scheda === 'da-ripassare') return Dati.tuttiGliArgomenti().filter(Revisioni.daRipassare).sort(Revisioni.perUrgenza);
-                if (materiaScheda) return Dati.argomentiDiMateria(materiaScheda);
-                return Dati.tuttiGliArgomenti();
-            };
-            const vuoto = this.scheda === 'da-ripassare'
+            const vuoto = vuotoFiltri() || (this.scheda === 'da-ripassare'
                 ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessun argomento è in ritardo o da ripassare oggi. 🎉' })
                 : Ui.vuoto({
                     icona: 'calendario', titolo: 'Ancora nessun argomento',
                     testo: 'Quando finisci di studiare un set, compare qui da solo con la data e il numero del ripasso. Puoi anche aggiungere a mano i capitoli o gli schemi che ripassi.',
                     azioni: `<button type="button" class="btn btn-primario" data-azione="nuovo">${ico('piu')}Nuovo argomento</button>
                              <button type="button" class="btn btn-secondario" data-azione="uno-per-set">${ico('cartella')}Un argomento per ogni set</button>`,
-                });
+                }));
 
             Revisioni.monta($('[data-tabella]', el), {
                 chiave: 'master:' + this.scheda,
-                argomenti,
+                argomenti: () => FiltriRevisioni.applica('set', argomenti()),
+                ordinamento: filtri.ordine, alOrdinare, nascoste: filtri.nascoste,
                 colonnaSet: true,
                 setModificabile: true,
                 nuovo: () => Revisioni.formNuovo({ materiaId: materiaScheda }),
                 vuoto,
-                dopo: () => this.aggiornaSchede(el),
+                dopo: () => { this.aggiornaSchede(el); if (barra) barra.disegna(); },
             });
         }
 
@@ -163,8 +180,14 @@ Viste.revisioni = {
         Ui.collegaAzioni(el, {
             nuovo: async () => { if (await Revisioni.formNuovo({ materiaId: materiaScheda })) ridisegna(); },
             'uno-per-set': async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); },
-            'ripassa-carte': () => Revisioni.avviaRipassoCarte(vociCarte().filter(v => Revisioni.sfasata(v) && Revisioni.cartaDaRipassare(v))),
+            'ripassa-carte': () => Revisioni.avviaRipassoCarte(filtrate().filter(v => Revisioni.sfasata(v) && Revisioni.cartaDaRipassare(v))),
             guida: () => Guida.apri(),
+            'azzera-filtri': () => { FiltriRevisioni.azzera(tipo); ridisegna(); },
+            // Si sceglie tra le flashcard della scheda (i set del filtro sono già scelti)
+            'studio-libero': () => StudioLibero.apri({
+                voci: Revisioni.tutteLeVoci({ materiaId: materiaScheda }),
+                setIniziali: FiltriRevisioni.stato('carte').set,
+            }),
             'piu-set': () => Revisioni.ripassaPiuSet({ materiaId: materiaScheda }),
             menu: b => Ui.menu(b, [
                 !carte && { testo: materiaScheda ? `Un argomento per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un argomento per ogni set', icona: 'cartella',

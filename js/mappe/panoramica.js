@@ -126,6 +126,12 @@ const Panoramica = (() => {
         return m;
     }
 
+    // Le materie con mappe che non hanno (più) la loro "link argomenti": si può ricrearla dalla sezione Mappe
+    function mancanti() {
+        return Dati.materie().filter(mat => fonti(mat.id).length
+            && !Mappe.tutte().some(m => m.materiaId === mat.id && (m.panoramica || normale(m.nome) === NOME)));
+    }
+
     // Ogni salvataggio di una mappa: se è nuova (o appena entrata in una materia) e la materia non ha ancora la sua
     // "link argomenti", la si crea; poi la si riallinea. Anche rinominare la materia la riallinea.
     Archivio.alCambio((nome, operazioni) => {
@@ -171,5 +177,5 @@ const Panoramica = (() => {
         return m && m.nodi[r.nodo] ? { m, nodo: r.nodo } : null;
     }
 
-    return { NOME, di, crea, allinea, inizializza, origine, sceglibile, profondita };
+    return { NOME, di, crea, mancanti, allinea, inizializza, origine, sceglibile, profondita };
 })();

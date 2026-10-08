@@ -145,10 +145,42 @@ const Ui = (() => {
         menuAperto = null;
         document.removeEventListener('mousedown', clicFuoriMenu, true);
         window.removeEventListener('resize', chiudiMenu);
-        window.removeEventListener('scroll', chiudiMenu, true);
+        window.removeEventListener('scroll', scorrimentoMenu, true);
     }
 
     function clicFuoriMenu(e) { if (menuAperto && !menuAperto.contains(e.target)) chiudiMenu(); }
+    // Si chiude se scorre la pagina, non se scorre il suo contenuto
+    function scorrimentoMenu(e) { if (menuAperto && !menuAperto.contains(e.target)) chiudiMenu(); }
+
+    // Sotto l'ancora (sopra se non c'è posto), allineato al suo bordo destro o sinistro
+    function apriSotto(el, ancora, daSinistra = false) {
+        const r = ancora.getBoundingClientRect();
+        const larghezza = el.offsetWidth, altezza = el.offsetHeight;
+        const sinistra = limita(daSinistra ? r.left : r.right - larghezza, 8, window.innerWidth - larghezza - 8);
+        let alto = r.bottom + 6;
+        if (alto + altezza > window.innerHeight - 8) alto = Math.max(8, r.top - altezza - 6);
+        el.style.left = sinistra + 'px';
+        el.style.top = alto + 'px';
+        menuAperto = el;
+        document.addEventListener('mousedown', clicFuoriMenu, true);
+        window.addEventListener('resize', chiudiMenu);
+        window.addEventListener('scroll', scorrimentoMenu, true);
+    }
+
+    // Tendina con un contenuto qualsiasi (caselle da spuntare, scelte) che resta aperta mentre ci clicchi dentro:
+    // si chiude con un clic fuori, Esc o Ui.chiudiMenu(). alApri(el) collega gli eventi
+    function tendina(ancora, { html, classe = '', alApri } = {}) {
+        chiudiMenu();
+        const el = document.createElement('div');
+        el.className = `menu tendina ${classe}`.trim();
+        el.innerHTML = html;
+        document.body.appendChild(el);
+        apriSotto(el, ancora, true);
+        if (alApri) alApri(el);
+        const primo = el.querySelector('input, button');
+        if (primo) primo.focus({ preventScroll: true });
+        return el;
+    }
 
     // voci: [{ testo, icona, clic, pericolo }] oppure '-' per un separatore
     function menu(ancora, voci) {
@@ -160,14 +192,7 @@ const Ui = (() => {
         el.innerHTML = lista.map((v, i) => v === '-' ? '<hr>' :
             `<button type="button" role="menuitem" data-i="${i}" class="${v.pericolo ? 'pericolo' : ''}">${v.icona ? ico(v.icona) : ''}<span>${esc(v.testo)}</span></button>`).join('');
         document.body.appendChild(el);
-
-        const r = ancora.getBoundingClientRect();
-        const larghezza = el.offsetWidth, altezza = el.offsetHeight;
-        let sinistra = limita(r.right - larghezza, 8, window.innerWidth - larghezza - 8);
-        let alto = r.bottom + 6;
-        if (alto + altezza > window.innerHeight - 8) alto = Math.max(8, r.top - altezza - 6);
-        el.style.left = sinistra + 'px';
-        el.style.top = alto + 'px';
+        apriSotto(el, ancora);
 
         el.addEventListener('click', e => {
             const b = e.target.closest('[data-i]');
@@ -175,10 +200,6 @@ const Ui = (() => {
             chiudiMenu();
             lista[+b.dataset.i].clic();
         });
-        menuAperto = el;
-        document.addEventListener('mousedown', clicFuoriMenu, true);
-        window.addEventListener('resize', chiudiMenu);
-        window.addEventListener('scroll', chiudiMenu, true);
         const primo = el.querySelector('button');
         if (primo) primo.focus({ preventScroll: true });
     }
@@ -598,7 +619,7 @@ const Ui = (() => {
     }
 
     return {
-        ico, collegaAzioni, toast, segnalaErrore, modale, conferma, finestraAperta, menu, chiudiMenu,
+        ico, collegaAzioni, toast, segnalaErrore, modale, conferma, finestraAperta, menu, tendina, chiudiMenu,
         classeApribile, titoloApribile, apriSezione,
         barraStato, legendaStato, percentuale, anello, vuoto, emblema, tesseraSet, pannelloStudio, rigaCarta, anteprimaRisposta, tronca, menuValutazione,
         formMateria, nuovaMateria, formSet, nuovoSet, formEsame, opzioniMaterie, opzioniSet, rientroOpzione, scegliSet,
