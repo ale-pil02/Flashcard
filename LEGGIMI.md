@@ -25,7 +25,7 @@ Per provarla senza toccare i tuoi dati: **Impostazioni → Dati di prova → Car
 | **Set** | Avanzamento (Perfetto / Buono / Ok / Scarso / Mai studiate), riquadro con le carte da fare e **Personalizza** (il pulsante Studia non c'è più: lo studio parte dalle revisioni), sotto-set, revisioni, materiali, elenco delle carte ad albero. Sotto-set, Revisioni, Materiali e Flashcard si aprono e chiudono con un clic sul titolo (lo stato resta per tutti i set) |
 | **Selezione** | Nel set e nella ricerca: più flashcard insieme → tag, domanda madre, sposta, valutazione, progressi, assistente, elimina |
 | **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni |
-| **Revisioni** | Ripasso dei set e degli argomenti come nel database "Spaced Repetition System" di Notion, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set |
+| **Revisioni** | Ripasso dei set e degli argomenti come nel database "Spaced Repetition System" di Notion, a intervalli crescenti (Fibonacci, modificabile) che si adattano a ritardi e anticipi, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set. Guida «Come funziona» con simulatore |
 | **Sessione personalizzata** | Scegli uno o più set, lo stato delle carte, i tag, quante carte e l'ordine |
 | **Editor** | Domanda, risposta, fonte della risposta, parte della mappa, domanda madre, suggerimento, spiegazione, tag, immagini |
 | **Statistiche** | Carte di oggi, tempo di studio, grafico giornaliero, calendario, avanzamento per materia |
@@ -177,15 +177,16 @@ I set (e, a mano, anche altri argomenti: capitoli, schemi) si ripassano con lo s
 |---|---|
 | Argomento | Il nome (di solito il set, il capitolo o lo schema) |
 | Schema / fonte | Testo libero e i materiali collegati, da aprire con un clic (🔗 per collegarne o toglierne) |
-| N° Rep | Quante volte l'hai ripassato |
+| N° Rep | Quante volte l'hai ripassato (solo un conteggio: cambiarlo a mano non sposta le date) |
 | Ultimo ripasso | La data dell'ultimo ripasso |
-| Prossima revisione | Ultimo ripasso + 2^(N° Rep − 1) giorni: 1, 2, 4, 8, 16… (N° Rep vuoto o 0 vale 1), come la formula di Notion |
+| Intervallo | Giorni dall'ultimo ripasso alla prossima revisione, aggiornato a ogni ripasso (vedi *Ripetizione spaziata*) |
+| Prossima revisione | Ultimo ripasso + intervallo; scegliendo la data a mano l'intervallo si adegua |
 | Alert | 🔴 *Da ripassare (N giorni)* se è in ritardo, 🟡 *Ripassare oggi*, 🟢 *Attendi N giorni* |
 | Stato | Ottimo, Buono, Ok, Scarso o Incompleto (non cambia gli intervalli) |
 
 **Nuovo argomento**: scegli il set (dalla pagina del set è già scelto), il nome e le sue flashcard: **tutte quelle del
-set** (anche quelle che aggiungerai; una sola riga così per set) oppure **solo alcune**, da spuntare nell'elenco ad
-albero (una domanda porta con sé le sue figlie). Un argomento con le flashcard funziona come la riga del set qui sotto,
+set** (anche quelle che aggiungerai; una sola riga così per set), **tutte quelle che ci sono adesso** (quelle aggiunte
+dopo no) oppure **solo alcune**, da spuntare nell'elenco ad albero (una domanda porta con sé le sue figlie). Un argomento con le flashcard funziona come la riga del set qui sotto,
 ma solo con le sue carte: stato, pulsante Ripasso, N° Rep a fine sessione e pannello «Per flashcard». Accanto al nome
 c'è «N di M flashcard»: clic (o ⋯ → *Flashcard dell'argomento…*) per cambiarle. Un set studiato che ha già argomenti
 con le flashcard non riceve una riga del set in più.
@@ -193,9 +194,11 @@ con le flashcard non riceve una riga del set in più.
 **Riga del set, aggiornata dallo studio.** Ogni set con flashcard ha la sua riga (la crea lo studio, oppure prende
 quella che c'è già: con il nome del set o l'unica del set). Quando finisci una sessione, o la termini con ✕ / Esc:
 - per ogni set studiato, separatamente (anche se ne studi più insieme, e i sotto-set per conto loro):
-  se hai valutato **tutte** le carte del set è un ripasso: N° Rep +1 e Ultimo ripasso = oggi. Al massimo uno al
-  giorno: un altro ripasso lo stesso giorno aggiorna solo lo stato. Se ne hai valutate solo alcune, la fine della
-  sessione lo dice e c'è il pulsante **Segna come ripasso**;
+  se hai valutato **tutte** le carte del set è un ripasso: N° Rep +1, Ultimo ripasso = oggi e il nuovo intervallo
+  (in anticipo o in ritardo si adatta; un altro ripasso lo stesso giorno fa solo N° Rep +1 e la data resta). Le carte
+  valutate **Buono** o **Perfetto** prendono ultimo ripasso e intervallo del set e restano al suo passo; le **Ok** e
+  **Scarso** seguono le loro regole e finiscono nel pannello «Per flashcard». Se ne hai valutate solo alcune, la fine
+  della sessione lo dice e c'è il pulsante **Segna come ripasso**;
 - lo **stato** viene dalle valutazioni delle carte del set (i dettagli nascosti non contano): basta una carta
   Scarso → Scarso; altrimenti una Ok → Ok; altrimenti più dell'80% Perfetto → Ottimo; altrimenti Buono. Se c'è
   anche una sola carta mai valutata (per esempio aggiunta dopo) → **Incompleto**. Cambiando la valutazione di una
@@ -204,31 +207,40 @@ quella che c'è già: con il nome del set o l'unica del set). Quando finisci una
   delle risposte. Quelli che togli a mano non tornano.
 
 **Pulsante Ripasso** (⚡ nella colonna Ripasso): fa partire lo studio del set. Se ci sono carte da sistemare (mai
-valutate, Ok o Scarso) chiede se ripassare **solo quelle** (si aggiorna lo stato, non N° Rep né date del set) o **tutto il
-set** (è un ripasso vero). Se sono da sistemare tutte (per esempio al primo ripasso, quando sono tutte mai
+valutate, Ok o Scarso) chiede se ripassare **solo quelle** (si aggiornano le flashcard e lo stato, non N° Rep né date
+del set) o **tutto il set** (è un ripasso vero). Se sono da sistemare tutte (per esempio al primo ripasso, quando sono tutte mai
 valutate) non chiede niente: è un ripasso vero. Le righe senza flashcard hanno la vecchia spunta: scegli com'è andata e l'app fa
-N° Rep +1 e Ultimo ripasso = oggi; per le righe dei set lo stesso è nel menu ⋯ (*Segna il ripasso a mano…*).
+N° Rep +1, Ultimo ripasso = oggi e il nuovo intervallo; per le righe dei set lo stesso è nel menu ⋯ (*Segna il
+ripasso a mano…*).
+
+**Conta o è una prova?** Quando avvii uno studio (⚡ del set o della carta, *Ripassa quelle da fare*, Personalizza,
+*Studia* del piano…) e un set o delle carte non sono nel giorno previsto (in anticipo, in ritardo o già ripassati
+oggi), l'app lo dice, con la data che avrebbe la prossima revisione, e chiede: **Conta come ripasso** oppure **Ripasso
+di prova**. Il ripasso di prova non cambia niente, né per il set né per le carte (valutazioni, N° Rep, date, stato);
+tempo e risposte vanno lo stesso nelle statistiche. Il giorno previsto non chiede niente. Le modifiche a mano valgono
+sempre.
 I ripassi si annullano dall'avviso, dal menu ⋯ della riga (*Annulla l'ultimo ripasso*) o da Modifiche recenti;
 nel menu c'è anche la cronologia dei ripassi.
 
-**Pannello «Per flashcard».** Ogni carta ha la stessa ripetizione del set (vedi *Ripetizione spaziata*). Nel
-pannello ci sono le carte dei set già ripassati che non vanno al passo con il loro set (o argomento): mai ripassate
-(aggiunte dopo), con la prossima revisione prima di quella del set (rimaste indietro, per esempio con Scarso) o con un
-N° Rep diverso da quello del set, anche più alto (per esempio dopo aver cambiato a mano il N° Rep del set; conta il
-N° Rep, non il giorno esatto). Quelle avanti col N° Rep compaiono con «Attendi N giorni». Si modificano come le
-righe (valutazione, N° Rep, ultimo ripasso), ⚡ ripassa una carta, **Ripassa quelle da fare** le prende tutte.
-Il ripasso dal pannello non conta come ripasso del set. Quando una carta ha lo stesso N° Rep del suo set e la sua
-revisione non cade prima, esce dal pannello e torna a seguire il set. **Riadegua al set** (nella riga) lo fa subito: la carta prende N° Rep e
-ultimo ripasso del set ed esce dall'elenco, anche se è Scarso o mai valutata; la valutazione resta quella che ha
-(quindi lo stato del set non cambia). La segue finché non la valuti di nuovo nello studio; si annulla dall'avviso.
+**Pannello «Per flashcard»** (nella sezione Revisioni e nella pagina di ogni set). Ogni carta ha la stessa ripetizione
+del set (vedi *Ripetizione spaziata*), con il suo N° Rep. Nel pannello ci sono le carte dei set già ripassati che non
+vanno al passo con il loro set (o argomento): mai ripassate (aggiunte dopo) o con la prossima revisione in un giorno
+diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro, cambiate a mano). Si modificano come le righe
+(valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione), ⚡ ripassa una carta, **Ripassa quelle da fare**
+le prende tutte. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
+quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
+prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
+valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
 - Tutte le celle si modificano sul posto, come in Notion; un clic sull'intestazione ordina la colonna.
 - **Larghezza delle colonne**: si trascina il bordo destro dell'intestazione; doppio clic per tornare alla
   larghezza predefinita (tutte insieme: menu ⋯ della sezione Revisioni). Valgono in ogni tabella delle revisioni.
 - **Sezione Revisioni** (nel menu, con il numero di quelli da fare, flashcard comprese): pannelli *Per set* e
   *Per flashcard*, schede *Tutte*, una per materia e *Da ripassare*. È l'unico posto dove si cambia il set di una
   riga; dal menu ⋯ *Un argomento per ogni set* crea in un colpo le righe dei set che non ne hanno.
-- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set: lì si
-  modificano, ma non si vedono né si toccano quelli degli altri set.
+- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per set* e
+  *Per flashcard*: lì si modificano, ma non si vedono né si toccano quelli degli altri set.
+- **Come funziona** (in alto nella sezione Revisioni, o Impostazioni → Revisioni) apre una guida a passi su
+  flashcard, valutazioni e revisioni, con un simulatore della prossima data (`js/guida.js`).
 - In **Home** compaiono gli argomenti da rivedere oggi e quante flashcard sono da ripassare per conto loro.
   L'assistente sa leggerli (anche il pannello delle flashcard), crearli, modificarli e segnare un ripasso
   ("ho ripassato il capitolo 2").
@@ -343,14 +355,38 @@ importate si studiano e si modificano.
 
 ## Ripetizione spaziata
 
-Un solo sistema, lo stesso delle revisioni: **prossima revisione = ultimo ripasso + 2^(N° Rep − 1) giorni**.
+Un solo sistema, lo stesso per le flashcard e per le revisioni: **prossima revisione = ultimo ripasso + intervallo**.
+N° Rep conta i ripassi e basta.
+
+**Sequenza** (Impostazioni → Revisioni, predefinita Fibonacci **1, 2, 3, 5, 8, 13, 21**; c'è anche Raddoppio, o la
+scrivi tu): ripassando sempre il giorno previsto, dopo la rep 1 aspetti il primo numero, dopo la rep 2 il secondo e
+così via; dopo l'ultimo gli intervalli crescono con il rapporto degli ultimi due (Fibonacci: ×1,618 → 34, 55, 89…).
+La prima volta che ripassi un set (o una carta) è la rep 1: la successiva è un giorno dopo. Cambiare la sequenza vale
+dal prossimo ripasso; **Applica alle revisioni che hai già** ricalcola l'intervallo di ognuno dal suo N° Rep (si annulla
+da Modifiche recenti).
+
+**Ritardi e anticipi.** Sia I l'intervallo previsto, P i giorni passati dall'ultimo ripasso e r il ritmo della sequenza
+in quel punto (per I = 8 con Fibonacci, 13/8):
+
+| Quando ripassi | Nuovo intervallo (da oggi) | Esempio: I = 8 giorni, Fibonacci |
+|---|---|---|
+| Il giorno previsto (P = I) | I × r | 13 |
+| In ritardo (P > I) | I × r × I / P: più hai aspettato, più la prossima si avvicina | 4 giorni di ritardo → 9 |
+| In anticipo (P < I) | I + P × (r − 1): la data prevista più la parte di intervallo "guadagnata" | 4 giorni di anticipo → 11 |
+| Lo stesso giorno di un altro ripasso | resta I, e la data non cambia (N° Rep +1) | — |
+
+Arrotondato ai giorni, minimo 1. Se poi torni puntuale, l'intervallo riprende a crescere da dove si trova.
 
 - Valutazioni: **Scarso**, **Ok**, **Buono**, **Perfetto**.
-- **Ok**, **Buono** o **Perfetto**: N° Rep +1 (al massimo una volta al giorno), ultimo ripasso = oggi.
-  Buono e Perfetto rendono la carta imparata e nella sessione non torna più; Ok no: nella sessione torna in fondo,
-  per il set resta tra le carte «da sistemare» e porta lo stato del set a Ok.
-- **Scarso**: N° Rep e ultimo ripasso restano com'erano e la carta è **da ripassare subito** (da oggi; i giorni
-  dopo risulta in ritardo) finché non le dai almeno Ok.
+- **Buono** o **Perfetto**: N° Rep +1, ultimo ripasso = oggi, intervallo con la formula. La carta è imparata e nella
+  sessione non torna più.
+- **Ok**: come sopra ma con metà crescita (r → 1 + (r − 1) / 2: da 8 giorni a 11 invece di 13), così la carta torna un
+  po' prima finché non le dai Buono o Perfetto. Nella sessione torna in fondo, per il set resta tra le carte «da
+  sistemare» e porta lo stato del set a Ok.
+- **Scarso**: N° Rep e ultimo ripasso restano com'erano, l'intervallo **torna indietro di un passo** nella sequenza (da
+  8 a 5; con il Raddoppio si dimezza) e la carta è **da ripassare subito** (da oggi; i giorni dopo risulta in ritardo)
+  finché non le dai almeno Ok. Quel ripasso la recupera: N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da
+  quello ridotto.
 - **Mai valutata, in un set già ripassato** (per esempio aggiunta dopo): come una Scarso, è da ripassare subito,
   dal giorno in cui è entrata nel set (o dall'ultimo ripasso del set, se c'era già e quel ripasso l'ha saltata), e
   in ritardo i giorni dopo, finché non la valuti. Entra in *Ripasso di oggi* e tra le «da ripassare» del set (la
@@ -358,13 +394,17 @@ Un solo sistema, lo stesso delle revisioni: **prossima revisione = ultimo ripass
 - Nella sessione Ok e Scarso tornano **in fondo**, dopo tutte le altre, finché non dai Buono o Perfetto. Puoi
   terminare quando vuoi (✕ o Esc): le carte restano con la valutazione che hai dato.
 - Nella stessa sessione solo la prima valutazione di una carta muove N° Rep e date; quelle dopo cambiano solo la
-  valutazione. Se la prima era Scarso (che non muove niente), la prima volta che la carta arriva almeno a Ok
-  prende N° Rep +1 e l'ultimo ripasso diventa oggi.
+  valutazione. Se la prima era Scarso, la prima volta che la carta arriva almeno a Ok la recupera.
 - La **valutazione si cambia a mano** nell'editor della carta, dal menu ⋯ della carta nel set e con più carte
   selezionate (⋯ → *Cambia la valutazione…*): cambia lo stato del set nelle revisioni, non le date. C'è anche
   **Mai valutata**, per correggere una valutazione data per sbaglio: la carta torna tra le nuove.
+- **N° Rep, ultimo ripasso, intervallo e prossima revisione si cambiano a mano** in fondo alla pagina della flashcard
+  (e nel pannello «Per flashcard»): valgono subito. Per una carta Scarso la data è quella da cui è da rifare.
 - Le carte del vecchio sistema (intervalli in stile Vaia) sono state convertite una volta all'avvio: quelle di un
   set con la sua riga nelle revisioni partono allineate a quella.
+- Passando all'intervallo come dato a sé (prima era 2^(N° Rep − 1)), set e carte hanno tenuto l'intervallo che
+  avevano, quindi nessuna data si è spostata; le carte che erano al passo con il set per N° Rep ne hanno preso data
+  e intervallo.
 
 Le formule sono in `js/srs.js` (carte) e `js/revisioni.js` (set, stato dalle carte, pannello delle flashcard).
 
@@ -377,13 +417,14 @@ css/stile.css           colori (chiaro e scuro) e tutti gli stili, divisi per se
 css/mappe.css           stili della sezione Mappe e del suo editor
 js/utili.js             date, testo, file
 js/archivio.js          unico accesso a IndexedDB (cache in memoria + scrittura su disco)
-js/srs.js               ripetizione spaziata delle carte (N° Rep a raddoppio, come le revisioni)
+js/srs.js               ripetizione spaziata: sequenza degli intervalli, ritardi e anticipi, valutazioni (carte e revisioni)
 js/dati.js              modello dei dati: materie, set e sotto-set, carte ad albero, ripassi, esami
 js/router.js            navigazione con l'indirizzo dopo il #
 js/componenti.js        finestre, menu, avvisi, barre di avanzamento, moduli, riquadro dello studio
 js/storia.js            modifiche annullabili (turni dell'assistente, azioni su più carte)
-js/revisioni.js         revisioni: formule come in Notion, tabella modificabile, riga del set aggiornata dallo
-                        studio, stato dalle carte, pannello delle flashcard per conto loro
+js/revisioni.js         revisioni: tabella modificabile, riga del set aggiornata dallo studio, stato dalle carte,
+                        pannello delle flashcard per conto loro, avviso «conta o è una prova» all'avvio dello studio
+js/guida.js             guida a passi su flashcard e revisioni, con il simulatore della prossima data
 js/selezione.js         selezione di più flashcard e azioni di gruppo
 js/ricco.js             editor di testo formattato e pulizia dell'HTML
 js/importa.js           import ed export (testo dell'app, Excel, CSV) e backup JSON (file dei materiali compresi)

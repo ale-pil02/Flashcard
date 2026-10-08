@@ -133,6 +133,10 @@ Viste.editor = {
                                 aria-checked="${Srs.valutazione(carta) == null}" title="Come se non l'avessi mai valutata: conta come carta nuova"><i class="pallino pallino-nuova"></i>Mai valutata</button>
                         </div>
                         <p class="nota" data-stato-carta>${ico('orologio')}${esc(Srs.descrivi(carta))} · ${plurale(carta.srs.ripetizioni || 0, 'risposta data', 'risposte date')}</p>
+                    </div>
+                    <div class="campo campo-ripasso">
+                        <span class="etichetta">Ripetizione spaziata <em>la cambi a mano: vale subito</em></span>
+                        <div class="griglia-ripasso" data-ripasso></div>
                     </div>`}
                 </div>
 
@@ -363,11 +367,50 @@ Viste.editor = {
                 { testo: 'Reimposta il progresso', icona: 'ruota', clic: () => {
                     Dati.reimpostaProgressi([carta]);
                     Ui.toast('Ora la carta risulta mai studiata');
-                    $('[data-stato-carta]', el).innerHTML = `${ico('orologio')}${esc(Srs.descrivi(carta))}`;
+                    $('[data-stato-carta]', el).innerHTML = statoCarta();
+                    disegnaRipasso();
                     $$('[data-valutazione]', el).forEach(b => { b.classList.remove('attivo'); b.setAttribute('aria-checked', 'false'); });
                 } },
             ]),
         });
+
+        // ---- Ripetizione spaziata a mano: N° Rep, ultimo ripasso, intervallo, prossima revisione (si salva subito) ----
+        const statoCarta = () => `${ico('orologio')}${esc(Srs.descrivi(carta))} · ${plurale(carta.srs.ripetizioni || 0, 'risposta data', 'risposte date')}`;
+        const disegnaRipasso = () => {
+            const box = $('[data-ripasso]', el);
+            if (!box) return;
+            const sr = Srs.normalizza(carta.srs);
+            const p = Srs.prossima(carta);
+            // Una carta mai valutata non ha date sue: prima si sceglie la valutazione
+            const senzaDate = Srs.valutazione(carta) == null && !sr.allineata;
+            const scarso = sr.ultimaValutazione === Srs.SCARSO;
+            const minimo = !scarso && sr.giorno ? chiaveGiorno(aggiungiGiorni(daChiaveGiorno(sr.giorno), 1)) : '';
+            const blocco = senzaDate ? 'disabled title="Mai valutata: scegli una valutazione qui sopra per darle delle date"' : '';
+            box.innerHTML = `
+                <label class="campo-mini"><span>N° Rep</span><input type="number" min="0" step="1" data-srs="rep" value="${sr.rep || 0}" title="Quante volte l'hai ripassata: cambiarlo non sposta le date"></label>
+                <label class="campo-mini"><span>Ultimo ripasso</span><input type="date" data-srs="giorno" value="${sr.giorno || ''}" max="${chiaveGiorno()}" ${blocco}></label>
+                <label class="campo-mini"><span>Intervallo (giorni)</span><input type="number" min="1" step="1" data-srs="intervallo" value="${sr.giorno ? sr.intervallo : ''}" ${blocco || (sr.giorno ? '' : 'disabled title="Prima serve l\'ultimo ripasso"')}></label>
+                <label class="campo-mini"><span>${scarso ? 'Da rifare dal' : 'Prossima revisione'}</span><input type="date" data-srs="prossima" value="${p ? chiaveGiorno(p) : ''}" ${minimo ? `min="${minimo}"` : ''} ${blocco}></label>`;
+        };
+        const ripasso = $('[data-ripasso]', el);
+        if (ripasso) {
+            disegnaRipasso();
+            ripasso.addEventListener('change', e => {
+                const campo = e.target.closest('[data-srs]');
+                if (!campo) return;
+                const k = campo.dataset.srs, v = campo.value;
+                const errore = k === 'giorno' && v > chiaveGiorno() ? "L'ultimo ripasso non può essere nel futuro"
+                    : k === 'intervallo' && !Srs.giorni(v) ? "L'intervallo è di almeno 1 giorno"
+                        : k === 'prossima' && (!v || (Srs.valutazione(carta) !== Srs.SCARSO && carta.srs.giorno && v <= carta.srs.giorno)) ? "La prossima revisione deve venire dopo l'ultimo ripasso"
+                            : '';
+                if (errore) { Ui.toast(errore, 'errore'); disegnaRipasso(); return; }
+                Dati.aggiornaSrs(carta.id, { [k]: k === 'giorno' ? v || null : v });
+                disegnaRipasso();
+                $('[data-stato-carta]', el).innerHTML = statoCarta();
+                App.aggiornaPiede();
+                Ui.toast('Salvato', 'successo', 1200);
+            });
+        }
 
         // Valutazione scelta a mano: si salva subito
         el.addEventListener('click', e => {
@@ -376,7 +419,8 @@ Viste.editor = {
             const v = b.dataset.valutazione === '' ? null : +b.dataset.valutazione;
             Dati.impostaValutazione([carta], v);
             $$('[data-valutazione]', el).forEach(x => { const si = x.dataset.valutazione === b.dataset.valutazione; x.classList.toggle('attivo', si); x.setAttribute('aria-checked', String(si)); });
-            $('[data-stato-carta]', el).innerHTML = `${ico('orologio')}${esc(Srs.descrivi(carta))} · ${plurale(carta.srs.ripetizioni || 0, 'risposta data', 'risposte date')}`;
+            $('[data-stato-carta]', el).innerHTML = statoCarta();
+            disegnaRipasso();
             Ui.toast(`Valutazione: ${v == null ? 'mai valutata' : Srs.VALUTAZIONI[v].nome}`, 'successo', 1800);
         });
 

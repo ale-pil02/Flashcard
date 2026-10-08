@@ -53,6 +53,28 @@ Viste.impostazioni = {
                     </label>
                 </section>
 
+                <section class="riquadro gruppo-impostazioni" id="impostazioni-revisioni">
+                    <h3>${ico('calendario-spunta')}Revisioni</h3>
+                    <div class="impostazione impostazione-sequenza">
+                        <span><b>Sequenza degli intervalli</b><small>Quanti giorni aspettare dopo la rep 1, 2, 3… se ripassi il giorno previsto (per set e flashcard).
+                            Dopo l'ultimo numero gli intervalli crescono allo stesso ritmo degli ultimi due. Ritardi, anticipi e valutazioni li adattano.</small></span>
+                        <div class="campo-sequenza">
+                            <input type="text" data-sequenza value="${esc(Srs.sequenza().join(', '))}" aria-label="Sequenza degli intervalli in giorni" spellcheck="false">
+                            <div class="azioni-riga">${Object.entries(Srs.SEQUENZE).map(([k, v]) =>
+                                `<button type="button" class="btn btn-fantasma btn-piccolo" data-preset-sequenza="${k}" title="${v.numeri.join(', ')}…">${v.nome}</button>`).join('')}</div>
+                        </div>
+                    </div>
+                    <p class="nota anteprima-sequenza" data-anteprima-sequenza></p>
+                    <div class="impostazione">
+                        <span><b>Applica alle revisioni che hai già</b><small>Ogni set e ogni flashcard prende l'intervallo della sequenza per il suo N° Rep, contato dal suo ultimo ripasso: le prossime revisioni si spostano. Si annulla da Modifiche recenti.</small></span>
+                        <button type="button" class="btn btn-secondario" data-azione="ricalcola">${ico('ruota')}Applica</button>
+                    </div>
+                    <div class="impostazione">
+                        <span><b>Come funzionano</b><small>Flashcard, valutazioni e revisioni spiegate passo per passo, con un simulatore</small></span>
+                        <button type="button" class="btn btn-secondario" data-azione="guida">${ico('lampadina')}Apri la guida</button>
+                    </div>
+                </section>
+
                 <section class="riquadro gruppo-impostazioni" id="impostazioni-ia">
                     <h3>${ico('scintille')}Assistente IA</h3>
                     <div class="impostazione">
@@ -152,6 +174,34 @@ Viste.impostazioni = {
         $('[data-ia-modello]', el).addEventListener('change', e => { Gemini.impostaModello(e.target.value); Ui.toast('Modello: ' + e.target.value, 'successo', 1500); });
         $('[data-ia-ragionamento]', el).addEventListener('change', e => { Gemini.impostaRagionamento(e.target.value); Ui.toast('Ragionamento: ' + Gemini.nomeRagionamento(), 'successo', 1500); });
 
+        // Sequenza degli intervalli: si salva quando è valida
+        const campoSequenza = $('[data-sequenza]', el);
+        const anteprimaSequenza = () => {
+            const box = $('[data-anteprima-sequenza]', el);
+            const seq = Srs.leggiSequenza(campoSequenza.value) || Srs.sequenza();
+            box.innerHTML = `Ripassando sempre puntuale: ${Srs.anteprimaSequenza(10, seq).map((g, i) => `<span title="dopo la rep ${i + 1}">${g}</span>`).join(' → ')}… giorni`;
+        };
+        const salvaSequenza = seq => {
+            Dati.salvaImpostazioni({ sequenzaRevisioni: seq });
+            campoSequenza.value = seq.join(', ');
+            anteprimaSequenza();
+            App.aggiornaPiede();
+            Ui.toast('Sequenza salvata: vale dal prossimo ripasso', 'successo', 2400);
+        };
+        campoSequenza.addEventListener('input', anteprimaSequenza);
+        campoSequenza.addEventListener('change', () => {
+            const seq = Srs.leggiSequenza(campoSequenza.value);
+            if (!seq) {
+                Ui.toast('Scrivi almeno due numeri interi crescenti, separati da virgole (es. 1, 2, 3, 5, 8)', 'errore', 5000);
+                campoSequenza.value = Srs.sequenza().join(', ');
+                anteprimaSequenza();
+                return;
+            }
+            salvaSequenza(seq);
+        });
+        $$('[data-preset-sequenza]', el).forEach(b => b.addEventListener('click', () => salvaSequenza(Srs.SEQUENZE[b.dataset.presetSequenza].numeri)));
+        anteprimaSequenza();
+
         // Salvataggio automatico dei campi
         $$('input[name], select[name]', el).forEach(campo => {
             campo.addEventListener('change', () => {
@@ -190,6 +240,16 @@ Viste.impostazioni = {
             importa: () => Importa.apriDialogo(),
             backup: async () => { await Importa.esportaBackup(); App.ridisegna(); },
             storia: () => Storia.elenco(),
+            guida: () => Guida.apri(),
+            ricalcola: async () => {
+                const ok = await Ui.conferma(`Ogni set e ogni flashcard già ripassati prendono l'intervallo della sequenza <b>${esc(Srs.sequenza().join(', '))}</b> per il loro N° Rep (per esempio N° Rep 5 → ${Srs.intervalloPerRep(5)} giorni), contato dall'ultimo ripasso. Le prossime revisioni si spostano; si annulla da Modifiche recenti.`,
+                    { titolo: 'Applicare la sequenza alle revisioni?', ok: 'Applica' });
+                if (!ok) return;
+                let n = null;
+                await Storia.esegui('Sequenza degli intervalli applicata alle revisioni', () => { n = Dati.ricalcolaIntervalli(); });
+                App.aggiornaPiede();
+                if (n) Ui.toast(`Ricalcolati ${plurale(n.argomenti, 'argomento', 'argomenti')} e ${plurale(n.carte, 'flashcard', 'flashcard')}`, 'successo', 3500);
+            },
             'mostra-chiave': () => { campoChiave.type = campoChiave.type === 'password' ? 'text' : 'password'; },
             'aggiorna-modelli': async b => {
                 Gemini.impostaChiave(campoChiave.value);

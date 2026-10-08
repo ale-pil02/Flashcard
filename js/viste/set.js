@@ -9,6 +9,7 @@ Viste.set = {
     nav: 'libreria',
     titolo: 'Set',
     filtri: { setId: null, testo: '', tag: '', stato: '' },
+    pannelloRevisioni: 'set',   // sezione Revisioni del set: 'set' (gli argomenti) o 'carte' (le flashcard per conto loro)
     chiuse: new Set(),   // carte con i rami chiusi
 
     mostra(el, params) {
@@ -128,9 +129,10 @@ Viste.set = {
 
         Materiali.monta($('[data-materiali-set]', el), s.id);
 
-        // ---- Revisioni: solo gli argomenti di questo set e dei suoi sotto-set ----
+        // ---- Revisioni: solo gli argomenti di questo set e dei suoi sotto-set, "Per set" o "Per flashcard" ----
         const boxRevisioni = $('[data-revisioni-set]', el);
         const argomentiDelSet = () => Dati.argomentiDiSet(s.id, { conSottoSet: true });
+        const vociCarte = () => Revisioni.carteDevianti({ setIds: [s.id, ...Dati.discendentiSet(s.id)] });
         const contoRevisioni = () => {
             const c = Revisioni.conteggi(argomentiDelSet());
             const n = c.scaduto + c.oggi;
@@ -138,24 +140,53 @@ Viste.set = {
         };
         const disegnaRevisioni = (fuoco = null) => {
             const lista = argomentiDelSet();
+            const voci = vociCarte();
+            const daFareCarte = voci.filter(Revisioni.cartaDaRipassare).length;
+            const perCarte = this.pannelloRevisioni === 'carte' && lista.length > 0;
             boxRevisioni.innerHTML = `
                 <section class="sezione sezione-revisioni${Ui.classeApribile('revisioni')}">
                     <div class="sezione-testa">
                         ${Ui.titoloApribile('revisioni', `Revisioni ${lista.length ? `<span class="conteggio">${lista.length}</span>` : ''}<span data-conto-revisioni>${contoRevisioni()}</span>`)}
                         <div class="azioni-riga">
                             <a class="btn btn-fantasma btn-piccolo" href="#/revisioni">${ico('calendario-spunta')}Tutte le revisioni</a>
-                            ${lista.length ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
+                            ${perCarte && daFareCarte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte-set">${ico('fulmine')}Ripassa quelle da fare (${daFareCarte})</button>` : ''}
+                            ${lista.length && !perCarte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="nuovo-argomento">${ico('piu')}Nuovo argomento</button>` : ''}
                         </div>
                     </div>
-                    <div class="sezione-corpo" data-tabella-revisioni></div>
+                    <div class="sezione-corpo">
+                        ${lista.length ? `
+                        <div class="pannelli-rev pannelli-rev-set" role="tablist" aria-label="Pannello delle revisioni">
+                            <button type="button" role="tab" class="pannello-rev${perCarte ? '' : ' attivo'}" data-pannello-rev="set" aria-selected="${!perCarte}">${ico('cartella')}Per set</button>
+                            <button type="button" role="tab" class="pannello-rev${perCarte ? ' attivo' : ''}" data-pannello-rev="carte" aria-selected="${perCarte}">
+                                ${ico('carte')}Per flashcard${voci.length ? `<span class="conteggio${daFareCarte ? ' rosso' : ''}">${daFareCarte || voci.length}</span>` : ''}</button>
+                        </div>` : ''}
+                        <div data-tabella-revisioni></div>
+                    </div>
                 </section>`;
+            const pannelli = $('.pannelli-rev-set', boxRevisioni);
+            if (pannelli) pannelli.addEventListener('click', e => {
+                const b = e.target.closest('[data-pannello-rev]');
+                if (!b || b.dataset.pannelloRev === (perCarte ? 'carte' : 'set')) return;
+                this.pannelloRevisioni = b.dataset.pannelloRev;
+                disegnaRevisioni();
+            });
+            const ripassaCarte = $('[data-azione="ripassa-carte-set"]', boxRevisioni);
+            if (ripassaCarte) ripassaCarte.addEventListener('click', () => Revisioni.avviaRipassoCarte(vociCarte().filter(Revisioni.cartaDaRipassare)));
+            if (perCarte) {
+                Revisioni.montaCarte($('[data-tabella-revisioni]', boxRevisioni), {
+                    voci: vociCarte,
+                    dopo: () => disegnaRevisioni(),
+                    vuoto: `<p class="nota nota-centrata">Tutte le flashcard di questo set vanno al passo con il set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo l'ultimo ripasso e mai valutate e quelle ripassate per conto loro.</p>`,
+                });
+                return;
+            }
             const tabella = Revisioni.monta($('[data-tabella-revisioni]', boxRevisioni), {
                 chiave: 'set:' + s.id,
                 argomenti: argomentiDelSet,
                 colonnaSet: sotto.length > 0,
                 nuovo: () => Revisioni.formNuovo({ setId: s.id }),
                 vuoto: `<button type="button" class="riquadro riquadro-tratteggiato" data-azione="nuovo-argomento">${ico('calendario-spunta')}
-                    <span>Aggiungi «${esc(s.nome)}» alle revisioni: segni quando lo ripassi e l'app ti dice quando rifarlo (dopo 1, 2, 4, 8… giorni)</span></button>`,
+                    <span>Aggiungi «${esc(s.nome)}» alle revisioni: segni quando lo ripassi e l'app ti dice quando rifarlo (dopo ${Srs.anteprimaSequenza(4).join(', ')}… giorni)</span></button>`,
                 dopo: () => { const box = $('[data-conto-revisioni]', boxRevisioni); if (box) box.innerHTML = contoRevisioni(); },
             });
             if (fuoco) tabella.disegna(fuoco);
