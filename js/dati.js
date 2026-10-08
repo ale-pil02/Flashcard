@@ -639,13 +639,13 @@ const Dati = (() => {
     function eliminaArgomento(id) { return Archivio.elimina('argomenti', id); }
 
     // "Ripassato": una ripetizione in più, e ultimo ripasso e intervallo secondo il giorno in cui lo fai (in anticipo, in
-    // ritardo o lo stesso giorno: js/srs.js, dopoRipasso)
+    // ritardo o lo stesso giorno) e, se in ritardo, secondo lo stato con cui esce (js/srs.js, dopoRipasso)
     function segnaRipasso(id, stato = '', giorno = chiaveGiorno()) {
         const a = argomento(id);
         if (!a) return null;
         const prima = { ripetizioni: a.ripetizioni || 0, ultimoRipasso: a.ultimoRipasso, intervallo: Revisioni.intervallo(a), stato: a.stato || '' };
         a.storico = [...(a.storico || []), { giorno, stato: stato || a.stato || '', prima }];
-        const dopo = Srs.dopoRipasso({ intervallo: prima.intervallo, giorno: a.ultimoRipasso }, giorno);
+        const dopo = Srs.dopoRipasso({ intervallo: prima.intervallo, giorno: a.ultimoRipasso }, giorno, { esito: Srs.esitoDaStato(stato || a.stato) });
         a.ripetizioni = prima.ripetizioni + 1;
         a.ultimoRipasso = dopo.giorno;
         a.intervallo = dopo.intervallo;

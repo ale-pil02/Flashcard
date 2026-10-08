@@ -202,11 +202,11 @@ const DatiProva = (() => {
             const L = date[N], I = Srs.intervalloPerRep(N);
             const buona = { ...base, stato: 'imparata', ultimaValutazione: caso === 'perfetto' ? 3 : 2, rep: N, giorno: giorno(L), intervallo: I, allineata: true, ripetizioni: N, ultimoRipasso: ts(L) };
             if (caso === 'ok' && N > 1) {
-                const x = Srs.dopoRipasso({ intervallo: Srs.intervalloPerRep(N - 1), giorno: giorno(date[N - 1]) }, giorno(L), { ok: true });
+                const x = Srs.dopoRipasso({ intervallo: Srs.intervalloPerRep(N - 1), giorno: giorno(date[N - 1]) }, giorno(L), { esito: 'ok' });
                 return { ...buona, stato: 'apprendimento', ultimaValutazione: 1, intervallo: x.intervallo, allineata: false, ripetizioni: N + 1 };
             }
             if (caso === 'scarso' && N > 1) {
-                return { ...base, stato: 'apprendimento', ultimaValutazione: 0, rep: N - 1, giorno: giorno(date[N - 1]), intervallo: Srs.passoIndietro(Srs.intervalloPerRep(N - 1)),
+                return { ...base, stato: 'apprendimento', ultimaValutazione: 0, rep: N - 1, giorno: giorno(date[N - 1]), intervallo: Srs.dopoScarso(Srs.intervalloPerRep(N - 1)),
                     daRifareDal: giorno(L), errori: 1, ripetizioni: N, ultimoRipasso: ts(L) };
             }
             if (caso === 'perconto' && L <= -1) {

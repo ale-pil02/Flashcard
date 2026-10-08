@@ -390,7 +390,8 @@ Viste.editor = {
                 <label class="campo-mini"><span>N° Rep</span><input type="number" min="0" step="1" data-srs="rep" value="${sr.rep || 0}" title="Quante volte l'hai ripassata: cambiandolo, l'intervallo torna quello della sequenza per quella rep"></label>
                 <label class="campo-mini"><span>Ultimo ripasso</span><input type="date" data-srs="giorno" value="${sr.giorno || ''}" max="${chiaveGiorno()}" ${blocco}></label>
                 <label class="campo-mini"><span>Intervallo (giorni)</span><input type="number" min="1" step="1" data-srs="intervallo" value="${sr.giorno ? sr.intervallo : ''}" ${blocco || (sr.giorno ? '' : 'disabled title="Prima serve l\'ultimo ripasso"')}></label>
-                <label class="campo-mini"><span>${scarso ? 'Da rifare dal' : 'Prossima revisione'}</span><input type="date" data-srs="prossima" value="${p ? chiaveGiorno(p) : ''}" ${minimo ? `min="${minimo}"` : ''} ${blocco}></label>`;
+                <label class="campo-mini"><span>${scarso ? 'Da rifare dal' : 'Prossima revisione'}</span><input type="date" data-srs="prossima" value="${p ? chiaveGiorno(p) : ''}" ${minimo ? `min="${minimo}"` : ''} ${blocco}></label>
+                ${(() => { const e = !senzaDate && Revisioni.esamePrima(carta.setId, p); return e ? `<p class="nota dopo-esame-nota">${ico('avviso')}La prossima revisione cade dopo l'esame «${esc(e.nome)}» del ${e.data.split('-').reverse().join('/')}.</p>` : ''; })()}`;
         };
         const ripasso = $('[data-ripasso]', el);
         if (ripasso) {

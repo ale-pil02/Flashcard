@@ -83,6 +83,7 @@ Viste.revisioni = {
                     <span class="avviso-rev avviso-oggi"><i></i><b>${c.oggi}</b> da fare oggi</span>
                     <span class="avviso-rev avviso-attesa"><i></i><b>${c.attesa}</b> in attesa</span>
                     ${c.mai ? `<span class="avviso-rev avviso-mai"><i></i><b>${c.mai}</b> ${carte ? 'mai ripassate' : 'mai ripassati'}</span>` : ''}
+                    ${!carte ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="piu-set" title="Scegli quali set ripassare e se tenerli in ordine o mescolare le carte">${ico('fulmine')}Ripassa più set</button>` : ''}
                     ${carte && daFareMostrate.length ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte"
                         title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il loro set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareMostrate.length})</button>` : ''}
                 </div>` : ''}
@@ -164,6 +165,7 @@ Viste.revisioni = {
             'uno-per-set': async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); },
             'ripassa-carte': () => Revisioni.avviaRipassoCarte(vociCarte().filter(v => Revisioni.sfasata(v) && Revisioni.cartaDaRipassare(v))),
             guida: () => Guida.apri(),
+            'piu-set': () => Revisioni.ripassaPiuSet({ materiaId: materiaScheda }),
             menu: b => Ui.menu(b, [
                 !carte && { testo: materiaScheda ? `Un argomento per ogni set di ${Dati.materia(materiaScheda).nome}` : 'Un argomento per ogni set', icona: 'cartella',
                     clic: async () => { if (await Revisioni.unoPerOgniSet(setDellaScheda())) ridisegna(); } },

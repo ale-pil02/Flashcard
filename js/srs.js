@@ -10,19 +10,22 @@
 //
 // Ripasso che conta, P = giorni passati dall'ultimo ripasso, I = intervallo previsto (dopoRipasso):
 // - il giorno previsto (P = I): I × r;
-// - in ritardo (P > I): I × r × I / P, da oggi: più hai aspettato, più la prossima si avvicina;
 // - in anticipo (P < I): la data prevista più la parte di intervallo "guadagnata", P / I di I × r: I + P × (r − 1) da
 //   oggi; la data va avanti, ma meno che con un ripasso puntuale;
+// - in ritardo (P > I) dipende da com'è andata (esito). Ricordare bene dopo più tempo del previsto dice che la memoria
+//   è più solida (come in Anki): Perfetto (o set Ottimo) P × r, cioè conta tutto il tempo passato; Buono (o set Buono)
+//   (I + ritardo / 2) × r, conta metà del ritardo. Se è andata così così (Ok, o set Ok, Scarso, Incompleto) nel
+//   frattempo hai dimenticato qualcosa: I × r × I / P, più hai aspettato più la prossima si avvicina;
 // - lo stesso giorno dell'ultimo ripasso (P = 0): N° Rep +1, intervallo e date restano.
 // Arrotondato ai giorni, minimo 1. La prima volta: il primo numero della sequenza (1 giorno).
 //
 // Quattro valutazioni: Scarso, Ok, Buono, Perfetto.
-// - Buono o Perfetto: la formula qui sopra; la carta è imparata.
+// - Buono o Perfetto: la formula qui sopra (differiscono solo in ritardo); la carta è imparata.
 // - Ok: la stessa formula con metà crescita (r → 1 + (r − 1) / 2), arrotondata per difetto così torna sempre un po'
 //   prima che con Buono (anche con gli intervalli piccoli), finché non le dai Buono o Perfetto.
-// - Scarso: N° Rep e ultimo ripasso restano, l'intervallo torna indietro di un passo nella sequenza (con il raddoppio si
-//   dimezza) e la carta è da ripassare subito (daRifareDal) finché non le dai almeno Ok. Quel ripasso la "recupera":
-//   N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da quello ridotto.
+// - Scarso: N° Rep e ultimo ripasso restano, l'intervallo scende a un terzo (dopo un errore servono intervalli corti
+//   per un po') e la carta è da ripassare subito (daRifareDal) finché non le dai almeno Ok. Quel ripasso la
+//   "recupera": N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da quello ridotto.
 // Nella sessione Ok e Scarso tornano in fondo alla coda finché non dai Buono o Perfetto (js/viste/studio.js); solo la
 // prima valutazione di una carta nella sessione muove N° Rep e date, quelle dopo (i ritorni in fondo) cambiano solo la
 // valutazione. Eccezione: se la prima era Scarso, la prima volta che arriva almeno a Ok la recupera.
@@ -86,12 +89,8 @@ const Srs = (() => {
         return seq[k + 1] / seq[k];
     }
 
-    // Un passo indietro: il tratto (seq[k], seq[k+1]] che finisce in I
-    function passoIndietro(I, seq = sequenza()) {
-        let k = 0;
-        while (k < seq.length - 2 && I > seq[k + 1]) k++;
-        return arrotonda(I / (seq[k + 1] / seq[k]));
-    }
+    // Dopo uno Scarso l'intervallo scende a un terzo
+    function dopoScarso(I) { return arrotonda(I / 3); }
 
     // L'intervallo dopo la rep n ripassando sempre puntuale: l'n-esimo numero della sequenza, poi a ritmo costante
     function intervalloPerRep(rep, seq = sequenza()) {
@@ -122,16 +121,26 @@ const Srs = (() => {
         return { tipo: scarto < 0 ? 'anticipo' : scarto > 0 ? 'ritardo' : 'puntuale', giorni: Math.abs(scarto), prevista };
     }
 
-    // Dopo un ripasso che conta: { intervallo, giorno } (giorno = l'ultimo ripasso, da cui si conta l'intervallo).
-    // ok = valutazione Ok: metà crescita
-    function dopoRipasso({ intervallo, giorno }, oggi = chiaveGiorno(), { ok = false, seq = sequenza() } = {}) {
+    // Com'è andato un ripasso, per la formula: 'perfetto' | 'buono' | 'ok' (carta Ok: metà crescita) | 'male' (set Ok,
+    // Scarso o Incompleto, o segnato senza giudizio: in ritardo accorcia)
+    const ESITI = ['perfetto', 'buono', 'ok', 'male'];
+    function esitoDaValutazione(v) { return v === PERFETTO ? 'perfetto' : v === OK ? 'ok' : 'buono'; }
+    function esitoDaStato(stato) { return stato === 'ottimo' ? 'perfetto' : stato === 'buono' ? 'buono' : 'male'; }
+
+    // Dopo un ripasso che conta: { intervallo, giorno } (giorno = l'ultimo ripasso, da cui si conta l'intervallo)
+    function dopoRipasso({ intervallo, giorno }, oggi = chiaveGiorno(), { esito = 'buono', seq = sequenza() } = {}) {
         if (!giorno) return { intervallo: seq[0], giorno: oggi };
         const I = giorni(intervallo) || seq[0];
         const P = giorniTra(daChiaveGiorno(giorno), daChiaveGiorno(oggi));
         if (P <= 0) return { intervallo: I, giorno };
+        const ok = esito === 'ok';
         let r = ritmo(I, seq);
         if (ok) r = 1 + (r - 1) / 2;
-        const nuovo = P < I ? I + P * (r - 1) : r * I * I / P;
+        let nuovo;
+        if (P <= I) nuovo = I + P * (r - 1);
+        else if (esito === 'perfetto') nuovo = P * r;
+        else if (esito === 'buono') nuovo = (I + (P - I) / 2) * r;
+        else nuovo = r * I * I / P;
         // Ok per difetto: con gli intervalli piccoli l'arrotondamento lo farebbe tornare insieme a Buono
         return { intervallo: ok ? limita(Math.floor(nuovo), 1, MAX_GIORNI) : arrotonda(nuovo), giorno: oggi };
     }
@@ -179,24 +188,27 @@ const Srs = (() => {
     function valuta(srs, valutazione, { date = true, ora = Date.now() } = {}) {
         const s = normalizza(srs);
         const oggi = chiaveGiorno(ora);
+        // Mai valutata (anche se riadeguata al set): è il primo incontro, si parte dal primo intervallo
+        const primaVolta = s.ultimaValutazione == null;
         s.ripetizioni += 1;
         s.ultimaValutazione = valutazione;
         s.ultimoRipasso = ora;
         s.stato = statoDa(valutazione);
         s.allineata = false;
         if (valutazione === SCARSO) {
-            // N° Rep e ultimo ripasso restano, l'intervallo torna indietro di un passo; da ripassare da oggi
+            // N° Rep e ultimo ripasso restano, l'intervallo scende a un terzo; da ripassare da oggi
             s.errori += 1;
-            if (date && s.giorno) s.intervallo = passoIndietro(intervalloDi(s.intervallo, s.rep));
+            if (date && s.giorno) s.intervallo = primaVolta ? sequenza()[0] : dopoScarso(intervalloDi(s.intervallo, s.rep));
             s.daRifareDal = oggi;
             return s;
         }
         const recupero = !!s.daRifareDal && !!s.giorno;
         s.daRifareDal = null;
         if (!date) return s;
+        if (primaVolta) { s.intervallo = sequenza()[0]; s.giorno = oggi; }
         // Recupero dopo uno Scarso: riparte dall'intervallo ridotto, contato da oggi
-        if (recupero) { s.intervallo = intervalloDi(s.intervallo, s.rep); s.giorno = oggi; }
-        else Object.assign(s, dopoRipasso({ intervallo: intervalloDi(s.intervallo, s.rep), giorno: s.giorno }, oggi, { ok: valutazione === OK }));
+        else if (recupero) { s.intervallo = intervalloDi(s.intervallo, s.rep); s.giorno = oggi; }
+        else Object.assign(s, dopoRipasso({ intervallo: intervalloDi(s.intervallo, s.rep), giorno: s.giorno }, oggi, { esito: esitoDaValutazione(valutazione) }));
         s.rep += 1;
         return s;
     }
@@ -264,8 +276,8 @@ const Srs = (() => {
 
     return {
         SCARSO, OK, BUONO, PERFETTO, VALUTAZIONI, SEQUENZE, SEQUENZA_PREDEFINITA, MAX_GIORNI,
-        sequenzaValida, leggiSequenza, sequenza, giorni, ritmo, passoIndietro, intervalloPerRep, anteprimaSequenza,
-        intervalloRaddoppio, intervalloDi, situazione, dopoRipasso,
+        sequenzaValida, leggiSequenza, sequenza, giorni, ritmo, dopoScarso, intervalloPerRep, anteprimaSequenza,
+        intervalloRaddoppio, intervalloDi, situazione, dopoRipasso, ESITI, esitoDaValutazione, esitoDaStato,
         statoIniziale, normalizza, valuta, conValutazione, prossima, anteprima, durata,
         stato, valutazione, categoria, daRipassare, descrivi,
     };

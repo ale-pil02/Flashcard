@@ -32,10 +32,14 @@ flashcard (anche ad albero), materiali, esami del piano di studio, impostazioni 
   sessione finché non diventano Buono o Perfetto; l'utente può terminare quando vuole. Ripetizione spaziata uguale per
   carte e revisioni: ognuna ha N° Rep, ultimo ripasso e intervallo; prossima = ultimo ripasso +
   intervallo. Gli intervalli seguono la sequenza delle impostazioni (predefinita Fibonacci: dopo la rep 1, 2, 3, 4, 5
-  si aspettano 1, 2, 3, 5, 8 giorni…). Ripasso in ritardo: intervallo × ritmo × previsto / passati (più ritardo, più
-  vicina la prossima); in anticipo: la data prevista più la parte di intervallo "guadagnata"; lo stesso giorno: N° Rep +1
-  e date ferme. Ok fa crescere l'intervallo la metà; Scarso → N° Rep fermo, intervallo indietro di un passo, carta da
-  ripassare subito finché non arriva almeno a Ok. Se lo studio parte fuori dal giorno previsto l'utente sceglie se conta
+  si aspettano 1, 2, 3, 5, 8 giorni…). Ripasso in ritardo: dipende da com'è andata. Perfetto (set Ottimo) conta tutto il
+  tempo passato, Buono metà del ritardo (ricordare dopo più tempo dice che la memoria è solida); Ok (set Ok, Scarso o
+  Incompleto) accorcia: intervallo × ritmo × previsto / passati. In anticipo: la data prevista più la parte di intervallo
+  "guadagnata"; lo stesso giorno: N° Rep +1 e date ferme. Ok fa crescere l'intervallo la metà; Scarso → N° Rep fermo,
+  intervallo a un terzo, carta da ripassare subito finché non arriva almeno a Ok. Una carta mai valutata parte sempre dal
+  primo intervallo. Nel ripasso completo del set le carte Buono o Perfetto prendono la data del set, tranne quelle che
+  erano nuove o Scarso. Se una revisione cade dopo l'esame della materia l'app lo segnala. «Ripassa più set» studia più
+  set insieme, in ordine o con le carte mescolate. Se lo studio parte fuori dal giorno previsto l'utente sceglie se conta
   o se è un ripasso di prova (non cambia niente). La valutazione si cambia anche a mano (modifica_carte, valutazione);
   N° Rep, ultimo ripasso, intervallo_giorni e prossima_revisione anche (cambiare solo il N° Rep riporta l'intervallo a
   quello della sequenza per quella rep).

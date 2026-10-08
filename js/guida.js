@@ -7,10 +7,11 @@ const Guida = (() => {
     const giorniTesto = n => plurale(n, 'giorno', 'giorni');
 
     // Un ripasso fatto dopo "passati" giorni con l'intervallo previsto I: { intervallo, dopo } (dopo = giorni da quel ripasso)
-    function prova(I, passati, ok = false) {
+    // esito: 'perfetto' | 'buono' | 'ok' (js/srs.js, dopoRipasso)
+    function prova(I, passati, esito = 'buono') {
         const oggi = chiaveGiorno();
         const ultimo = chiaveGiorno(aggiungiGiorni(daChiaveGiorno(oggi), -passati));
-        const x = Srs.dopoRipasso({ intervallo: I, giorno: ultimo }, oggi, { ok });
+        const x = Srs.dopoRipasso({ intervallo: I, giorno: ultimo }, oggi, { esito });
         return { intervallo: x.intervallo, dopo: giorniTra(daChiaveGiorno(oggi), aggiungiGiorni(daChiaveGiorno(x.giorno), x.intervallo)) };
     }
 
@@ -38,12 +39,14 @@ const Guida = (() => {
                 const I = Srs.intervalloPerRep(5);
                 const testi = {
                     [Srs.SCARSO]: () => `<b>Scarso</b>: torna in fondo alla sessione e resta da ripassare finché non le dai almeno Ok. Il N° Rep non sale
-                        e l'intervallo torna indietro di un passo: da ${giorniTesto(I)} a <b>${giorniTesto(Srs.passoIndietro(I))}</b>. Quando la recuperi, riparte da lì.`,
+                        e l'intervallo scende a un terzo: da ${giorniTesto(I)} a <b>${giorniTesto(Srs.dopoScarso(I))}</b>. Quando la recuperi, riparte da lì.`,
                     [Srs.OK]: () => `<b>Ok</b>: la sapevi così così. Torna in fondo alla sessione, il N° Rep sale e l'intervallo cresce la metà:
-                        <b>${giorniTesto(prova(I, I, true).intervallo)}</b> invece di ${giorniTesto(prova(I, I).intervallo)}. Così torna un po' prima, finché non le dai Buono o Perfetto.`,
-                    [Srs.BUONO]: () => `<b>Buono</b>: fatta. Il N° Rep sale e l'intervallo segue la sequenza: da ${giorniTesto(I)} a <b>${giorniTesto(prova(I, I).intervallo)}</b>.`,
-                    [Srs.PERFETTO]: () => `<b>Perfetto</b>: come Buono per le date (<b>${giorniTesto(prova(I, I).intervallo)}</b>). In più conta per lo stato del set:
-                        con oltre l'80% di carte Perfetto il set è «Ottimo».`,
+                        <b>${giorniTesto(prova(I, I, 'ok').intervallo)}</b> invece di ${giorniTesto(prova(I, I).intervallo)}. Così torna un po' prima, finché non le dai Buono o Perfetto.`,
+                    [Srs.BUONO]: () => `<b>Buono</b>: fatta. Il N° Rep sale e l'intervallo segue la sequenza: da ${giorniTesto(I)} a <b>${giorniTesto(prova(I, I).intervallo)}</b>.
+                        Se la ripassi in ritardo e la sai ancora, conta metà del ritardo: con 4 giorni di ritardo, <b>${giorniTesto(prova(I, I + 4).intervallo)}</b>.`,
+                    [Srs.PERFETTO]: () => `<b>Perfetto</b>: puntuale come Buono (<b>${giorniTesto(prova(I, I, 'perfetto').intervallo)}</b>). In ritardo conta tutto il tempo passato,
+                        perché ricordare dopo più tempo dice che la memoria è più solida: con 4 giorni di ritardo, <b>${giorniTesto(prova(I, I + 4, 'perfetto').intervallo)}</b>.
+                        Conta anche per lo stato del set: con oltre l'80% di carte Perfetto il set è «Ottimo».`,
                 };
                 box.addEventListener('click', e => {
                     const b = e.target.closest('[data-guida-valuta]');
@@ -77,7 +80,7 @@ const Guida = (() => {
                     <label class="campo-mini"><span>Hai fatto la rep</span>
                         <select data-sim-rep>${Array.from({ length: 8 }, (_, i) => `<option value="${i + 1}" ${i === 3 ? 'selected' : ''}>${i + 1}</option>`).join('')}</select></label>
                     <label class="campo-mini"><span>Valutazione</span>
-                        <select data-sim-ok><option value="0">Buono o Perfetto</option><option value="1">Ok</option></select></label>
+                        <select data-sim-ok><option value="buono">Buono</option><option value="perfetto">Perfetto</option><option value="ok">Ok</option></select></label>
                     <label class="campo-mini guida-cursore"><span>Ripassi dopo <b data-sim-giorni></b></span>
                         <input type="range" min="0" step="1" data-sim-passati></label>
                 </div>
@@ -89,8 +92,8 @@ const Guida = (() => {
                     const I = Srs.intervalloPerRep(+rep.value);
                     if (nuovoMax) { passati.max = String(I * 3); passati.value = String(I); }
                     const P = +passati.value;
-                    const x = prova(I, P, ok.value === '1');
-                    const puntuale = prova(I, I, ok.value === '1');
+                    const x = prova(I, P, ok.value);
+                    const puntuale = prova(I, I, ok.value);
                     const scarto = P - I;
                     $('[data-sim-giorni]', box).textContent = giorniTesto(P);
                     const situazione = P === 0 ? 'Lo stesso giorno della rep precedente'
@@ -98,7 +101,9 @@ const Guida = (() => {
                     const spiegazione = P === 0 ? 'Il N° Rep sale (se scegli che conta), ma la data non si muove: un ripasso in più lo stesso giorno non allunga la memoria.'
                         : scarto === 0 ? 'L\'intervallo segue la sequenza.'
                             : scarto < 0 ? `La data va avanti, ma meno che ripassando puntuale: il ripasso conta solo per la parte di intervallo che hai aspettato (${P} su ${I}).`
-                                : 'Più hai aspettato, più la prossima si avvicina: nel frattempo hai dimenticato qualcosa. Se poi torni puntuale, l\'intervallo ricomincia a crescere.';
+                                : ok.value === 'ok' ? 'La sapevi così così: più hai aspettato, più la prossima si avvicina, perché nel frattempo hai dimenticato qualcosa.'
+                                    : ok.value === 'perfetto' ? 'Te la ricordavi benissimo anche dopo più tempo del previsto: conta tutto il tempo passato e l\'intervallo si allunga.'
+                                        : 'Te la ricordavi anche dopo più tempo del previsto: conta metà del ritardo e l\'intervallo si allunga un po\'.';
                     $('[data-sim-esito]', box).innerHTML = `
                         <p><b>${situazione}</b> → prossima revisione tra <b>${giorniTesto(x.dopo)}</b>${scarto !== 0 && P ? ` (ripassando il giorno previsto avresti aspettato ${giorniTesto(puntuale.dopo)})` : ''}.</p>
                         <p class="nota">${spiegazione}</p>`;
@@ -163,8 +168,9 @@ const Guida = (() => {
             html: () => `
                 <ol class="guida-passi">
                     <li>Apri <b>Revisioni</b> → scheda <b>Da ripassare</b>.</li>
-                    <li>Per ogni set premi ${ico('fulmine')} e valuta le carte con sincerità.</li>
-                    <li>Passa a <b>Per flashcard</b> e premi <b>Ripassa quelle da fare</b>.</li>
+                    <li>Premi <b>Ripassa più set</b>: quelli da ripassare sono già scelti; tienili mescolati, aiuta a distinguere argomenti simili.
+                        Oppure ripassa un set alla volta con ${ico('fulmine')}. Prima di girare la carta prova a dire la risposta, poi valuta con sincerità.</li>
+                    <li>Passa a <b>Per flashcard</b> → <b>Solo sfasate</b> e premi <b>Ripassa le sfasate da fare</b>.</li>
                     <li>Ogni tanto: Impostazioni → <b>Backup</b>.</li>
                 </ol>
                 <p class="nota">Puoi riaprire questa guida da Revisioni o da Impostazioni. Con i dati di prova (Impostazioni → Dati di prova) c'è anche

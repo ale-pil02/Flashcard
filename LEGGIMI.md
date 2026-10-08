@@ -205,9 +205,11 @@ con le flashcard non riceve una riga del set in più.
 quella che c'è già: con il nome del set o l'unica del set). Quando finisci una sessione, o la termini con ✕ / Esc:
 - per ogni set studiato, separatamente (anche se ne studi più insieme, e i sotto-set per conto loro):
   se hai valutato **tutte** le carte del set è un ripasso: N° Rep +1, Ultimo ripasso = oggi e il nuovo intervallo
-  (in anticipo o in ritardo si adatta; un altro ripasso lo stesso giorno fa solo N° Rep +1 e la data resta). Le carte
-  valutate **Buono** o **Perfetto** prendono ultimo ripasso e intervallo del set e restano al suo passo; le **Ok** e
-  **Scarso** seguono le loro regole e finiscono nel pannello «Per flashcard». Se ne hai valutate solo alcune, la fine
+  (in anticipo o in ritardo si adatta, in ritardo secondo lo stato con cui esce il set; un altro ripasso lo stesso
+  giorno fa solo N° Rep +1 e la data resta). Le carte valutate **Buono** o **Perfetto** prendono ultimo ripasso e
+  intervallo del set e restano al suo passo, tranne quelle che all'inizio della sessione erano **nuove** o **Scarso**
+  (dopo un primo incontro o un errore l'intervallo lungo del set sarebbe troppo); quelle, come le **Ok** e **Scarso**,
+  seguono le loro regole e finiscono nel pannello «Per flashcard». Se ne hai valutate solo alcune, la fine
   della sessione lo dice e c'è il pulsante **Segna come ripasso**;
 - lo **stato** viene dalle valutazioni delle carte del set (i dettagli nascosti non contano): basta una carta
   Scarso → Scarso; altrimenti una Ok → Ok; altrimenti più dell'80% Perfetto → Ottimo; altrimenti Buono. Se c'è
@@ -223,12 +225,24 @@ valutate) non chiede niente: è un ripasso vero. Le righe senza flashcard hanno 
 N° Rep +1, Ultimo ripasso = oggi e il nuovo intervallo; per le righe dei set lo stesso è nel menu ⋯ (*Segna il
 ripasso a mano…*).
 
-**Conta o è una prova?** Quando avvii uno studio (⚡ del set o della carta, *Ripassa quelle da fare*, Personalizza,
-*Studia* del piano…) e un set o delle carte non sono nel giorno previsto (in anticipo, in ritardo o già ripassati
-oggi), l'app lo dice, con la data che avrebbe la prossima revisione, e chiede: **Conta come ripasso** oppure **Ripasso
-di prova**. Il ripasso di prova non cambia niente, né per il set né per le carte (valutazioni, N° Rep, date, stato);
+**Ripassa più set** (sezione Revisioni, pannello *Per set*, e Home): scegli quali set ripassare (quelli da ripassare
+oggi sono già spuntati) e se le carte vanno **in ordine**, un set dopo l'altro, o **mescolate**: le carte dei set si
+alternano lungo tutta la sessione (in proporzione, anche se i set hanno grandezze diverse), mentre dentro ogni set
+l'ordine e la cascata restano. Alternare argomenti simili aiuta a distinguerli. Ogni set di cui valuti tutte le carte
+conta come ripasso del set.
+
+**Conta o è una prova?** Quando avvii uno studio e non è il giorno previsto (in anticipo, in ritardo o già ripassato
+oggi), l'app lo dice e chiede: **Conta come ripasso** oppure **Ripasso di prova**. Se la sessione è il ripasso
+completo di uno o più set chiede solo per i set: le loro carte fuori giorno seguono le loro regole senza domande. Nelle
+sessioni per singole carte (⚡ della carta, *Ripassa le sfasate da fare*, *Solo quelle*) chiede per le carte. La
+finestra mostra per ogni set la linea del tempo (ultimo ripasso, data prevista, oggi) e, se è in ritardo, la prossima
+revisione per ogni esito: Ottimo, Buono, oppure Ok, Scarso o incompleto. Il ripasso di prova non cambia niente, né per il set né per le carte (valutazioni, N° Rep, date, stato);
 tempo e risposte vanno lo stesso nelle statistiche. Il giorno previsto non chiede niente. Le modifiche a mano valgono
 sempre.
+
+**Dopo l'esame.** Se la prossima revisione di un set o di una carta cade dopo il prossimo esame della sua materia
+(Piano di studio), accanto alla data compare «dopo l'esame», e lo stesso nella pagina della carta, a fine sessione e
+nella finestra qui sopra. L'app non sposta la data: decidi tu se anticiparla.
 I ripassi si annullano dall'avviso, dal menu ⋯ della riga (*Annulla l'ultimo ripasso*) o da Modifiche recenti;
 nel menu c'è anche la cronologia dei ripassi.
 
@@ -386,11 +400,15 @@ in quel punto (per I = 8 con Fibonacci, 13/8):
 | Quando ripassi | Nuovo intervallo (da oggi) | Esempio: I = 8 giorni, Fibonacci |
 |---|---|---|
 | Il giorno previsto (P = I) | I × r | 13 |
-| In ritardo (P > I) | I × r × I / P: più hai aspettato, più la prossima si avvicina | 4 giorni di ritardo → 9 |
+| In ritardo, Perfetto (set Ottimo) | P × r: conta tutto il tempo passato, perché ricordare dopo più tempo dice che la memoria è solida | 4 giorni di ritardo → 20 |
+| In ritardo, Buono (set Buono) | (I + ritardo / 2) × r: conta metà del ritardo | 4 giorni di ritardo → 16 |
+| In ritardo, Ok (set Ok, Scarso o Incompleto) | I × r × I / P: più hai aspettato, più la prossima si avvicina | 4 giorni di ritardo → 7 per una carta Ok (metà crescita, per difetto), 9 per un set Ok |
 | In anticipo (P < I) | I + P × (r − 1): la data prevista più la parte di intervallo "guadagnata" | 4 giorni di anticipo → 11 |
 | Lo stesso giorno di un altro ripasso | resta I, e la data non cambia (N° Rep +1) | — |
 
-Arrotondato ai giorni, minimo 1. Se poi torni puntuale, l'intervallo riprende a crescere da dove si trova.
+Arrotondato ai giorni, minimo 1. Se poi torni puntuale, l'intervallo riprende a crescere da dove si trova. Per il
+ritardo vale l'esempio di Anki: un richiamo riuscito dopo più tempo rafforza di più, mentre se è andata così così nel
+frattempo hai dimenticato qualcosa. Una carta mai valutata (anche riadeguata al set) parte sempre dal primo intervallo.
 
 - Valutazioni: **Scarso**, **Ok**, **Buono**, **Perfetto**.
 - **Buono** o **Perfetto**: N° Rep +1, ultimo ripasso = oggi, intervallo con la formula. La carta è imparata e nella
@@ -398,8 +416,8 @@ Arrotondato ai giorni, minimo 1. Se poi torni puntuale, l'intervallo riprende a 
 - **Ok**: come sopra ma con metà crescita (r → 1 + (r − 1) / 2, arrotondato per difetto: da 8 giorni a 10 invece di 13;
   da 2 a 2 invece di 3), così la carta torna sempre un po' prima finché non le dai Buono o Perfetto. Nella sessione torna in fondo, per il set resta tra le carte «da
   sistemare» e porta lo stato del set a Ok.
-- **Scarso**: N° Rep e ultimo ripasso restano com'erano, l'intervallo **torna indietro di un passo** nella sequenza (da
-  8 a 5; con il Raddoppio si dimezza) e la carta è **da ripassare subito** (da oggi; i giorni dopo risulta in ritardo)
+- **Scarso**: N° Rep e ultimo ripasso restano com'erano, l'intervallo **scende a un terzo** (da 34 giorni a 11, da 8
+  a 3: dopo un errore servono intervalli corti per un po') e la carta è **da ripassare subito** (da oggi; i giorni dopo risulta in ritardo)
   finché non le dai almeno Ok. Quel ripasso la recupera: N° Rep +1, ultimo ripasso = oggi e l'intervallo riparte da
   quello ridotto.
 - **Mai valutata, in un set già ripassato** (per esempio aggiunta dopo): come una Scarso, è da ripassare subito,
