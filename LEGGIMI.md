@@ -260,6 +260,14 @@ cambiate a mano). Si modificano come le righe (valutazione, N° Rep, ultimo ripa
 quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
 prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
 valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
+**Carte in più mazzi.** Una flashcard sta sempre in un solo set, ma può stare in più mazzi (argomenti) dello stesso
+set: la riga di tutto il set e quelli con alcune flashcard. Ha una sola data, quindi **segue un mazzo solo**: quello
+scelto con *Riadegua…*, se no il primo mazzo con alcune flashcard che la contiene (già ripassato), se no la riga del set.
+Si allinea solo al mazzo che segue, e *Solo sfasate* guarda lui. La colonna *Rispetto al set* lo nomina («2 giorni
+prima di «Mazzo A»») e sotto, più piccolo, dice come sta rispetto agli altri mazzi (*anche in «Bowlby» (tutto il set):
+al passo*). In questi casi il pulsante diventa **Riadegua…** e fa scegliere il mazzo: la carta prende la sua data e da
+lì in poi segue lui (`srs.segue`). Quando scegli le flashcard di un mazzo, l'app avvisa se alcune sono già in un altro
+mazzo con alcune carte.
 - Tutte le celle si modificano sul posto, come in Notion; un clic sull'intestazione ordina la colonna (crescente →
   decrescente → ordine di partenza), anche nel pannello *Per flashcard*.
 - **Studio libero** (pannello *Per flashcard*, nella sezione Revisioni e nella pagina di ogni set): per quando hai un
@@ -281,7 +289,7 @@ valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non camb
 - **Sezione Revisioni** (nel menu, con il numero di quelli da fare, flashcard comprese): pannelli *Per set* e
   *Per flashcard*, schede *Tutte*, una per materia e *Da ripassare*. È l'unico posto dove si cambia il set di una
   riga; dal menu ⋯ *Un argomento per ogni set* crea in un colpo le righe dei set che non ne hanno.
-- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per argomento* e
+- **Nella pagina di un set** ci sono solo gli argomenti di quel set e dei suoi sotto-set, con i pannelli *Per mazzo* e
   *Per flashcard*: lì si modificano, ma non si vedono né si toccano quelli degli altri set.
 - **Come funziona** (in alto nella sezione Revisioni, o Impostazioni → Revisioni) apre una guida a passi su
   flashcard, valutazioni e revisioni, con un simulatore della prossima data (`js/guida.js`).
@@ -377,6 +385,12 @@ dalla domanda generale su un ramo a quelle sui singoli concetti, fino ai dettagl
 - **Nello studio**, in ordine del set si va sempre dalla madre alle figlie. Con lo *studio a
   cascata* attivo, una domanda figlia mai vista compare solo dopo che hai imparato la madre;
   appena succede, le figlie arrivano subito dopo nella stessa sessione.
+- **Sorelle mescolate** (Impostazioni → Studio → *Ordine delle carte*: *Ordine del set, sorelle mescolate*): la madre
+  resta prima delle sue figlie e di tutto il suo ramo, ma le domande con la stessa madre (es. i sottorami) escono in
+  ordine casuale: 4, poi il suo ramo, poi 1, poi 3… I set restano uno dopo l'altro (o alternati, con *Ripassa più set*
+  mescolati). Vale anche per la singola sessione: nella finestra di avvio c'è la casella **Mescola le domande
+  sorelle**, spuntata se l'impostazione è quella; c'è quando la sessione va nell'ordine del set, quindi anche nei
+  ripassi delle Revisioni e nello Studio libero *Come nei set*.
 - **All'import** l'albero viene dal file: nel testo dell'app dalle tabulazioni prima di `D:`, nell'Excel
   dell'app dalla colonna *Livello*.
 - **Nascondi dettagli** (pagina del set, oppure Impostazioni → Studio → *Carte di dettaglio*): le carte

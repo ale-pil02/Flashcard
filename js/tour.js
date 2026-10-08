@@ -122,7 +122,7 @@ const Tour = (() => {
             rotta: () => { const s = setDi('Capitolo 3 – Sviluppo delle emozioni'); return s ? '/set/' + s.id : '/libreria'; },
             prima: () => Object.assign(Viste.set, { pannelloRevisioni: 'carte', soloSfasate: false }),
             trova: () => $('.sezione-revisioni'),
-            testo: () => `<p>Ogni set ha la sua sezione Revisioni, con <b>Per argomento</b> e <b>Per flashcard</b> (anche qui c'è «Solo sfasate»): vedi e
+            testo: () => `<p>Ogni set ha la sua sezione Revisioni, con <b>Per mazzo</b> e <b>Per flashcard</b> (anche qui c'è «Solo sfasate»): vedi e
                 cambi solo le righe e le carte di questo set e dei suoi sotto-set.</p>`,
         },
         {

@@ -123,12 +123,20 @@ const Revisioni = (() => {
 
     function maiValutata(v) { return Srs.stato(v.carta) === 'nuova'; }
 
-    // L'argomento già ripassato almeno una volta a cui la carta appartiene: prima quelli con alcune carte, poi la riga
-    // del set
+    // I mazzi (argomenti con le flashcard) già ripassati almeno una volta che contengono la carta: la riga del set e
+    // quelli con alcune carte. Una carta ha una sola data, quindi ne segue uno solo (argomentoDi)
+    function mazziDi(c) {
+        if (!c) return [];
+        return Dati.argomentiDiSet(c.setId).filter(a => automatico(a) && a.ultimoRipasso && (a.ripetizioni || 0) > 0
+            && (!Array.isArray(a.carte) || a.carte.includes(c.id)));
+    }
+
+    // Il mazzo che la carta segue (si allinea a lui quando lo ripassi): quello scelto con "Riadegua" (c.srs.segue), se
+    // no il primo con alcune carte che la contiene, se no la riga del set
     function argomentoDi(c) {
-        if (!c) return null;
-        const righe = Dati.argomentiDiSet(c.setId).filter(a => automatico(a) && a.ultimoRipasso && (a.ripetizioni || 0) > 0);
-        return righe.find(a => Array.isArray(a.carte) && a.carte.includes(c.id)) || righe.find(a => !Array.isArray(a.carte)) || null;
+        const mazzi = mazziDi(c);
+        const scelto = c && c.srs && c.srs.segue && mazzi.find(a => a.id === c.srs.segue);
+        return scelto || mazzi.find(a => Array.isArray(a.carte)) || mazzi.find(a => !Array.isArray(a.carte)) || null;
     }
 
     // Carta mai valutata di un set già ripassato: da ripassare dal giorno in cui è entrata nel set, o dall'ultimo
@@ -406,7 +414,8 @@ const Revisioni = (() => {
     // A ogni avvio dello studio chiede se è un ripasso effettivo o di prova (che non cambia niente), e dice com'è messo
     // rispetto ai giorni previsti: i set fuori giorno con la linea del tempo e la prossima revisione per ogni esito,
     // quelli puntuali o alla prima volta in breve; nelle sessioni di carte quante sono fuori giorno.
-    // Restituisce 'conta' (effettivo), 'prova' o null (annullato)
+    // opzioni.sorelle = { attivo }: mostra la casella "Mescola le domande sorelle" (per questa sessione).
+    // Restituisce { scelta: 'conta' (effettivo) | 'prova', sorelle: bool } o null (annullato)
     function chiediSeConta(carte, opzioni = {}) {
         const { argomenti, flashcard, conti } = situazioniAvvio(carte, opzioni);
         const fuori = argomenti.filter(fuoriGiornoTipo);
@@ -459,6 +468,8 @@ const Revisioni = (() => {
                     ${bloccoInPari}
                     ${bloccoCarte}
                     ${altreCarte}
+                    ${opzioni.sorelle ? `<label class="conta-sorelle"><input type="checkbox" data-sorelle ${opzioni.sorelle.attivo ? 'checked' : ''}>
+                        <span><b>${ico('mescola')}Mescola le domande sorelle</b><small>La madre resta prima delle sue figlie, ma le domande allo stesso livello (es. i sottorami) escono in ordine casuale</small></span></label>` : ''}
                     <div class="conta-scelte">
                         <button type="button" class="conta-scelta conta-scelta-primaria" data-scelta="conta" autofocus>
                             <span class="conta-scelta-icona">${ico('spunta')}</span>
@@ -473,7 +484,8 @@ const Revisioni = (() => {
                 alApri: (el, m) => el.addEventListener('click', e => {
                     const b = e.target.closest('[data-scelta]');
                     if (!b) return;
-                    scelta = b.dataset.scelta;
+                    const casella = $('[data-sorelle]', el);
+                    scelta = { scelta: b.dataset.scelta, sorelle: !!(casella && casella.checked) };
                     m.chiudi();
                 }),
                 alChiudere: () => risolvi(scelta),
@@ -558,16 +570,24 @@ const Revisioni = (() => {
     // Come sta una carta rispetto al suo argomento (il set, già ripassato almeno una volta):
     // { tipo, giorni, testo } con tipo 'senza-set' (set mai ripassato) | 'passo' (stessa prossima revisione) |
     // 'mai' (mai valutata) | 'scarso' (da rifare) | 'prima' | 'dopo' (la sua prossima revisione cade N giorni prima o dopo)
+    // Se la carta sta in più mazzi, altri = come sta rispetto a quelli che non segue: [{ a, giorni, testo }]
     function sfasatura(c, a = argomentoDi(c)) {
-        if (!a) return { tipo: 'senza-set', giorni: 0, testo: 'Set mai ripassato' };
+        if (!a) return { tipo: 'senza-set', giorni: 0, testo: 'Set mai ripassato', altri: [] };
         const s = c.srs || {};
-        if (Srs.valutazione(c) == null && !s.allineata) return { tipo: 'mai', giorni: 0, testo: 'Mai valutata' };
+        if (Srs.valutazione(c) == null && !s.allineata) return { tipo: 'mai', giorni: 0, testo: 'Mai valutata', altri: [] };
         const p = Srs.prossima(c);
-        const g = p ? giorniTra(prossima(a), p) : 0;
-        const quanto = g ? `${plurale(Math.abs(g), 'giorno', 'giorni')} ${g < 0 ? 'prima del' : 'dopo il'} set` : '';
-        if (s.ultimaValutazione === Srs.SCARSO) return { tipo: 'scarso', giorni: Math.abs(g), testo: `Scarso: da rifare${quanto ? ` · ${quanto}` : ''}` };
-        if (!g) return { tipo: 'passo', giorni: 0, testo: 'Al passo con il set' };
-        return { tipo: g < 0 ? 'prima' : 'dopo', giorni: Math.abs(g), testo: `${quanto}${s.ultimaValutazione === Srs.OK ? ' (Ok)' : ''}` };
+        const scarto = x => (p ? giorniTra(prossima(x), p) : 0);
+        const setIntero = !Array.isArray(a.carte);
+        const nome = x => `«${x.nome || nomeSet(x.setId)}»`;
+        const g = scarto(a);
+        const quanto = g ? `${plurale(Math.abs(g), 'giorno', 'giorni')} ${g < 0 ? (setIntero ? 'prima del set' : `prima di ${nome(a)}`) : (setIntero ? 'dopo il set' : `dopo ${nome(a)}`)}` : '';
+        const altri = mazziDi(c).filter(x => x !== a).map(x => {
+            const d = scarto(x);
+            return { a: x, giorni: d, testo: `anche in ${nome(x)}${Array.isArray(x.carte) ? '' : ' (tutto il set)'}: ${d ? `${plurale(Math.abs(d), 'giorno', 'giorni')} ${d < 0 ? 'prima' : 'dopo'}` : 'al passo'}` };
+        });
+        if (s.ultimaValutazione === Srs.SCARSO) return { tipo: 'scarso', giorni: Math.abs(g), testo: `Scarso: da rifare${quanto ? ` · ${quanto}` : ''}`, altri };
+        if (!g) return { tipo: 'passo', giorni: 0, testo: setIntero ? 'Al passo con il set' : `Al passo con ${nome(a)}`, altri };
+        return { tipo: g < 0 ? 'prima' : 'dopo', giorni: Math.abs(g), testo: `${quanto}${s.ultimaValutazione === Srs.OK ? ' (Ok)' : ''}`, altri };
     }
 
     // Una voce del pannello delle flashcard: { carta, argomento, ripetizioni, intervallo, ultimoRipasso, sfasatura }
@@ -1053,13 +1073,29 @@ const Revisioni = (() => {
     // Dentro box: "Tutte le flashcard del set" (anche quelle che aggiungerai), "Tutte quelle di adesso" (le carte di oggi,
     // le nuove no) o "Solo alcune", con l'elenco ad albero da spuntare (una domanda porta con sé le sue figlie).
     // iniziali = null (tutte) o [id]. Restituisce { valore() → null | [id] }
-    function montaSceltaCarte(box, setId, iniziali = null) {
+    // escludi = l'argomento che si sta cambiando (non conta tra "gli altri mazzi")
+    function montaSceltaCarte(box, setId, iniziali = null, escludi = null) {
         const albero = Dati.alberoDiSet(setId);
         const scelte = new Set(iniziali || []);
         const tutteDentro = Array.isArray(iniziali) && albero.length > 0 && albero.every(n => scelte.has(n.carta.id));
         let modo = !Array.isArray(iniziali) ? 'tutte' : tutteDentro ? 'adesso' : 'alcune';
         const alcune = () => modo === 'alcune';
-        const conta = () => { const c = $('[data-conta-carte]', box); if (c) c.textContent = `${scelte.size} di ${albero.length} scelte`; };
+        // Le flashcard scelte che stanno già in altri mazzi con alcune carte: una carta ha una sola data e ne segue uno
+        const avvisaAltri = () => {
+            const box2 = $('[data-altri-mazzi]', box);
+            if (!box2) return;
+            const ids = modo === 'tutte' ? [] : modo === 'adesso' ? albero.map(n => n.carta.id) : [...scelte];
+            const altri = Dati.argomentiDiSet(setId).filter(a => a.id !== escludi && Array.isArray(a.carte))
+                .map(a => ({ a, n: ids.filter(id => a.carte.includes(id)).length })).filter(x => x.n);
+            const setIntero = modo !== 'tutte' && Dati.argomentiDiSet(setId).some(a => a.id !== escludi && a.delSet && !Array.isArray(a.carte));
+            box2.innerHTML = [
+                altri.length ? `<p class="avviso-mazzi">${ico('avviso')}<span>${altri.map(x => `${plurale(x.n, 'flashcard è', 'flashcard sono')} già in «${esc(x.a.nome || 'senza nome')}»`).join(', ')}.
+                    Una flashcard ha una sola data, quindi segue un mazzo solo: queste continuano a seguire quello in cui erano (se l'hai già ripassato), e rispetto a questo le vedrai sfasate.
+                    Per cambiare il mazzo che seguono: «Riadegua…» nel pannello Per flashcard.</span></p>` : '',
+                setIntero && ids.length ? `<p class="nota">Le flashcard restano anche nel mazzo di tutto il set: dopo il primo ripasso di questo, seguono questo.</p>` : '',
+            ].join('');
+        };
+        const conta = () => { const c = $('[data-conta-carte]', box); if (c) c.textContent = `${scelte.size} di ${albero.length} scelte`; avvisaAltri(); };
         const disegna = () => {
             box.innerHTML = `
                 <div class="scelta-radio">
@@ -1079,7 +1115,8 @@ const Revisioni = (() => {
                     <button type="button" class="btn btn-fantasma btn-piccolo" data-carte-tutte="1">Seleziona tutte</button>
                     <button type="button" class="btn btn-fantasma btn-piccolo" data-carte-tutte="0">Nessuna</button>
                     <small class="conta-carte-arg" data-conta-carte></small>
-                </div>` : '<p class="nota">Il set non ha ancora flashcard.</p>') : ''}`;
+                </div>` : '<p class="nota">Il set non ha ancora flashcard.</p>') : ''}
+                <div data-altri-mazzi></div>`;
             conta();
         };
         box.addEventListener('change', e => {
@@ -1123,7 +1160,7 @@ const Revisioni = (() => {
             Ui.modale({
                 titolo: `Flashcard di «${esc(a.nome || 'Argomento')}»`, classe: 'modale-piccola',
                 corpo: `<p class="nota">Lo stato, il pulsante Ripasso e il N° Rep di questo argomento seguono le flashcard che scegli.</p><div data-carte-arg></div>`,
-                alApri: el => { scelta = montaSceltaCarte($('[data-carte-arg]', el), a.setId, automatico(a) ? (Array.isArray(a.carte) ? a.carte : null) : null); },
+                alApri: el => { scelta = montaSceltaCarte($('[data-carte-arg]', el), a.setId, automatico(a) ? (Array.isArray(a.carte) ? a.carte : null) : null, a.id); },
                 azioni: [
                     { testo: 'Annulla', classe: 'btn-fantasma' },
                     { testo: 'Salva', classe: 'btn-primario', principale: true, clic: async m => {
@@ -1207,7 +1244,7 @@ const Revisioni = (() => {
         { col: 'carta', ordina: 'carta', testo: 'Flashcard', icona: 'carte', larghezza: 300 },
         { col: 'set', ordina: 'set', testo: 'Set', icona: 'cartella', larghezza: 160 },
         { col: 'stato', ordina: 'valutazione', testo: 'Valutazione', icona: 'obiettivo', larghezza: 122 },
-        { col: 'sfasatura', ordina: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 176 },
+        { col: 'sfasatura', ordina: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 196 },
         { col: 'num', ordina: 'ripetizioni', testo: 'N° Rep', icona: 'elenco-num', larghezza: 64 },
         { col: 'data', ordina: 'ultimo', testo: 'Ultimo ripasso', icona: 'calendario', larghezza: 134 },
         { col: 'intervallo', ordina: 'intervallo', testo: 'Intervallo', icona: 'ruota', larghezza: 92 },
@@ -1245,7 +1282,8 @@ const Revisioni = (() => {
                             ${Srs.VALUTAZIONI.map(x => `<option value="${x.valore}" ${val === x.valore ? 'selected' : ''}>${x.nome}</option>`).join('')}
                         </select></label>
                 </td>
-                <td class="col-sfasatura"><span class="sfasatura sfasatura-${v.sfasatura.tipo}">${esc(v.sfasatura.testo)}</span></td>
+                <td class="col-sfasatura"><span class="sfasatura sfasatura-${v.sfasatura.tipo}"${v.sfasatura.altri.length ? ' title="Il mazzo che la flashcard segue: si allinea a lui quando lo ripassi. Per cambiarlo: Riadegua…"' : ''}>${esc(v.sfasatura.testo)}</span>
+                    ${v.sfasatura.altri.map(x => `<small class="sfasatura-altro${x.giorni ? '' : ' al-passo'}">${esc(x.testo)}</small>`).join('')}</td>
                 <td class="col-num"><input class="campo-rev cella-num" type="number" min="0" step="1" data-carta-campo="rep" value="${v.ripetizioni}" aria-label="N° Rep"></td>
                 <td class="col-data"><label class="sovrapposto"><span class="testo-sovrapposto">${v.ultimoRipasso ? dataLunga(v.ultimoRipasso) : '<span class="tenue">—</span>'}</span>
                     <input class="controllo-sovrapposto" type="date" data-carta-campo="giorno" value="${v.ultimoRipasso || ''}" max="${chiaveGiorno()}" aria-label="Ultimo ripasso"></label></td>
@@ -1255,8 +1293,9 @@ const Revisioni = (() => {
                 <td class="col-azioni">
                     <button type="button" class="btn-ripassato con-studio${v.ultimoRipasso === chiaveGiorno() ? ' fatto' : ''}" data-carta-ripassa
                         title="Ripassa questa flashcard" aria-label="Ripassa">${ico(v.ultimoRipasso === chiaveGiorno() ? 'spunta' : 'fulmine')}</button>
-                    ${v.argomento && sfasata(v) ? `<button type="button" class="btn btn-fantasma btn-piccolo btn-adegua" data-carta-adegua
-                        title="Riadeguamento al set: prende ultimo ripasso e intervallo del set (la stessa prossima revisione) e torna al passo; valutazione e N° Rep restano">${ico('sincronizza')}Riadegua al set</button>` : ''}
+                    ${v.argomento && (sfasata(v) || v.sfasatura.altri.length) ? `<button type="button" class="btn btn-fantasma btn-piccolo btn-adegua" data-carta-adegua
+                        title="${v.sfasatura.altri.length ? 'Scegli il mazzo da seguire: la flashcard prende ultimo ripasso e intervallo di quel mazzo (la stessa prossima revisione) e da lì in poi si allinea a lui; valutazione e N° Rep restano'
+                            : 'Riadeguamento al set: prende ultimo ripasso e intervallo del set (la stessa prossima revisione) e torna al passo; valutazione e N° Rep restano'}">${ico('sincronizza')}${v.sfasatura.altri.length ? 'Riadegua…' : Array.isArray(v.argomento.carte) ? 'Riadegua' : 'Riadegua al set'}</button>` : ''}
                 </td>
             </tr>`;
     }
@@ -1299,7 +1338,7 @@ const Revisioni = (() => {
             const data = e.target.closest('input[type=date].controllo-sovrapposto');
             if (data && data.showPicker) { try { data.showPicker(); } catch (err) { /* il browser lo apre da sé */ } }
             const adegua = e.target.closest('[data-carta-adegua]');
-            if (adegua) { riadegua(adegua.closest('tr[data-id]').dataset.id); return; }
+            if (adegua) { sceltaRiadegua(adegua, adegua.closest('tr[data-id]').dataset.id); return; }
             const b = e.target.closest('[data-carta-ripassa]');
             if (!b) return;
             const id = b.closest('tr[data-id]').dataset.id;
@@ -1307,16 +1346,27 @@ const Revisioni = (() => {
             if (voce) avviaRipassoCarte([voce]);
         });
 
-        // Riadeguamento al set: la carta prende N° Rep e data del set ed esce dall'elenco (si annulla dall'avviso)
-        const riadegua = async id => {
+        // Riadeguamento: la carta prende ultimo ripasso e intervallo del mazzo ed esce dall'elenco delle sfasate (si annulla
+        // dall'avviso). Se sta in più mazzi si sceglie quale: da lì in poi segue quello
+        const riadegua = async (id, a, segui) => {
             const c = Dati.carta(id);
-            const a = argomentoDi(c);
-            if (!a) return;
-            await Storia.esegui(`Flashcard riadeguata al set «${a.nome || nomeSet(c.setId)}»: prossima revisione con il set`,
-                () => Dati.allineaAlSet([c]));
+            if (!c || !a) return;
+            await Storia.esegui(`Flashcard riadeguata a «${a.nome || nomeSet(c.setId)}»: prossima revisione con lui`,
+                () => Dati.allineaAlSet([c], a, { segui }));
             disegna();
             op.dopo();
             App.aggiornaPiede();
+        };
+        const sceltaRiadegua = (ancora, id) => {
+            const c = Dati.carta(id);
+            const mazzi = mazziDi(c);
+            const segue = argomentoDi(c);
+            if (mazzi.length < 2) { riadegua(id, segue, false); return; }
+            Ui.menu(ancora, mazzi.map(a => ({
+                testo: `Riadegua a «${a.nome || nomeSet(a.setId)}»${Array.isArray(a.carte) ? '' : ' (tutto il set)'}${a === segue ? ' · lo segue già' : ''}`,
+                icona: a === segue ? 'spunta' : 'sincronizza',
+                clic: () => riadegua(id, a, true),
+            })));
         };
 
         contenitore.addEventListener('keydown', e => {
@@ -1359,7 +1409,7 @@ const Revisioni = (() => {
         STATI, intervallo, prossima, esamePrima, avvisoEsame, giorniMancanti, avviso, daRipassare, perUrgenza, conteggi, quanteDaRipassare,
         etichettaAvviso, dataBreve, dataLunga, nomeSet, monta, formNuovo, unoPerOgniSet, ripristinaLarghezze,
         carteDelSet, statoDaCarte, statoDi, rigaDelSet, registraSessione, segnaComunque, descriviEsito,
-        daNonAllineare, esitiSeConta, ripassaPiuSet, avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
+        daNonAllineare, esitiSeConta, ripassaPiuSet, avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, mazziDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
         avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, situazioniAvvio, ordina, colonneDi, perUrgenzaCarte,
     };
 })();
