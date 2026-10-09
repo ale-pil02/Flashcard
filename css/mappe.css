@@ -211,6 +211,7 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .nodo.trovato::after { content: ''; position: absolute; inset: -6px; z-index: -2; border-radius: 10px; background: rgba(255, 214, 0, .35); }
 .nodo.trovato-attivo::after { background: rgba(255, 152, 0, .55); }
 .nodo.bersaglio-figlio { outline: 3px solid var(--primario); outline-offset: 5px; }
+.nodo.nel-riquadro { outline: 2px dashed var(--primario); outline-offset: 4px; }
 .nodo.bersaglio-prima { box-shadow: 0 -5px 0 -1px var(--primario); }
 .nodo.bersaglio-dopo { box-shadow: 0 5px 0 -1px var(--primario); }
 .editor-mappa.trascinando .nodo:not(.bersaglio-figlio) { cursor: grabbing; }
@@ -317,7 +318,9 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .maniglia[data-m="figlio"] { width: 26px; height: 26px; background: var(--primario); font-size: 18px; }
 .maniglia .ico { width: 14px; height: 14px; }
 .maniglia.attiva { background: var(--primario); opacity: 1; }
-.maniglia-curva {
+/* Punti di passaggio della linea scelta: pieni = da spostare (doppio clic per toglierli), vuoti = da trascinare per
+   aggiungerne uno a metà del tratto */
+.maniglia-punto {
     position: absolute;
     width: 14px;
     height: 14px;
@@ -327,7 +330,10 @@ body[data-vista="mappa"] .fab-ia { display: none; }
     box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
     transform: translate(-50%, -50%);
     cursor: grab;
+    touch-action: none;
 }
+.maniglia-punto.nuovo { width: 11px; height: 11px; border: 2px solid var(--primario); background: #fff; opacity: .8; }
+.maniglia-punto.nuovo:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
 .mappa-rettangolo { position: absolute; border: 1.5px dashed var(--primario); background: color-mix(in srgb, var(--primario) 10%, transparent); pointer-events: none; }
 
 .mappa-pop {
@@ -605,6 +611,9 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .pop-multipla { display: flex; align-items: center; gap: 6px; width: auto; padding: 6px 8px; border-radius: 12px; white-space: nowrap; }
 .pop-multipla .pop-titolo { padding: 0 4px; }
 .pop-multipla .btn .ico { width: 15px; height: 15px; }
+.pop-multipla { flex-wrap: wrap; max-width: 420px; }
+.pop-multipla .btn.attivo { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); }
+.griglia-disposizioni-multi { flex-basis: 100%; margin-top: 4px; white-space: normal; }
 .segno-graffa { display: inline-block; width: 16px; font: 700 19px/1 Georgia, 'Times New Roman', serif; text-align: center; }
 .lista-scelte .segno-graffa { width: 27px; }
 

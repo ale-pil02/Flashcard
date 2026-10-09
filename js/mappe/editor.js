@@ -56,7 +56,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         pannello: SOLA ? null : (() => { try { return localStorage.getItem(CHIAVE_PANNELLO) || null; } catch (e) { return null; } })(),
         passato: [], futuro: [], continua: null,
         cerca: { aperta: false, testo: '', trovati: [], indice: -1 },
-        appunti: null, stileCopiato: null, popDisp: null, focusLato: null,
+        appunti: null, stileCopiato: null, popDisp: null, popDispMulti: false, focusLato: null,
     };
     const geo = new Map();          // id → riquadro disposto (x, y, w, h, dir, livello, colore, s = stile)
     const elementi = new Map();     // id → <div class="nodo">
@@ -596,7 +596,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 const membri = f.raccordo.nodi.map(x => geo.get(x)).filter(Boolean);
                 if (f.raccordo.graffa) graffa(f, membri, c, Math.max(1.5, w1), scelto);
                 else membri.forEach(q => traccia(Disposizione.arco(q, versoLegame(q, f), c.forma), c, w0, w1, f.id, q.id, scelto));
-            } else traccia(Disposizione.arco(p, f, c.forma, f.n.piega), c, w0, w1, f.id, null, scelto && !st.arcoDa);
+            } else traccia(Disposizione.arco(p, f, c.forma, f.n.piega, f.n.percorso), c, w0, w1, f.id, null, scelto && !st.arcoDa);
             // Figlio comune: una linea anche da ognuno degli altri genitori, con lo stesso stile
             (f.n.legami || []).forEach(pid => {
                 const q = geo.get(pid);
@@ -634,16 +634,30 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         htmlEtichetteRel = etRel.join('');
     }
 
+    // Collegamento tra rami: curva (con il punto di controllo c, spostato a mano in r.curva) o, se ha i punti di
+    // passaggio (r.percorso, nel riferimento dei due centri), linea morbida che passa da tutti. arc = la curva in tratti
+    // di Bézier, per prenderla col mouse; h = dove va il testo
     function geometriaRelazione(r) {
         const A = geo.get(r.da), B = geo.get(r.a);
         if (!A || !B) return null;
         const ca = Disposizione.centro(A), cb = Disposizione.centro(B);
+        if (Disposizione.percorsoValido(r.percorso)) {
+            const punti = Disposizione.daPercorso(ca, cb, r.percorso);
+            const p0 = Disposizione.bordoVerso(A, punti[0]), p1 = Disposizione.bordoVerso(B, punti[punti.length - 1]);
+            const arc = Disposizione.curvaPer(p0, p1, punti);
+            const k = punti.length % 2 ? punti[(punti.length - 1) / 2] : null;
+            const g = arc.segmenti[Math.floor(arc.segmenti.length / 2)];
+            const h = k || Disposizione.puntoBezier(g.a, g.c1, g.c2, g.b, 0.5);
+            return { d: arc.d, p0, p1, h, ca, cb, arc, punti };
+        }
         const dx = cb.x - ca.x, dy = cb.y - ca.y, l = Math.hypot(dx, dy) || 1;
         const base = { x: (ca.x + cb.x) / 2 - dy / l * l * 0.18, y: (ca.y + cb.y) / 2 + dx / l * l * 0.18 };
         const c = r.curva ? { x: base.x + r.curva.dx, y: base.y + r.curva.dy } : base;
         const p0 = Disposizione.bordoVerso(A, c), p1 = Disposizione.bordoVerso(B, c);
         const h = { x: 0.25 * p0.x + 0.5 * c.x + 0.25 * p1.x, y: 0.25 * p0.y + 0.5 * c.y + 0.25 * p1.y };
-        return { d: `M${p0.x.toFixed(1)},${p0.y.toFixed(1)} Q${c.x.toFixed(1)},${c.y.toFixed(1)} ${p1.x.toFixed(1)},${p1.y.toFixed(1)}`, p0, p1, c, h, base };
+        // La stessa curva come Bézier cubica
+        const arc = { a: p0, b: p1, c1: { x: p0.x + (c.x - p0.x) * 2 / 3, y: p0.y + (c.y - p0.y) * 2 / 3 }, c2: { x: p1.x + (c.x - p1.x) * 2 / 3, y: p1.y + (c.y - p1.y) * 2 / 3 } };
+        return { d: `M${p0.x.toFixed(1)},${p0.y.toFixed(1)} Q${c.x.toFixed(1)},${c.y.toFixed(1)} ${p1.x.toFixed(1)},${p1.y.toFixed(1)}`, p0, p1, c, h, base, ca, cb, arc, punti: [] };
     }
 
     // Bolle dei rami chiusi (quanti nodi nascondono) ed etichette delle relazioni
@@ -720,7 +734,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function seleziona(id, { aggiungi = false } = {}) {
         if (st.modifica) concludiModifica();
-        if (!aggiungi) st.sel.clear();
+        if (!aggiungi) { st.sel.clear(); st.popDispMulti = false; }
         if (id && m.nodi[id]) {
             if (aggiungi && st.sel.has(id)) st.sel.delete(id); else st.sel.add(id);
         }
@@ -813,34 +827,42 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 parti.push(popDisposizione(b.id, { x: a.x + w / 2, y: sopra ? a.y - 28 : a.y + h + 30 }, sopra));
             }
         }
-        // Linea scelta: un pallino a metà per piegarla (si può anche prendere un punto qualsiasi della linea)
-        const piegabile = arcoPiegabile(st.arco);
-        if (piegabile && !st.arcoDa && !st.modifica) {
-            const q = Disposizione.puntoBezier(piegabile.a, piegabile.c1, piegabile.c2, piegabile.b, 0.5);
-            const ps = aSchermo(q.x, q.y);
-            parti.push(`<span class="maniglia-curva" data-piega style="left:${ps.x}px;top:${ps.y}px" title="Trascina per piegare la linea"></span>`);
+        // Linea scelta (un ramo o un collegamento): i suoi punti di passaggio, da spostare (doppio clic per toglierli), e a
+        // metà di ogni tratto un pallino vuoto per aggiungerne uno
+        const linea = !st.modifica && lineaScelta();
+        if (linea) {
+            linea.punti.forEach((q, i) => {
+                const ps = aSchermo(q.x, q.y);
+                parti.push(`<span class="maniglia-punto" data-punto="${i}" style="left:${ps.x}px;top:${ps.y}px" title="Trascina per spostare il punto · doppio clic per toglierlo"></span>`);
+            });
+            const tratti = linea.punti.length ? linea.arc.segmenti : [linea.curva];
+            tratti.forEach((g, i) => {
+                const q = Disposizione.puntoBezier(g.a, g.c1, g.c2, g.b, 0.5), ps = aSchermo(q.x, q.y);
+                parti.push(`<span class="maniglia-punto nuovo" data-punto-nuovo="${i}" style="left:${ps.x}px;top:${ps.y}px" title="Trascina per aggiungere un punto di passaggio"></span>`);
+            });
         }
         // Più nodi scelti: figlio comune (linee da tutti) o graffa che li raccoglie
         const scelti = !st.modifica && !st.collegando && st.sel.size > 1 ? [...st.sel].map(id => geo.get(id)).filter(Boolean) : [];
         if (scelti.length > 1) {
             const x0 = Math.min(...scelti.map(q => q.x)), x1 = Math.max(...scelti.map(q => q.x + q.w)), y1 = Math.max(...scelti.map(q => q.y + q.h));
-            const ps = aSchermo((x0 + x1) / 2, y1);
+            const y0 = Math.min(...scelti.map(q => q.y));
+            const ps = aSchermo((x0 + x1) / 2, y1), pa = aSchermo((x0 + x1) / 2, y0);
             const fratelli = sonoFratelli([...st.sel]);
-            parti.push(`<div class="mappa-pop pop-multipla" data-pop="multi" style="left:${ps.x}px;top:${ps.y + 12}px">
+            // Con la griglia delle disposizioni aperta, se sotto non c'è posto va sopra i nodi scelti
+            const sopra = st.popDispMulti && ps.y + 380 > tela.getBoundingClientRect().height && pa.y > 380;
+            parti.push(`<div class="mappa-pop pop-multipla${sopra ? ' sopra' : ''}" data-pop="multi" style="left:${ps.x}px;top:${sopra ? pa.y - 12 : ps.y + 12}px">
                 <span class="pop-titolo">${st.sel.size} nodi</span>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="figlio" title="Un nodo nuovo, figlio di tutti i nodi scelti">${ico('piu')}Figlio comune</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="graffa" ${fratelli ? 'title="Una graffa raccoglie i nodi scelti e li porta a un nodo nuovo"' : 'disabled title="La graffa raccoglie nodi con lo stesso genitore"'}><b class="segno-graffa">}</b>Graffa</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="flashcard" title="Le flashcard di questi nodi, scritte dall'IA">${ico('carte')}Flashcard</button>
+                <button type="button" class="btn btn-secondario btn-piccolo${st.popDispMulti ? ' attivo' : ''}" data-multi="disposizione" aria-expanded="${st.popDispMulti}" title="Disposizione dei figli di tutti i nodi scelti, in un colpo solo">${ico('ramo')}Disposizione</button>
+                ${st.popDispMulti ? griglieDisposizioneMulti() : ''}
             </div>`);
         }
         if (st.rel) {
             const r = m.relazioni.find(x => x.id === st.rel);
             const g = r && geometriaRelazione(r);
-            if (g) {
-                const p = aSchermo(g.h.x, g.h.y);
-                parti.push(`<span class="maniglia-curva" data-curva style="left:${p.x}px;top:${p.y}px" title="Trascina per piegare il collegamento"></span>`);
-                parti.push(popRelazione(r, p));
-            }
+            if (g) parti.push(popRelazione(r, aSchermo(g.h.x, g.h.y)));
         }
         if (st.et) {
             const ee = elEtichette.get(st.et.nodo + ':' + st.et.id);
@@ -926,25 +948,54 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         </div>`;
     }
 
-    function scegliDisposizione(id, v) {
+    // Cambia la disposizione di un nodo (della mappa, se è la radice), dentro una modifica
+    function impostaDisposizione(id, v) {
         const n = m.nodi[id];
         if (!n) return;
-        modifica(() => {
-            // Con un'altra disposizione le linee piegate a mano non avrebbero più senso: tornano normali
-            if (v !== 'libera') raddrizza(id === m.radice ? null : id);
-            if (id === m.radice) {
-                if (v === 'libera' && m.disposizione !== 'libera') fissaPosizioni(m.radice);
-                if (v === 'destra' || v === 'sinistra') { m.disposizione = 'orizzontale'; m.direzione = v; }
-                else { m.disposizione = v; if (v === 'orizzontale' && !['auto', 'orario'].includes(m.direzione)) m.direzione = 'auto'; }
-            } else {
-                // Passando alla disposizione libera i nodi restano dove sono adesso, poi si spostano a mano
-                if (v === 'libera' && (geo.get(id) || {}).disp !== 'libera') fissaPosizioni(id);
-                n.disposizione = v || null;
-            }
-        });
+        // Con un'altra disposizione le linee piegate a mano non avrebbero più senso: tornano normali
+        if (v !== 'libera') raddrizza(id === m.radice ? null : id);
+        if (id === m.radice) {
+            if (!v) return;   // la radice non ha un padre da cui prenderla
+            if (v === 'libera' && m.disposizione !== 'libera') fissaPosizioni(m.radice);
+            if (v === 'destra' || v === 'sinistra') { m.disposizione = 'orizzontale'; m.direzione = v; }
+            else { m.disposizione = v; if (v === 'orizzontale' && !['auto', 'orario'].includes(m.direzione)) m.direzione = 'auto'; }
+        } else {
+            // Passando alla disposizione libera i nodi restano dove sono adesso, poi si spostano a mano
+            if (v === 'libera' && (geo.get(id) || {}).disp !== 'libera') fissaPosizioni(id);
+            n.disposizione = v || null;
+        }
+    }
+
+    function scegliDisposizione(id, v) {
+        if (!m.nodi[id]) return;
+        modifica(() => impostaDisposizione(id, v));
         st.popDisp = null;
         posizionaSopra();
         mostraNodo(id);
+    }
+
+    // Più nodi scelti: la disposizione dei figli di tutti, con una sola modifica (un solo Ctrl+Z). La radice, se c'è,
+    // cambia quella della mappa ("Come il padre" per lei non vale)
+    function griglieDisposizioneMulti() {
+        const ids = [...st.sel].filter(id => m.nodi[id]);
+        const valore = id => (id === m.radice
+            ? (m.disposizione === 'orizzontale' && ['destra', 'sinistra'].includes(m.direzione) ? m.direzione : m.disposizione)
+            : m.nodi[id].disposizione || '');
+        const comune = ids.every(id => valore(id) === valore(ids[0])) ? valore(ids[0]) : null;
+        return `<div class="griglia-disposizioni griglia-disposizioni-multi">${SCELTE_NODO.map(([v, t]) => `
+            <button type="button" class="scelta-disposizione${comune === v ? ' attivo' : ''}" data-disp-multi="${v}">${miniaturaDisposizione(v || 'eredita')}<span>${t}</span></button>`).join('')}
+        </div>`;
+    }
+
+    function scegliDisposizioneMulti(v) {
+        const ids = [...st.sel].filter(id => m.nodi[id]);
+        if (!ids.length) return;
+        // Prima i nodi più in alto: passando alla libera, i rami sotto restano dove sono
+        ids.sort((a, b) => Mappe.antenati(m, a).length - Mappe.antenati(m, b).length);
+        modifica(() => ids.forEach(id => impostaDisposizione(id, v)));
+        st.popDispMulti = false;
+        posizionaSopra();
+        Ui.toast(`Disposizione di ${plurale(ids.length, 'nodo', 'nodi')}: ${(SCELTE_NODO.find(x => x[0] === v) || ['', v])[1].toLowerCase()}`, 'successo', 2200);
     }
 
     function popEtichetta(e, p) {
@@ -976,7 +1027,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     // Linee piegate a mano dentro il ramo di id (null = in tutta la mappa) di nuovo normali
     function raddrizza(id) {
-        (id ? Mappe.discendenti(m, id) : Object.keys(m.nodi)).forEach(x => { if (m.nodi[x].piega) m.nodi[x].piega = null; });
+        (id ? Mappe.discendenti(m, id) : Object.keys(m.nodi)).forEach(x => { if (m.nodi[x].piega) m.nodi[x].piega = null; if (m.nodi[x].percorso) m.nodi[x].percorso = null; });
     }
 
     // Posto per un nodo nuovo (o appena spostato) sotto un genitore libero: accanto a lui, sotto gli altri figli
@@ -1005,6 +1056,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             if (x !== id && nx.off) nx.off = { dx: -nx.off.dx, dy: nx.off.dy };
             if (scambia[nx.disposizione]) nx.disposizione = scambia[nx.disposizione];
             if (Disposizione.piegaValida(nx.piega)) nx.piega = { c1: { dx: -nx.piega.c1.dx, dy: nx.piega.c1.dy }, c2: { dx: -nx.piega.c2.dx, dy: nx.piega.c2.dy } };
+            // Specchiata, ogni punto di passaggio resta alla stessa distanza lungo la linea ma dall'altra parte
+            if (Disposizione.percorsoValido(nx.percorso)) nx.percorso = nx.percorso.map(q => ({ u: q.u, v: -q.v }));
         });
     }
 
@@ -1197,7 +1250,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             const s = m.nodi[id].stile = m.nodi[id].stile || {};
             if (valore === null || valore === undefined || valore === '') delete s[chiave]; else s[chiave] = valore;
             if (chiave === 'frecciaFine') delete s.freccia;
-            if (chiave === 'lineaForma') m.nodi[id].piega = null;
+            if (chiave === 'lineaForma') { m.nodi[id].piega = null; m.nodi[id].percorso = null; }
         }));
     }
 
@@ -1944,10 +1997,10 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             extra = `<button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="scollega">Togli questa linea</button>`;
         } else {
             testa = `Linea da ${nome(m.nodi[n.genitore])} a ${nome(n)}.`;
-            extra = n.piega
-                ? `<p class="pannello-nota">Hai piegato la linea a mano: segue i due nodi quando si spostano.</p>
+            extra = n.piega || Disposizione.percorsoValido(n.percorso)
+                ? `<p class="pannello-nota">Hai deciso tu il percorso della linea: segue i due nodi quando si spostano. Trascina la linea o i pallini vuoti per aggiungere punti di passaggio, i pallini pieni per spostarli; doppio clic su un punto per toglierlo.</p>
                    <button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="raddrizza">Raddrizza la linea</button>`
-                : '<p class="pannello-nota">Trascina un punto qualsiasi della linea per piegarla come vuoi.</p>';
+                : '<p class="pannello-nota">Trascina un punto qualsiasi della linea per farla passare da lì: ogni punto che aggiungi è un punto di passaggio, che poi sposti o togli (doppio clic).</p>';
         }
         return `
             <p class="pannello-nota">${testa}</p>
@@ -2178,7 +2231,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     // collegate ai loro nodi. Le domande le scrive l'assistente IA, che poi crea le carte nel set (si annulla dalla chat)
     function flashcardDaiNodi(ids = [...st.sel]) {
         ids = ids.filter(id => m.nodi[id]);
-        if (!ids.length) { Ui.toast('Seleziona prima uno o più nodi (Maiusc o Ctrl + clic, oppure Maiusc + trascina)', 'info', 5000); return; }
+        if (!ids.length) { Ui.toast('Seleziona prima uno o più nodi (Ctrl + clic, oppure Ctrl + trascina dallo sfondo)', 'info', 5000); return; }
         if (!Dati.tuttiSet().length) { Ui.toast('Prima crea un set in cui mettere le flashcard', 'errore', 5000); return; }
         const nomi = ids.map(id => Mappe.testoSemplice(m.nodi[id].testo) || '(senza testo)');
         let piano = null;
@@ -2271,9 +2324,9 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             ['Ctrl+B · Ctrl+I · Ctrl+U', 'grassetto, corsivo, sottolineato'], ['Ctrl+Alt+C · Ctrl+Alt+V', 'copia e incolla lo stile'],
             ['Ctrl+F', 'cerca'], ['Ctrl+A', 'seleziona tutto'],
             ['Ctrl+clic', 'aggiungi o togli un nodo dalla selezione (trascinandone uno si spostano tutti)'],
-            ['Trascina una linea', 'piegala (resta attaccata ai due nodi)'],
+            ['Trascina una linea', 'aggiungi lì un punto di passaggio (i pallini pieni si spostano, doppio clic li toglie)'],
             ['Ctrl+0 · Ctrl++ · Ctrl+−', 'adatta alla finestra, ingrandisci, riduci'], ['Rotellina · Maiusc+rotellina', 'zoom · scorri'],
-            ['Trascina lo sfondo · Maiusc+trascina', 'sposta la mappa · seleziona un\'area'], ['Doppio clic sullo sfondo', 'nuovo nodo libero'],
+            ['Trascina lo sfondo · Ctrl+trascina (o Maiusc)', 'sposta la mappa · finestra di selezione: prende i nodi che tocca'], ['Doppio clic sullo sfondo', 'nuovo nodo libero'],
             ['**testo** · *testo* · __testo__', 'grassetto, corsivo, sottolineato dentro un nodo'],
         ];
         Ui.modale({
@@ -2316,18 +2369,29 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (e.target.closest('[data-link]')) return;
         if (e.target.closest('[data-vai-origine]') && nodoEl) { vaiAllOrigine(nodoEl.dataset.id); return; }
         if (e.target.closest('[data-segno-nota]') && nodoEl) { seleziona(nodoEl.dataset.id); if (st.pannello !== 'nota') apriPannello('nota'); return; }
-        if (e.target.closest('[data-curva]')) { trascinaCurva(e); return; }
+        // Ctrl (o Maiusc) + trascina fuori dai nodi: finestra di selezione, come sul desktop di Windows
+        if ((e.ctrlKey || e.metaKey) && !nodoEl && !e.target.closest('.mappa-figura, .mappa-etichetta, [data-punto], [data-punto-nuovo]')) { rettangoloSelezione(e); return; }
+        const punto = e.target.closest('[data-punto], [data-punto-nuovo]');
+        if (punto) {
+            if (punto.dataset.punto != null) trascinaPunto(e, +punto.dataset.punto);
+            else trascinaPunto(e, +punto.dataset.puntoNuovo, { nuovo: true });
+            return;
+        }
         if (e.target.closest('[data-ridimensiona-figura]')) { ridimensionaFigura(e); return; }
         const figEl = e.target.closest('.mappa-figura');
         if (figEl) { trascinaFigura(e, figEl); return; }
-        if (e.target.closest('[data-piega]')) { trascinaArco(e, st.arco, null, 0.5); return; }
         const etEl = e.target.closest('.mappa-etichetta');
         if (etEl) { trascinaEtichetta(e, etEl); return; }
         const relEt = e.target.closest('[data-rel]');
         if (relEt) {
-            // Clic su un collegamento: lo sceglie; trascinandolo da un punto qualsiasi lo si piega
-            selezionaRelazione(relEt.dataset.rel);
-            if (relEt.classList.contains('rel-colpo')) trascinaCurva(e, aMondo(e.clientX, e.clientY));
+            // Clic su un collegamento: lo sceglie; trascinandolo da un punto qualsiasi si aggiunge lì un punto di passaggio
+            if (st.rel !== relEt.dataset.rel) selezionaRelazione(relEt.dataset.rel);
+            if (relEt.classList.contains('rel-colpo')) trascinaPunto(e, null, { nuovo: true });
+            else {
+                // Il testo sta a metà della linea: trascinandolo si sposta il punto di passaggio di mezzo (o se ne aggiunge uno)
+                const L = lineaScelta(), n = L ? L.punti.length : 0;
+                if (L) trascinaPunto(e, n % 2 ? (n - 1) / 2 : n / 2, { nuovo: !(n % 2) });
+            }
             return;
         }
         const arcoEl = e.target.closest('[data-arco]');
@@ -2371,23 +2435,37 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         });
     }
 
+    // Finestra di selezione: si aggiungono alla selezione i nodi che tocca (mentre trascini si vedono già evidenziati).
+    // Un clic senza trascinare toglie la selezione
     function rettangoloSelezione(e) {
         const r = tela.getBoundingClientRect();
         const x0 = e.clientX - r.left, y0 = e.clientY - r.top;
         const box = document.createElement('div');
         box.className = 'mappa-rettangolo';
         sopraEl.appendChild(box);
+        const dentro = (dx, dy) => {
+            const a = { x: (Math.min(x0, x0 + dx) - st.vista.x) / st.vista.zoom, y: (Math.min(y0, y0 + dy) - st.vista.y) / st.vista.zoom };
+            const b = { x: a.x + Math.abs(dx) / st.vista.zoom, y: a.y + Math.abs(dy) / st.vista.zoom };
+            const ids = [];
+            geo.forEach((g, id) => { if (g.x < b.x && g.x + g.w > a.x && g.y < b.y && g.y + g.h > a.y) ids.push(id); });
+            return ids;
+        };
         trascina(e, {
+            soglia: 3,
             muovi: (dx, dy) => {
                 Object.assign(box.style, { left: Math.min(x0, x0 + dx) + 'px', top: Math.min(y0, y0 + dy) + 'px', width: Math.abs(dx) + 'px', height: Math.abs(dy) + 'px' });
+                const ids = new Set(dentro(dx, dy));
+                elementi.forEach((el, id) => el.classList.toggle('nel-riquadro', ids.has(id)));
             },
             fine: (partito, dx, dy) => {
                 box.remove();
-                if (!partito) return;
-                const a = { x: (Math.min(x0, x0 + dx) - st.vista.x) / st.vista.zoom, y: (Math.min(y0, y0 + dy) - st.vista.y) / st.vista.zoom };
-                const b = { x: a.x + Math.abs(dx) / st.vista.zoom, y: a.y + Math.abs(dy) / st.vista.zoom };
-                geo.forEach((g, id) => { if (g.x < b.x && g.x + g.w > a.x && g.y < b.y && g.y + g.h > a.y) st.sel.add(id); });
-                st.attivo = [...st.sel].pop() || null;
+                elementi.forEach(el => el.classList.remove('nel-riquadro'));
+                if (!partito) { if (st.sel.size || st.rel || st.et || st.fig || st.arco) seleziona(null); return; }
+                const ids = dentro(dx, dy);
+                if (!ids.length) return;
+                if (st.rel || st.et || st.fig || st.arco) { st.rel = null; st.et = null; st.fig = null; st.arco = st.arcoDa = null; disegnaLinee(); }
+                ids.forEach(id => st.sel.add(id));
+                st.attivo = ids[ids.length - 1];
                 aggiornaSelezione();
                 aggiornaPannello();
             },
@@ -2516,7 +2594,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 let sotto = null;
                 spostati.forEach(id => {
                     const n = m.nodi[id], g = pos.get(id) || { w: 90, h: 24 };
-                    if (prima.get(id) !== genitore) n.piega = null;
+                    if (prima.get(id) !== genitore) { n.piega = null; n.percorso = null; }
                     if (!(pg && pg.disp === 'libera')) { n.off = null; return; }
                     const o = offsetAccanto(genitore, spostati, g.w, g.h);
                     if (o && sotto != null) o.dy = sotto + g.h / 2;
@@ -2633,43 +2711,6 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         });
     }
 
-    // Piega un collegamento tra rami: il punto preso (a metà se si usa il pallino) segue il puntatore
-    function trascinaCurva(e, punto = null) {
-        const r = m.relazioni.find(x => x.id === st.rel);
-        const g0 = r && geometriaRelazione(r);
-        if (!g0) return;
-        const quad = t => {
-            const u = 1 - t;
-            return { x: u * u * g0.p0.x + 2 * u * t * g0.c.x + t * t * g0.p1.x, y: u * u * g0.p0.y + 2 * u * t * g0.c.y + t * t * g0.p1.y };
-        };
-        let t = 0.5;
-        if (punto) {
-            let migliore = Infinity;
-            for (let i = 0; i <= 40; i++) {
-                const q = quad(i / 40), d = Math.hypot(q.x - punto.x, q.y - punto.y);
-                if (d < migliore) { migliore = d; t = i / 40; }
-            }
-        }
-        t = limita(t, 0.15, 0.85);
-        const b0 = quad(t), k = 2 * (1 - t) * t;
-        let prima = null;
-        trascina(e, {
-            soglia: punto ? 3 : 1,
-            muovi: (dx, dy, ev) => {
-                if (!prima) prima = istantanea();
-                const h = aMondo(ev.clientX, ev.clientY);
-                const c = { x: g0.c.x + (h.x - b0.x) / k, y: g0.c.y + (h.y - b0.y) / k };
-                r.curva = { dx: c.x - g0.base.x, dy: c.y - g0.base.y };
-                disegnaLinee(); disegnaExtra(); posizionaSopra();
-            },
-            fine: partito => {
-                if (!partito || !prima) return;
-                st.passato.push(prima); st.futuro = [];
-                cambiato();
-            },
-        });
-    }
-
     // Linea tra un nodo e il suo genitore come curva di Bézier (per piegarla): le curve tengono i loro punti,
     // le altre forme partono da una curva che le somiglia. null per le linee che non si piegano (raccordi)
     function arcoPiegabile(id) {
@@ -2686,40 +2727,59 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             : { a, b, c1: { x: a.x, y: (a.y + b.y) / 2 }, c2: { x: b.x, y: (a.y + b.y) / 2 } };
     }
 
-    // Clic su una linea: la sceglie. Trascinandola da un punto qualsiasi la si piega: quel punto segue il puntatore
-    // (si spostano i due punti di controllo, di più quello più vicino) e la linea resta attaccata ai due nodi
-    function trascinaArco(e, id, da = null, tFisso = null) {
-        if (!id || !m.nodi[id]) return;
-        if (st.arco !== id || st.arcoDa !== (da || null)) selezionaArco(id, da);
-        const cub = !da && arcoPiegabile(id);
-        if (!cub) return;
-        const n = m.nodi[id];
-        let t = tFisso;
-        if (t == null) {
-            const q = aMondo(e.clientX, e.clientY);
-            let migliore = Infinity;
-            for (let i = 0; i <= 60; i++) {
-                const v = Disposizione.puntoBezier(cub.a, cub.c1, cub.c2, cub.b, i / 60), d = Math.hypot(v.x - q.x, v.y - q.y);
-                if (d < migliore) { migliore = d; t = i / 60; }
-            }
+    // ---- Percorso delle linee: punti di passaggio scelti a mano ---------------------------------------
+
+    // La linea scelta, se si può modificare: un ramo (la linea dal genitore) o un collegamento tra rami.
+    // { o: nodo o relazione, A, B: il riferimento dei punti, punti: quelli di passaggio (nel mondo), arc: la linea con i
+    // punti, curva: la linea com'è adesso come Bézier cubica (per prenderla col mouse), vecchia: piegata col vecchio
+    // sistema (un solo punto di controllo) }
+    function lineaScelta() {
+        if (st.rel) {
+            const r = m.relazioni.find(x => x.id === st.rel);
+            const g = r && geometriaRelazione(r);
+            if (!g) return null;
+            return { o: r, A: g.ca, B: g.cb, punti: g.punti, arc: g.arc, curva: g.arc.segmenti ? null : g.arc, vecchia: !g.punti.length && !!r.curva };
         }
-        t = limita(t, 0.12, 0.88);
-        const p0 = Disposizione.puntoBezier(cub.a, cub.c1, cub.c2, cub.b, t);
-        const u = 1 - t, b1 = 3 * u * u * t, b2 = 3 * u * t * t, k = b1 * b1 + b2 * b2;
-        const tondo = v => Math.round(v * 10) / 10;
+        if (!st.arco || st.arcoDa) return null;
+        const n = m.nodi[st.arco], f = geo.get(st.arco), p = n && geo.get(n.genitore);
+        if (!f || !p || f.raccordo) return null;
+        const c = Mappe.collegamento(m, n, f.colore);
+        const arc = Disposizione.arco(p, f, c.forma, n.piega, n.percorso);
+        const punti = arc.conPercorso ? arc.punti : [];
+        return { o: n, A: arc.a, B: arc.b, punti, arc, curva: punti.length ? null : arcoPiegabile(st.arco), vecchia: !punti.length && Disposizione.piegaValida(n.piega) };
+    }
+
+    function salvaPunti(L, punti) {
+        L.o.percorso = punti.length ? punti.map(P => Disposizione.inPercorso(L.A, L.B, P)) : null;
+        if ('piega' in L.o) L.o.piega = null;
+        if ('curva' in L.o) L.o.curva = null;
+    }
+
+    // Sposta il punto di passaggio i della linea scelta; nuovo = ne aggiunge uno nel tratto i (null = nel punto della linea
+    // dove hai cliccato) e lo sposta. Una linea piegata col vecchio sistema diventa una linea con un punto, a metà
+    function trascinaPunto(e, i, { nuovo = false } = {}) {
+        const L = lineaScelta();
+        if (!L) return;
+        let punti = L.punti.map(q => ({ ...q }));
+        if (L.vecchia) {
+            const g = L.curva;
+            punti = [Disposizione.puntoBezier(g.a, g.c1, g.c2, g.b, 0.5)];
+        }
+        if (nuovo && i == null) {
+            // Il tratto della linea più vicino al clic
+            const q = aMondo(e.clientX, e.clientY);
+            if (L.punti.length) i = Disposizione.vicinoSuCurva(L.arc, q).i;
+            else i = L.vecchia ? (Disposizione.vicinoSuCurva(L.curva, q).t < 0.5 ? 0 : 1) : 0;
+        } else if (nuovo && L.vecchia) { nuovo = false; i = 0; }   // il pallino a metà è proprio quel punto
         let prima = null;
         trascina(e, {
-            soglia: 3,
+            soglia: nuovo ? 3 : 1,
             muovi: (dx, dy, ev) => {
-                if (!prima) prima = istantanea();
                 const h = aMondo(ev.clientX, ev.clientY);
-                const D = { x: h.x - p0.x, y: h.y - p0.y };
-                n.piega = {
-                    c1: { dx: tondo(cub.c1.x - cub.a.x + D.x * b1 / k), dy: tondo(cub.c1.y - cub.a.y + D.y * b1 / k) },
-                    c2: { dx: tondo(cub.c2.x - cub.b.x + D.x * b2 / k), dy: tondo(cub.c2.y - cub.b.y + D.y * b2 / k) },
-                };
-                disegnaLinee();
-                posizionaSopra();
+                if (!prima) { prima = istantanea(); if (nuovo) punti.splice(i, 0, h); }
+                punti[i] = h;
+                salvaPunti(L, punti);
+                disegnaLinee(); disegnaExtra(); posizionaSopra();
             },
             fine: partito => {
                 if (!partito || !prima) return;
@@ -2728,8 +2788,24 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 st.futuro = [];
                 st.continua = null;
                 cambiato();
+                if (st.arco) aggiornaPannello();
             },
         });
+    }
+
+    // Toglie il punto di passaggio i (senza punti la linea torna normale)
+    function togliPunto(i) {
+        const L = lineaScelta();
+        if (!L || !L.punti[i]) return;
+        modifica(() => salvaPunti(L, L.punti.filter((q, k) => k !== i)));
+    }
+
+    // Clic su una linea: la sceglie. Trascinandola da un punto qualsiasi si aggiunge lì un punto di passaggio, che segue
+    // il puntatore (la linea resta attaccata ai due nodi)
+    function trascinaArco(e, id, da = null) {
+        if (!id || !m.nodi[id]) return;
+        if (st.arco !== id || st.arcoDa !== (da || null)) selezionaArco(id, da);
+        if (!da) trascinaPunto(e, null, { nuovo: true });
     }
 
     function suRotella(e) {
@@ -2768,7 +2844,9 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     function suDoppioClic(e) {
-        if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia, .in-modifica')) return;
+        const punto = e.target.closest('[data-punto]');
+        if (punto) { togliPunto(+punto.dataset.punto); return; }
+        if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia, [data-punto-nuovo], .in-modifica')) return;
         const figEl = e.target.closest('.mappa-figura');
         if (figEl) { Ricco.ingrandisci(figEl.src); return; }
         const etEl = e.target.closest('.mappa-etichetta');
@@ -2977,8 +3055,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             const ids = idsCollegamento();
             const chiavi = Mappe.CHIAVI_COLLEGAMENTO;
             const az = x.dataset.collAz;
-            if (az === 'ripristina') modifica(() => ids.forEach(id => { chiavi.forEach(k => delete m.nodi[id].stile[k]); m.nodi[id].piega = null; }));
-            else if (az === 'raddrizza') modifica(() => ids.forEach(id => { m.nodi[id].piega = null; }));
+            if (az === 'ripristina') modifica(() => ids.forEach(id => { chiavi.forEach(k => delete m.nodi[id].stile[k]); m.nodi[id].piega = null; m.nodi[id].percorso = null; }));
+            else if (az === 'raddrizza') modifica(() => ids.forEach(id => { m.nodi[id].piega = null; m.nodi[id].percorso = null; }));
             else if (az === 'scollega') {
                 const n = m.nodi[st.arco], da = st.arcoDa;
                 if (!n || !da) return;
@@ -3109,7 +3187,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const t = e.target;
         let x;
         if ((x = t.closest('[data-disp-nodo]')) && st.popDisp) { scegliDisposizione(st.popDisp, x.dataset.dispNodo); return; }
-        if ((x = t.closest('[data-multi]'))) { if (x.dataset.multi === 'flashcard') flashcardDaiNodi(); else figlioComune(x.dataset.multi === 'graffa'); return; }
+        if ((x = t.closest('[data-disp-multi]'))) { scegliDisposizioneMulti(x.dataset.dispMulti); return; }
+        if ((x = t.closest('[data-multi]'))) {
+            if (x.dataset.multi === 'disposizione') { st.popDispMulti = !st.popDispMulti; posizionaSopra(); return; }
+            if (x.dataset.multi === 'flashcard') flashcardDaiNodi(); else figlioComune(x.dataset.multi === 'graffa');
+            return;
+        }
         const r = m.relazioni.find(q => q.id === st.rel);
         if (r && (x = t.closest('[data-rel-az]'))) {
             const az = x.dataset.relAz;
@@ -3121,7 +3204,9 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 // Linea dritta: il punto di controllo va a metà tra i due centri
                 if (az === 'dritta' && g) {
                     const a = Disposizione.centro(geo.get(r.da)), b = Disposizione.centro(geo.get(r.a));
-                    r.curva = { dx: (a.x + b.x) / 2 - g.base.x, dy: (a.y + b.y) / 2 - g.base.y };
+                    r.percorso = null;
+                    const base = geometriaRelazione(r).base;
+                    r.curva = { dx: (a.x + b.x) / 2 - base.x, dy: (a.y + b.y) / 2 - base.y };
                 }
             });
         } else if (r && (x = t.closest('[data-rel-tratto]'))) modifica(() => { r.tratto = x.dataset.relTratto; });

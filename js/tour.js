@@ -129,7 +129,7 @@ const Tour = (() => {
             titolo: 'Flashcard dai nodi di una mappa',
             rotta: () => { const m = mappa(); return m ? '/mappa/' + m.id : '/mappe'; },
             trova: () => $('[data-a="flashcard"]'),
-            testo: () => `<p>Seleziona uno o più nodi (Maiusc o Ctrl + clic, oppure Maiusc + trascina) e premi questo pulsante: l'assistente IA
+            testo: () => `<p>Seleziona uno o più nodi (Ctrl + clic, oppure Ctrl + trascina dallo sfondo per la finestra di selezione) e premi questo pulsante: l'assistente IA
                 scrive le flashcard di quei nodi, con tag e rientri come la creazione flashcard per profondità, già collegate alla mappa. Serve la chiave di Gemini
                 (Impostazioni → Assistente IA).</p>
                 <p>Con il pulsante Immagine puoi anche mettere un'immagine <b>fluttuante</b>: segue il suo nodo, ma spostandola non sposti i nodi.</p>`,

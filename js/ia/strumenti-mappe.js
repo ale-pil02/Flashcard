@@ -88,7 +88,7 @@
 
     // Linee piegate a mano nel ramo di id (null = tutta la mappa): con un'altra disposizione tornano normali
     function raddrizza(m, id) {
-        (id ? Mappe.discendenti(m, id) : Object.keys(m.nodi)).forEach(x => { if (m.nodi[x].piega) m.nodi[x].piega = null; });
+        (id ? Mappe.discendenti(m, id) : Object.keys(m.nodi)).forEach(x => { if (m.nodi[x].piega) m.nodi[x].piega = null; if (m.nodi[x].percorso) m.nodi[x].percorso = null; });
     }
 
     // Disposizione della mappa (sulla radice) o dei figli di un nodo; '' = come il padre
@@ -182,7 +182,7 @@
             if (valido === undefined) { avvisi.push(`stile: valore «${v}» non valido per ${k}`); return; }
             n.stile[k] = valido;
             if (k === 'frecciaFine') delete n.stile.freccia;
-            if (k === 'lineaForma') n.piega = null;
+            if (k === 'lineaForma') { n.piega = null; n.percorso = null; }
         });
     }
 
@@ -516,14 +516,14 @@
                     }
                     if (x.disposizione_figli != null) impostaDisposizione(m, n.id, x.disposizione_figli);
                     if (typeof x.ramo_chiuso === 'boolean') n.chiuso = x.ramo_chiuso && n.figli.length > 0;
-                    if (x.ripristina_stile) { n.stile = {}; n.piega = null; }
+                    if (x.ripristina_stile) { n.stile = {}; n.piega = null; n.percorso = null; }
                     if (x.copia_stile_da) {
                         const da = m.nodi[x.copia_stile_da];
                         if (da) n.stile = structuredClone(da.stile || {}); else avvisi.push('nodo da cui copiare lo stile non trovato');
                     }
                     (x.ripristina || []).forEach(k => { if (n.stile) delete n.stile[k]; });
                     if (x.stile) applicaStile(n, x.stile, avvisi);
-                    if (x.raddrizza_linea) n.piega = null;
+                    if (x.raddrizza_linea) { n.piega = null; n.percorso = null; }
                     if (x.lato != null) {
                         if (n.genitore !== m.radice) avvisi.push('il lato vale solo per i rami principali');
                         else n.lato = { destra: 'd', sinistra: 's' }[x.lato] || null;
@@ -597,7 +597,7 @@
                             esiti.push({ nodo_id: id, errore: 'non si può mettere un nodo dentro il suo stesso ramo' });
                             return;
                         }
-                        if (prima !== genitore) { n.piega = null; n.off = null; }
+                        if (prima !== genitore) { n.piega = null; n.percorso = null; n.off = null; }
                         if (!genitore) { n.x = null; n.y = null; }
                         esiti.push({ nodo_id: id, ok: true });
                     });
@@ -698,7 +698,7 @@
                     if (tratto(x.tratto)) r.tratto = x.tratto;
                     if (typeof x.freccia_inizio === 'boolean') r.frecciaInizio = x.freccia_inizio;
                     if (typeof x.freccia_fine === 'boolean') r.frecciaFine = x.freccia_fine;
-                    if (x.raddrizza) r.curva = null;
+                    if (x.raddrizza) { r.curva = null; r.percorso = null; }
                 });
                 const via = new Set(a.elimina || []);
                 const prima = m.relazioni.length;
