@@ -1222,6 +1222,10 @@ a.tessera:hover, .tessera-materia:hover {
     padding: 20px 20px 8px;
 }
 .studio-etichette { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.studio-sopra-carta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.carta-modifica { flex: none; color: var(--testo-2); }
+.carta-modifica .ico { width: 15px; height: 15px; }
+.modale-modifica-carta { width: min(720px, 100%); }
 
 .carta-studio {
     padding: 32px;
@@ -1520,7 +1524,7 @@ body.schermo-intero[data-vista="mappa"] .pannello-ia { display: flex; }
     top: 0; right: 0; bottom: 0;
     display: flex;
     flex-direction: column;
-    width: min(440px, 100vw);
+    width: min(var(--larghezza-ia, 440px), 100vw);
     border-left: 1px solid var(--bordo);
     background: var(--superficie);
     box-shadow: var(--ombra-forte);
@@ -1528,8 +1532,14 @@ body.schermo-intero[data-vista="mappa"] .pannello-ia { display: flex; }
     transition: transform .22s ease;
 }
 .pannello-ia.aperto { transform: none; }
+.pannello-ia.ridimensionando { transition: none; user-select: none; }
+/* Bordo sinistro: si trascina per allargare o stringere il pannello */
+.ia-maniglia { position: absolute; z-index: 2; top: 0; bottom: 0; left: -5px; width: 10px; cursor: ew-resize; touch-action: none; }
+.ia-maniglia::after { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background .15s; }
+.ia-maniglia:hover::after, .pannello-ia.ridimensionando .ia-maniglia::after { background: var(--primario); }
 @media (min-width: 1280px) {
-    body.ia-aperta .app { margin-right: 440px; }
+    /* L'app si stringe accanto al pannello, ma non oltre metà della finestra (più largo, il pannello le sta sopra) */
+    body.ia-aperta .app { margin-right: min(var(--larghezza-ia, 440px), 50vw); }
     .pannello-ia { box-shadow: none; }
 }
 
@@ -1612,6 +1622,17 @@ body.schermo-intero[data-vista="mappa"] .pannello-ia { display: flex; }
 .ia-modifiche.annullate { border-color: var(--bordo); background: var(--superficie-2); }
 .ia-modifiche.annullate > .ico { color: var(--testo-3); }
 .ia-allegati { padding: 8px 12px 0; }
+/* Fonti aggiunte a mano per questa conversazione */
+.ia-fonti-temp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px 0; }
+.ia-fonti-temp-titolo { color: var(--testo-3); font-size: .75rem; font-weight: 700; }
+.ia-chip-fonte { gap: 2px; padding: 3px 4px 3px 8px; font-size: .8rem; }
+.ia-chip-fonte button { display: inline-flex; align-items: center; gap: 5px; padding: 2px; border: none; background: none; color: inherit; font: inherit; cursor: pointer; }
+.ia-chip-fonte .ico { width: 14px; height: 14px; }
+.ia-chip-nome:hover { text-decoration: underline; }
+.ia-graffetta { display: grid; place-items: center; flex: none; width: 36px; height: 44px; border: none; border-radius: 12px; background: none; color: var(--testo-2); cursor: pointer; }
+.ia-graffetta:hover { background: var(--superficie-2); color: var(--primario); }
+.ia-graffetta .ico { width: 20px; height: 20px; }
+.ia-anteprima-fonte { max-height: 60vh; overflow: auto; padding: 12px; border-radius: 10px; background: var(--superficie-2); font: .85rem/1.5 ui-monospace, monospace; white-space: pre-wrap; }
 .ia-allegati .chip { padding: 5px 6px 5px 10px; font-size: .8rem; }
 .ia-allegati .chip button { margin-left: 4px; }
 .ia-allegato { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: .78rem; font-weight: 700; opacity: .85; }
@@ -1999,6 +2020,7 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
     .fab-ia { right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); width: 50px; height: 50px; border-radius: 16px; }
     body[data-vista="editor"] .fab-ia { bottom: calc(150px + env(safe-area-inset-bottom)); }
     .pannello-ia { width: 100vw; border-left: none; }
+    .ia-maniglia, [data-ia-allarga] { display: none; }
     body.schermo-intero #livello-toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
 
     .barra-editor { bottom: calc(66px + env(safe-area-inset-bottom)); }

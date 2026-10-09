@@ -15,6 +15,11 @@ const Gemini = (() => {
     // Google risponde 429/503 quando il modello è congestionato: si ritenta con attesa crescente
     const RITENTABILI = new Set([429, 500, 502, 503, 504]);
     const TENTATIVI = 3;
+    // Connessione caduta ("Failed to fetch": rete instabile, PC in sospensione, richiesta troppo grande): si ritenta
+    const TENTATIVI_RETE = 3;
+    // Google accetta richieste fino a 20 MB (testo + file in linea): oltre non si manda nemmeno
+    const MAX_RICHIESTA = 19.5 * 1024 * 1024;
+    const LIMITI = 'flashcard-gemini-limiti';
 
     const leggi = (k, ripiego) => { try { const v = localStorage.getItem(k); return v == null ? ripiego : v; } catch (e) { return ripiego; } };
     const scrivi = (k, v) => { try { if (v == null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage non disponibile */ } };
@@ -79,16 +84,42 @@ const Gemini = (() => {
         const ripieghi = pensiero ? (pensiero.thinkingLevel === 'minimal' ? [{ thinkingLevel: 'low' }, null] : [null]) : [];
         let usato = pensiero || null;
         let payload = conPensiero(usato);
+        const mb = n => (n / 1024 / 1024).toFixed(1).replace('.', ',');
+        if (payload.length > MAX_RICHIESTA) {
+            throw new Error(`La richiesta per Gemini è troppo grande (${mb(payload.length)} MB, il massimo è 20): togli qualche materiale dalle fonti della chat o scrivimi di lavorare su una parte alla volta.`);
+        }
+        let erroriRete = 0;
         for (let tentativo = 1; ; tentativo++) {
-            const risposta = await fetch(url, {
-                method: 'POST', signal: segnale,
-                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': k },
-                body: payload,
-            });
+            let risposta;
+            try {
+                risposta = await fetch(url, {
+                    method: 'POST', signal: segnale,
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': k },
+                    body: payload,
+                });
+            } catch (e) {
+                if (e.name === 'AbortError') throw e;
+                // La connessione è caduta prima della risposta: si riprova con attese crescenti
+                erroriRete++;
+                if (erroriRete <= TENTATIVI_RETE) {
+                    const pausa = [2000, 5000, 10000][erroriRete - 1];
+                    if (suAttesa) suAttesa(Math.round(pausa / 1000), erroriRete + 1, 'rete');
+                    await attendi(pausa, segnale);
+                    tentativo--;
+                    continue;
+                }
+                const errore = new Error(`La connessione con Gemini si è interrotta e non è ripartita (ho riprovato ${TENTATIVI_RETE} volte). `
+                    + `Di solito è la rete instabile o il PC andato in sospensione${payload.length > 8 * 1024 * 1024 ? `, oppure la richiesta molto grande (${mb(payload.length)} MB)` : ''}. `
+                    + 'Quello che ho già fatto resta: scrivimi «continua» per riprendere da qui.');
+                errore.rete = true;
+                throw errore;
+            }
             const dati = await risposta.json().catch(() => ({}));
             if (risposta.ok && !dati.error) {
-                // Quanto ha ragionato davvero (token di ragionamento) e con quale impostazione: per la prova nelle impostazioni
-                ultimo = { modello: modello(), richiesto: pensiero || null, usato, pensiero: (dati.usageMetadata || {}).thoughtsTokenCount || 0 };
+                // Quanto ha ragionato davvero (token di ragionamento) e con quale impostazione: per la prova nelle impostazioni;
+                // quanti token ha occupato la richiesta (per mostrare quanto contesto si sta usando)
+                const uso = dati.usageMetadata || {};
+                ultimo = { modello: modello(), richiesto: pensiero || null, usato, pensiero: uso.thoughtsTokenCount || 0, contesto: uso.promptTokenCount || 0, mb: payload.length / 1024 / 1024 };
                 return dati;
             }
             // Livello non accettato da questo modello: si riprova con il ripiego successivo
@@ -117,6 +148,7 @@ const Gemini = (() => {
         const k = chiave();
         if (!k) throw new Error('Serve la chiave API per leggere l\'elenco dei modelli.');
         const trovati = [];
+        const limitiTrovati = {};
         let pagina = '';
         do {
             const r = await fetch(`${BASE}/v1beta/models?pageSize=200${pagina ? '&pageToken=' + encodeURIComponent(pagina) : ''}`, { headers: { 'x-goog-api-key': k } });
@@ -124,15 +156,25 @@ const Gemini = (() => {
             if (!r.ok) throw new Error(erroreLeggibile(r.status, dati.error && dati.error.message));
             (dati.models || []).forEach(m => {
                 const id = String(m.name || '').replace(/^models\//, '');
-                if ((m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(id)) trovati.push(id);
+                if ((m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(id)) {
+                    trovati.push(id);
+                    if (m.inputTokenLimit) limitiTrovati[id] = { ingresso: m.inputTokenLimit, uscita: m.outputTokenLimit || 0 };
+                }
             });
             pagina = dati.nextPageToken || '';
         } while (pagina);
         if (!trovati.length) throw new Error('Nessun modello Gemini compatibile per questa chiave.');
         const lista = [...new Set(trovati)].sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
         scrivi(MODELLI, JSON.stringify(lista));
+        scrivi(LIMITI, JSON.stringify(limitiTrovati));
         if (!lista.includes(modello())) impostaModello(lista.find(m => /flash/.test(m) && !/lite|image|tts|audio|live/.test(m)) || lista[0]);
         return lista;
+    }
+
+    // Quanti token accetta il modello (contesto) e quanti ne può scrivere, come li dichiara Google: { ingresso, uscita } o null
+    // se l'elenco dei modelli non è ancora stato letto (Impostazioni → Assistente IA → Aggiorna elenco)
+    function limiti(id = modello()) {
+        try { return (JSON.parse(leggi(LIMITI, '{}')) || {})[id] || null; } catch (e) { return null; }
     }
 
     // File API (per PDF grandi): caricamento in due passi, il file resta su Google 48 ore
@@ -172,7 +214,7 @@ const Gemini = (() => {
     }
 
     return {
-        chiave, impostaChiave, modelli, modello, impostaModello, aggiornaModelli, genera, caricaFile, MODELLI_DEFAULT,
+        chiave, impostaChiave, modelli, modello, impostaModello, aggiornaModelli, genera, caricaFile, limiti, MODELLI_DEFAULT,
         LIVELLI, ragionamento, impostaRagionamento, nomeRagionamento, configRagionamento, livelloApplicabile,
         get ultimo() { return ultimo; },
     };

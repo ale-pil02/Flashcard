@@ -12,7 +12,10 @@ const Assistente = (() => {
     const URL_MARKED = 'https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js';
     const MAX_PASSI = 40;              // chiamate al modello per un solo messaggio (la skill ne usa parecchie)
     const TURNI_TENUTI = 14;           // messaggi dell'utente ricordati nella conversazione
-    const BUDGET_INLINE = 14 * 1024 * 1024;   // PDF e immagini inviati direttamente in una richiesta
+    // PDF e immagini inviati direttamente in una richiesta: pochi MB in tutto. I file più grandi si caricano una volta sui
+    // server di Gemini (restano 48 ore) e la richiesta li cita soltanto: altrimenti a ogni passo dell'assistente partirebbero
+    // di nuovo decine di MB, e una connessione appena instabile cade ("Failed to fetch")
+    const BUDGET_INLINE = 4 * 1024 * 1024;
     const ico = (...a) => Ui.ico(...a);
 
     let el = null;
@@ -22,6 +25,13 @@ const Assistente = (() => {
     let controllo = null;        // AbortController della richiesta in corso
     let attesa = '';             // testo dello stato mentre lavora
     let allegate = [];           // id delle flashcard selezionate da mandare col prossimo messaggio
+    // Fonti aggiunte a mano per una conversazione (file o testo): non diventano materiali e restano solo finché
+    // l'app è aperta. id conversazione → [fonte] (vedi Materiali.fonteTemporanea)
+    const fontiTemp = new Map();
+    const fontiDellaChat = () => (conv && fontiTemp.get(conv.id)) || [];
+    // Larghezza del pannello (trascinando il bordo sinistro), ricordata in questo browser
+    const CHIAVE_LARGHEZZA = 'flashcard-ia-larghezza';
+    const LARGHEZZA_BASE = 440;
 
     // ---- Conversazioni ----------------------------------------------------------
 
@@ -44,20 +54,29 @@ const Assistente = (() => {
         el.className = 'pannello-ia';
         el.setAttribute('aria-label', 'Assistente IA');
         el.innerHTML = `
+            <div class="ia-maniglia" data-ia-maniglia title="Trascina per allargare o stringere il pannello (doppio clic: larghezza normale)"></div>
             <header class="ia-testa">
                 <span class="ia-logo">${ico('scintille')}</span>
                 <div class="ia-titolo"><b>Assistente</b><span data-ia-ambito></span></div>
+                <button type="button" class="btn-icona" data-ia="allarga" data-ia-allarga aria-label="Allarga il pannello" title="Allarga il pannello">${ico('allarga')}</button>
                 <button type="button" class="btn-icona" data-ia="menu" aria-label="Opzioni">${ico('altro')}</button>
                 <button type="button" class="btn-icona" data-ia="chiudi" aria-label="Chiudi l'assistente">${ico('chiudi')}</button>
             </header>
             <div class="ia-fonti" data-ia-fonti></div>
             <div class="ia-messaggi" data-ia-messaggi aria-live="polite"></div>
             <div class="ia-allegati" data-ia-allegati hidden></div>
+            <div class="ia-fonti-temp" data-ia-fonti-temp hidden></div>
             <form class="ia-scrivi" data-ia-modulo>
+                <button type="button" class="ia-graffetta" data-ia="aggiungi-fonte" aria-label="Aggiungi una fonte per questa conversazione"
+                    title="Aggiungi una fonte solo per questa conversazione (file o testo): la uso finché non la togli, senza salvarla nei materiali">${ico('graffetta')}</button>
                 <textarea rows="1" data-ia-testo placeholder="Chiedi o dai un'istruzione…" title="Invio per mandare, Maiusc+Invio per andare a capo. /profondita avvia la creazione flashcard per profondità"></textarea>
                 <button type="submit" class="ia-invia" data-ia-invia aria-label="Invia">${ico('invia')}</button>
             </form>`;
         document.body.appendChild(el);
+        impostaLarghezza(larghezzaSalvata());
+        $('[data-ia-maniglia]', el).addEventListener('pointerdown', trascinaBordo);
+        $('[data-ia-maniglia]', el).addEventListener('dblclick', () => { impostaLarghezza(LARGHEZZA_BASE, true); });
+        window.addEventListener('resize', () => impostaLarghezza(larghezzaSalvata()));
 
         const area = $('[data-ia-testo]', el);
         const ridimensiona = () => {
@@ -99,6 +118,12 @@ const Assistente = (() => {
                 b.disabled = true;
                 if (azione === 'annulla') Storia.annullaConAvviso(b.dataset.voce); else Storia.ripristinaConAvviso(b.dataset.voce);
             } else if (azione === 'togli-allegati') { allegate = []; disegnaAllegati(); }
+            else if (azione === 'allarga') allarga();
+            else if (azione === 'aggiungi-fonte') menuFonte(b);
+            else if (azione === 'togli-fonte') {
+                fontiTemp.set(conv.id, fontiDellaChat().filter(f => f.id !== b.dataset.id));
+                disegnaFontiTemp();
+            } else if (azione === 'vedi-fonte') vediFonte(b.dataset.id);
         });
     }
 
@@ -143,6 +168,127 @@ const Assistente = (() => {
         $('[data-ia-testo]', el).focus();
     }
 
+    // ---- Larghezza del pannello ----------------------------------------------------------
+
+    function larghezzaSalvata() {
+        try { return +localStorage.getItem(CHIAVE_LARGHEZZA) || LARGHEZZA_BASE; } catch (e) { return LARGHEZZA_BASE; }
+    }
+
+    function impostaLarghezza(w, ricorda = false) {
+        const max = Math.max(340, window.innerWidth - 80);
+        const l = Math.round(limita(w, 340, max));
+        document.documentElement.style.setProperty('--larghezza-ia', l + 'px');
+        if (el) {
+            const grande = l > Math.min(760, window.innerWidth * 0.6);
+            const b = $('[data-ia-allarga]', el);
+            b.innerHTML = ico(grande ? 'restringi' : 'allarga');
+            b.title = grande ? 'Larghezza normale' : 'Allarga il pannello';
+            b.setAttribute('aria-label', b.title);
+        }
+        if (ricorda) { try { localStorage.setItem(CHIAVE_LARGHEZZA, String(l)); } catch (e) { /* niente */ } }
+        return l;
+    }
+
+    // Grande (quasi tutta la finestra) ↔ normale
+    function allarga() {
+        const ora = larghezzaSalvata();
+        const grande = ora > Math.min(760, window.innerWidth * 0.6);
+        impostaLarghezza(grande ? LARGHEZZA_BASE : Math.max(760, Math.round(window.innerWidth * 0.7)), true);
+    }
+
+    function trascinaBordo(e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        el.classList.add('ridimensionando');
+        const muovi = ev => impostaLarghezza(window.innerWidth - ev.clientX);
+        const fine = ev => {
+            window.removeEventListener('pointermove', muovi);
+            window.removeEventListener('pointerup', fine);
+            el.classList.remove('ridimensionando');
+            impostaLarghezza(window.innerWidth - ev.clientX, true);
+        };
+        window.addEventListener('pointermove', muovi);
+        window.addEventListener('pointerup', fine);
+    }
+
+    // ---- Fonti temporanee ----------------------------------------------------------------
+
+    function menuFonte(ancora) {
+        Ui.menu(ancora, [
+            { testo: 'Carica un file (PDF, Word, immagine…)', icona: 'carica', clic: sceltaFileFonte },
+            { testo: 'Incolla un testo', icona: 'testo-t', clic: testoFonte },
+            fontiDellaChat().length ? '-' : null,
+            fontiDellaChat().length ? { testo: 'Togli tutte le fonti aggiunte', icona: 'chiudi', clic: () => { fontiTemp.delete(conv.id); disegnaFontiTemp(); } } : null,
+        ].filter(Boolean));
+    }
+
+    function sceltaFileFonte() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = Materiali.ACCETTATI;
+        input.addEventListener('change', async () => {
+            const files = [...input.files];
+            if (!files.length) return;
+            const lista = fontiDellaChat().slice();
+            for (const f of files) {
+                try {
+                    Ui.toast(`Leggo «${f.name}»…`, 'info', 1500);
+                    lista.push(await Materiali.fonteTemporanea(f));
+                } catch (err) { Ui.toast(err.message || `«${f.name}» non si legge`, 'errore'); }
+            }
+            fontiTemp.set(conv.id, lista);
+            disegnaFontiTemp();
+            $('[data-ia-testo]', el).focus();
+        });
+        input.click();
+    }
+
+    function testoFonte() {
+        Ui.modale({
+            titolo: 'Testo come fonte',
+            corpo: `
+                <label class="campo"><span>Nome</span><input type="text" name="nome" placeholder="Es. Appunti della lezione" maxlength="80"></label>
+                <label class="campo"><span>Testo</span><textarea name="testo" rows="12" placeholder="Incolla qui il testo"></textarea></label>
+                <p class="nota">Lo uso in questa conversazione finché non lo togli; non va nei materiali.</p>`,
+            azioni: [
+                { testo: 'Annulla', classe: 'btn-fantasma' },
+                { testo: 'Aggiungi', classe: 'btn-primario', principale: true, clic: m => {
+                    const testo = $('[name="testo"]', m.el).value.trim();
+                    if (!testo) { Ui.toast('Incolla prima un testo', 'errore'); return; }
+                    const nome = $('[name="nome"]', m.el).value.trim() || Ui.tronca(testo.replace(/\s+/g, ' '), 40);
+                    fontiTemp.set(conv.id, [...fontiDellaChat(), Materiali.testoTemporaneo(nome, testo)]);
+                    m.chiudi();
+                    disegnaFontiTemp();
+                } },
+            ],
+        });
+    }
+
+    function vediFonte(id) {
+        const f = fontiDellaChat().find(x => x.id === id);
+        if (!f) return;
+        if (f.blob && ['pdf', 'immagine'].includes(f.tipo)) { window.open(URL.createObjectURL(f.blob), '_blank', 'noopener'); return; }
+        Ui.modale({
+            titolo: f.nome,
+            corpo: `<p class="nota">${esc(Materiali.descrivi(f))} · fonte di questa conversazione</p><pre class="ia-anteprima-fonte">${esc((f.testo || '').slice(0, 20000))}${(f.testo || '').length > 20000 ? '\n[…]' : ''}</pre>`,
+            azioni: [{ testo: 'Chiudi', classe: 'btn-primario', principale: true }],
+        });
+    }
+
+    function disegnaFontiTemp() {
+        if (!el) return;
+        const box = $('[data-ia-fonti-temp]', el), lista = fontiDellaChat();
+        box.hidden = !lista.length;
+        box.innerHTML = lista.length ? `
+            <span class="ia-fonti-temp-titolo" title="Le uso in questa conversazione finché non le togli; non vanno nei materiali">Fonti di questa chat</span>
+            ${lista.map(f => `
+            <span class="chip ia-chip-fonte">
+                <button type="button" class="ia-chip-nome" data-ia="vedi-fonte" data-id="${f.id}" title="${esc(f.nome)} · ${esc(Materiali.descrivi(f))}">${ico(Materiali.TIPI[f.tipo] ? Materiali.TIPI[f.tipo].icona : 'documento')}${esc(Ui.tronca(f.nome, 28))}</button>
+                <button type="button" data-ia="togli-fonte" data-id="${f.id}" aria-label="Togli ${esc(f.nome)}" title="Togli questa fonte">${ico('chiudi')}</button>
+            </span>`).join('')}` : '';
+    }
+
     function disegnaAllegati() {
         if (!el) return;
         const box = $('[data-ia-allegati]', el);
@@ -176,9 +322,28 @@ const Assistente = (() => {
             s ? { testo: 'Apri il set', icona: 'cartella', clic: () => Router.vai('/set/' + s.id) } : null,
             { testo: 'Modifiche recenti (annulla)', icona: 'annulla', clic: () => Storia.elenco() },
             { testo: `Ragionamento: ${Gemini.nomeRagionamento().toLowerCase()}`, icona: 'scintille', clic: sceltaRagionamento },
+            { testo: 'Contesto: quanto ne regge la chat', icona: 'database', clic: infoContesto },
             '-',
             { testo: 'Impostazioni dell\'assistente', icona: 'ingranaggio', clic: () => Router.vai('/impostazioni') },
         ]);
+    }
+
+    // Quanti token accetta il modello (lo dice Google nell'elenco dei modelli) e quanti ne ha occupati l'ultima richiesta
+    function infoContesto() {
+        const lim = Gemini.limiti(), u = Gemini.ultimo;
+        const n = x => Number(x).toLocaleString('it-IT');
+        Ui.modale({
+            titolo: 'Contesto della chat', classe: 'modale-piccola',
+            corpo: `
+                <p>Modello: <b>${esc(Gemini.modello())}</b>.</p>
+                <p>${lim ? `Google dichiara un contesto di <b>${n(lim.ingresso)} token</b> in entrata${lim.uscita ? ` e fino a ${n(lim.uscita)} token per risposta` : ''}.`
+                    : 'Il limite del modello non è ancora noto: in Impostazioni → Assistente IA premi «Aggiorna elenco» e lo leggo da Google.'}</p>
+                ${u && u.contesto && u.modello === Gemini.modello() ? `<p>L'ultima richiesta ne occupava <b>${n(u.contesto)}</b>${lim ? ` (${Math.max(1, Math.round(u.contesto / lim.ingresso * 100))}%)` : ''}, ${u.mb.toFixed(1).replace('.', ',')} MB.</p>` : ''}
+                <p class="nota">Per restare veloce la chat manda al modello gli ultimi ${TURNI_TENUTI} messaggi tuoi (con le risposte e i risultati degli
+                    strumenti), accorcia i risultati lunghi dei messaggi vecchi e, nella chat del set, i materiali scelti come fonti. I PDF e le immagini
+                    grandi si caricano una volta sui server di Gemini (restano 48 ore) invece di ripartire a ogni passo.</p>`,
+            azioni: [{ testo: 'Ho capito', classe: 'btn-primario', principale: true }],
+        });
     }
 
     function sceltaRagionamento() {
@@ -208,6 +373,7 @@ const Assistente = (() => {
         if (controllo) return;
         if (conv.vista.length && !await Ui.conferma('La conversazione attuale verrà cancellata.', { titolo: 'Nuova conversazione?', ok: 'Ricomincia' })) return;
         Dati.eliminaChat(conv.id);
+        fontiTemp.delete(conv.id);
         conv = { id: conv.id, storico: [], vista: [] };
         disegna();
     }
@@ -255,6 +421,7 @@ const Assistente = (() => {
         disegnaFonti();
         disegnaMessaggi();
         disegnaAllegati();
+        disegnaFontiTemp();
         const invio = $('[data-ia-invia]', el);
         invio.innerHTML = ico(controllo ? 'stop' : 'invia');
         invio.classList.toggle('ferma', !!controllo);
@@ -370,18 +537,32 @@ const Assistente = (() => {
         });
     }
 
+    // Le parti dei materiali si preparano una volta per messaggio, non a ogni passo dell'assistente
+    let partiFonti = null;   // { chiave, parti }
+
     async function contenuti() {
         const storico = compatta(taglia(conv.storico)).map(c => ({ role: c.role, parts: c.parts }));
-        if (!setId) return storico;
-        // Chat del set: i materiali scelti vanno in testa come fonti
-        const fonti = Dati.materialiDiSet(setId).filter(m => m.usaInChat !== false);
-        if (!fonti.length || !storico.length) return storico;
-        attesa = `Preparo ${plurale(fonti.length, 'materiale', 'materiali')}…`;
-        disegnaMessaggi();
-        const budget = { inline: BUDGET_INLINE };
-        const parti = [{ text: `Materiali del set «${Dati.set(setId).nome}», caricati dall'utente: sono le fonti di questa conversazione.` }];
-        for (const m of fonti) parti.push(...await Materiali.partiPerIA(m, budget));
-        storico[0] = { role: storico[0].role, parts: [...parti, ...storico[0].parts] };
+        // Chat del set: i materiali scelti vanno in testa come fonti; in ogni chat, anche le fonti aggiunte a mano
+        const fonti = setId ? Dati.materialiDiSet(setId).filter(m => m.usaInChat !== false) : [];
+        const temp = fontiDellaChat();
+        if ((!fonti.length && !temp.length) || !storico.length) return storico;
+        const chiave = (setId || '') + '|' + fonti.map(m => `${m.id}:${m.aggiornato || m.creato || ''}`).join(',') + '|' + temp.map(f => f.id).join(',');
+        if (!partiFonti || partiFonti.chiave !== chiave) {
+            attesa = `Preparo ${plurale(fonti.length + temp.length, 'fonte', 'fonti')}…`;
+            disegnaMessaggi();
+            const budget = { inline: BUDGET_INLINE };
+            const parti = [];
+            if (fonti.length) {
+                parti.push({ text: `Materiali del set «${Dati.set(setId).nome}», caricati dall'utente: sono le fonti di questa conversazione.` });
+                for (const m of fonti) parti.push(...await Materiali.partiPerIA(m, budget));
+            }
+            if (temp.length) {
+                parti.push({ text: `Fonti che l'utente ha aggiunto a mano solo per questa conversazione (${temp.length}): tienine conto insieme alle altre. Non sono nei materiali: non provare a leggerle o citarle con gli strumenti dei materiali.` });
+                for (const f of temp) parti.push(...await Materiali.partiPerIA(f, budget));
+            }
+            partiFonti = { chiave, parti };
+        }
+        storico[0] = { role: storico[0].role, parts: [...partiFonti.parti, ...storico[0].parts] };
         return storico;
     }
 
@@ -411,6 +592,7 @@ const Assistente = (() => {
 
         controllo = new AbortController();
         attesa = '';
+        partiFonti = null;   // i materiali si rileggono a ogni messaggio (possono essere cambiati)
         disegna();
         // Una cartella collegata al set va riletta prima: l'assistente deve vedere l'ultima versione dei file
         if (setId && Cartelle.collegata(setId)) {
@@ -432,7 +614,10 @@ const Assistente = (() => {
                 disegnaMessaggi();
                 const dati = await Gemini.genera(richiesta, {
                     segnale: controllo.signal,
-                    suAttesa: (secondi, tentativo) => { attesa = `Gemini è occupato, riprovo tra ${secondi} s (tentativo ${tentativo})…`; disegnaMessaggi(); },
+                    suAttesa: (secondi, tentativo, motivo) => {
+                        attesa = motivo === 'rete' ? `La connessione è caduta, riprovo tra ${secondi} s (tentativo ${tentativo})…` : `Gemini è occupato, riprovo tra ${secondi} s (tentativo ${tentativo})…`;
+                        disegnaMessaggi();
+                    },
                 });
                 const candidato = dati.candidates && dati.candidates[0];
                 if (!candidato || !candidato.content || !candidato.content.parts) {

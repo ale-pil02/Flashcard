@@ -28,7 +28,7 @@ Impostazioni → Dati di prova → Tutorial).
 | **Libreria** | Materie → set → sotto-set → flashcard, con ricerca su tutto il testo |
 | **Set** | Avanzamento (Perfetto / Buono / Ok / Scarso / Mai studiate), riquadro con le carte da fare e **Personalizza** (il pulsante Studia non c'è più: lo studio parte dalle revisioni), sotto-set, revisioni, materiali, elenco delle carte ad albero. Sotto-set, Revisioni, Materiali e Flashcard si aprono e chiudono con un clic sul titolo (lo stato resta per tutti i set) |
 | **Selezione** | Nel set e nella ricerca: più flashcard insieme → tag, domanda madre, sposta, valutazione, progressi, assistente, elimina |
-| **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni |
+| **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni. **Modifica** (sopra la carta, o il tasto E) corregge domanda, risposta, suggerimento e spiegazione senza lasciare il ripasso: la carta si aggiorna subito, nella stessa fase |
 | **Revisioni** | Ripasso dei set e dei mazzi come nel database "Spaced Repetition System" di Notion, a intervalli crescenti (Fibonacci, modificabile) che si adattano a ritardi e anticipi, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set. Guida «Come funziona» con simulatore |
 | **Sessione personalizzata** | Scegli uno o più set, lo stato delle carte, i tag, quante carte e l'ordine |
 | **Editor** | Domanda, risposta, fonte della risposta, parte della mappa, domanda madre, suggerimento, spiegazione, tag, immagini |
@@ -147,9 +147,13 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
 - **Mappe mentali**: anche nell'editor delle mappe (pulsante ✨ nella barra). Sa quale mappa hai aperta e quali
   nodi hai selezionato ("aggiungi tre figli a questo nodo"). Crea mappe (anche da uno schema o da un materiale
   del set, .smmx compresi), aggiunge, modifica, sposta, copia (anche in un'altra mappa) ed elimina nodi; cambia
-  testo, note, etichette, icone, date, caselle, stile, linee, disposizioni, tema e colori; crea raccordi con linee
-  o graffa e figli comuni, collegamenti tra rami e temi personali; seleziona nodi, si concentra su un ramo, esporta
-  in PNG, OPML o testo. Non aggiunge immagini e non piega le linee a mano. Strumenti in `js/ia/strumenti-mappe.js`.
+  testo (anche il grassetto o il corsivo di una sola parte), note, etichette, icone, date, caselle, stile (anche la
+  dimensione in punti e la linea sotto il nodo), larghezza dei nodi, linee e loro curvatura, disposizioni, distanze
+  tra fratelli, griglia, tema e colori; crea, modifica, dà ai nodi ed elimina gli stili predefiniti; crea raccordi
+  con linee o graffa e figli comuni, collegamenti tra rami e temi personali; decide l'ordine delle mappe; seleziona
+  nodi, si concentra su un ramo, esporta in PNG, OPML o testo. Prima di eliminare nodi collegati a flashcard lo dice.
+  Non aggiunge immagini e non mette a mano i singoli punti di passaggio delle linee (usa la curvatura). Strumenti in
+  `js/ia/strumenti-mappe.js`.
 - **Livello di ragionamento** (Impostazioni → Assistente IA, o menu ⋯ dell'assistente): come il "Thinking level" di
   Google AI Studio (predefinito del modello, minimo, basso, medio, alto): `generationConfig.thinkingConfig.thinkingLevel`
   per i Gemini 3 e successivi (anche per i nomi senza versione come `gemini-flash-latest`); i Gemini 2.5 usano il loro
@@ -160,6 +164,22 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   il livello scelto si vede anche sotto il titolo dell'assistente.
 - **Chat del set**: aperta da un set, usa i suoi materiali come fonti (PDF e immagini li legge
   direttamente) e li cita, come NotebookLM. Altrove c'è la chat generale.
+- **Fonti solo per questa chat** (graffetta 📎 accanto al campo di scrittura, in ogni chat): *Carica un file* (PDF,
+  Word, PowerPoint, immagini, mappe, testi: gli stessi formati dei materiali) o *Incolla un testo*. Compaiono come
+  etichette sopra il campo («Fonti di questa chat»): un clic ne mostra il contenuto, la × le toglie. L'assistente le
+  usa a ogni messaggio insieme ai materiali, finché non le togli, cambi chat o ricominci la conversazione; **non
+  vengono salvate nei materiali** né nei backup e spariscono chiudendo l'app.
+- **Pannello più grande**: trascina il bordo sinistro del pannello per allargarlo o stringerlo (doppio clic: torna
+  normale), oppure il pulsante ⤢ in alto lo porta quasi a tutta la finestra e indietro. La larghezza resta in questo
+  browser. Sugli schermi grandi l'app si stringe accanto al pannello fino a metà finestra; oltre, il pannello le sta sopra.
+- **Contesto** (menu ⋯ → *Contesto: quanto ne regge la chat*): il limite del modello in token come lo dichiara Google
+  (per i Gemini attuali circa 1 milione in entrata), quanto ne occupava l'ultima richiesta e quanti MB. La chat manda
+  al modello gli ultimi 14 messaggi tuoi con risposte e risultati degli strumenti (quelli lunghi dei messaggi vecchi
+  accorciati), più le fonti.
+- **Connessione che cade** («Failed to fetch»): l'app riprova da sola tre volte (dopo 2, 5 e 10 secondi) mostrando
+  il tentativo; se non basta lo dice chiaramente e basta scrivere «continua». I PDF e le immagini grandi (oltre 4 MB in
+  tutto) si caricano una volta sui server di Gemini (restano 48 ore) invece di ripartire a ogni passo dell'assistente,
+  e una richiesta oltre i 19,5 MB viene fermata con un messaggio invece di fallire a metà.
 - **Creazione flashcard per profondità** (la skill *creatore-flashcard-mappe-mentali*, prima chiamata
   *localizzazione*): si avvia solo su richiesta, con `/profondita` nella chat (va ancora anche il vecchio
   `/localizzazione`) o con il pulsante **Creazione flashcard per profondità** sul materiale. La parte meccanica
@@ -301,7 +321,10 @@ mazzo con alcune carte.
 ## Mappe mentali (come SimpleMind)
 
 Sezione **Mappe** nel menu: elenco delle mappe con anteprima, filtrabile per materia; ogni mappa può stare
-in una materia e in un set. Si crea con **Nuova mappa** (o dal pulsante Crea) e si importa con **Importa**:
+in una materia e in un set. **Ordine delle mappe** (in alto a destra): *A mano*, *Ultima modificata* o *Per nome*.
+A mano si trascinano le tessere dove si vuole (o dal loro menu ⋯: *Sposta prima* / *Sposta dopo*); le mappe nuove
+compaiono in cima. Trascinare una tessera passa da solo all'ordine a mano. Nel modello: `ordineMappe` e
+`ordineMappeMano [id]` nelle impostazioni. Si crea con **Nuova mappa** (o dal pulsante Crea) e si importa con **Importa**:
 
 - **SimpleMind (.smmx)**: testi, forma e colori di ogni nodo, stili per livello e colori dei rami del foglio
   di stile, etichette sopra i nodi, icone (quelle di serie diventano emoji, quelle personali restano
@@ -326,13 +349,25 @@ L'editor (rotta `#/mappa/<id>`):
 - **Tastiera**: Tab figlio, Invio fratello, F2 o doppio clic per scrivere (o si comincia a scrivere e basta),
   Maiusc+Invio per andare a capo, Canc elimina, frecce per spostarsi, Alt+↑/↓ riordina, Spazio apre/chiude
   il ramo, Ctrl+Z/Y, Ctrl+C/X/V (si incollano anche elenchi rientrati da altri programmi), Ctrl+B/I/U,
-  Ctrl+Alt+C / Ctrl+Alt+V copia e incolla lo stile, Ctrl+F cerca, Ctrl+0 adatta. Nel testo: `**grassetto**`, `*corsivo*`, `__sottolineato__`, `~~barrato~~`.
+  Ctrl+Alt+C / Ctrl+Alt+V copia e incolla lo stile, Ctrl+Alt+1…9 gli stili predefiniti, Ctrl+F cerca, Ctrl+G la griglia,
+  Ctrl+0 adatta.
+- **Grassetto, corsivo, sottolineato e barrato su una parte del testo**: mentre scrivi nel nodo (F2) selezioni le
+  parole e premi Ctrl+B, Ctrl+I, Ctrl+U o Ctrl+Maiusc+X, oppure usi la barretta B I U S che compare sopra il nodo.
+  Il testo si vede già formattato mentre scrivi. Fuori dalla scrittura, Ctrl+B/I/U vale per tutto il nodo (se tutto il
+  nodo è già in grassetto dallo stile, una sua parte non si distingue: l'app lo dice). Nel modello il testo tiene i
+  segni `**grassetto**`, `*corsivo*`, `__sottolineato__`, `~~barrato~~`, anche dentro una parola o insieme
+  (`***grassetto e corsivo***`); `\*` è un asterisco vero. Un segno vale solo se tocca il testo e ha chi lo chiude,
+  quindi «5 * 3» o «____» restano come sono.
 - **Mouse e touch**: trascina lo sfondo per spostarti, rotellina (o due dita) per lo zoom, Maiusc+rotellina
   per scorrere, doppio clic sullo sfondo per un nodo libero. **Finestra di selezione**: tieni premuto Ctrl (o
   Maiusc) e trascina dallo sfondo: compare un riquadro, come sul desktop di Windows, e si aggiungono alla selezione
   i nodi che tocca (mentre trascini sono già evidenziati).
   Trascinando un nodo su un altro lo si sposta sotto di lui, sopra o sotto un fratello per riordinarlo;
   i rami principali si spostano anche da un lato all'altro.
+- **Griglia di allineamento** (pulsante a puntini nella barra, Ctrl+G, o pannello Disposizione): sullo sfondo
+  compaiono i punti della griglia e i nodi che sposti a mano (nella disposizione libera e i nodi liberi) si fermano col
+  centro sul punto più vicino, così restano allineati; tenendo Alt mentre trascini li sposti liberamente. Il passo
+  (10-80 px) si sceglie nel pannello Disposizione. Nel modello: `griglia { attiva, passo }` sulla mappa.
 - **Larghezza del nodo** (come SimpleMind): sotto il nodo scelto, verso destra, c'è la maniglia ◂▸. Trascinandola
   il bordo destro segue il puntatore, con una linea guida, e il testo va a capo; lasciando, la mappa si ridispone.
   Doppio clic sulla maniglia (o Stile → Larghezza → *Larghezza automatica*, anche per più nodi) torna alla larghezza
@@ -346,8 +381,9 @@ L'editor (rotta `#/mappa/<id>`):
   sopra o sotto solo se quel figlio dispone i suoi in verticale o capovolti.
 - **Trascinamento**: mentre trascini si muovono in diretta il nodo, il suo ramo e tutte le linee. Con Ctrl+clic
   si scelgono più nodi (un altro Ctrl+clic ne toglie uno): trascinandone uno si spostano tutti insieme.
-- **Più nodi scelti**: compare una barra con **Disposizione** (la disposizione dei figli di tutti i nodi scelti,
-  in un colpo solo e con un solo Ctrl+Z; se c'è la radice cambia quella della mappa), Flashcard, Figlio comune e Graffa.
+- **Più nodi scelti**: in alto al centro della mappa compare una barra ferma (non copre i nodi che stai scegliendo)
+  con **Disposizione** (la disposizione dei figli di tutti i nodi scelti, in un colpo solo e con un solo Ctrl+Z; se c'è
+  la radice cambia quella della mappa), Flashcard, Figlio comune e Graffa.
 - **Figlio comune e graffa**: dalla barra dei nodi scelti (anche nel menu del nodo).
   **Figlio comune** crea un nodo collegato a tutti: se i nodi sono fratelli il nuovo nodo sta oltre di loro, a
   metà della loro altezza, con una linea da ognuno; se non lo sono sta sotto il primo scelto e gli altri hanno una
@@ -357,7 +393,11 @@ L'editor (rotta `#/mappa/<id>`):
 - **Linee**: clicca una linea per sceglierla; nel pannello Stile ne cambi forma (curva, ad angolo, angolo
   arrotondato, dritta), tratto (affusolata automatica, affusolata, piena, a trattini, a punti), spessore, frecce
   all'inizio e alla fine e colore, anche per tutto il ramo. L'affusolata automatica si assottiglia a ogni livello
-  senza scendere sotto lo spessore minimo; forma e misure di base sono in Disposizione e tema → Linee.
+  senza scendere sotto lo spessore minimo; forma e misure di base sono in Tema e linee → Linee della mappa.
+  **Curvatura** (sotto le frecce e il colore): il modo semplice di piegare una linea, senza punti a mano. Scegli
+  *ad arco* o *a onda (S)* e con il cursore quanto si piega e da che parte (0 = linea normale); vale per tutte le
+  linee scelte. Anche i **collegamenti tra rami** hanno il loro cursore *Curvatura* nella finestrella (0 = dritto).
+  Sotto, nel modello, sono uno o due punti di passaggio (`percorso`), quindi si possono poi rifinire a mano.
   **Il percorso della linea lo decidi tu**: trascinando un punto qualsiasi della linea scelta aggiungi lì un **punto
   di passaggio**; i pallini pieni sono i punti (si spostano), quelli vuoti a metà di ogni tratto ne aggiungono un
   altro. **Togliere un punto** senza rifare la linea: cliccalo (diventa rosso, con una × accanto) e premi Canc o la
@@ -369,11 +409,31 @@ L'editor (rotta `#/mappa/<id>`):
   collegamento, rispetto ai centri dei due nodi): il loro testo sta a metà e trascinandolo si sposta il punto di
   mezzo. Le linee piegate col vecchio sistema (un solo punto, `piega` / `curva`) diventano una linea con un punto
   appena le tocchi.
-- **Pannelli** (barra in alto): Disposizione e tema (orizzontale, verticale, capovolta, lineare, radiale,
-  libera; rami a destra/sinistra/automatici; spaziatura; linee della mappa; 4 temi di serie e quelli tuoi, creati
-  con **Nuovo tema** partendo dall'aspetto della mappa e salvati nelle impostazioni, quindi validi per tutte le mappe), Stile (carattere, forma, bordo, colori
-  del ramo e del riempimento, freccia e linea del collegamento, dimensione minima, copia/incolla stile),
-  Icone, Nota (con link, data, casella da spuntare, immagini), Struttura (elenco rientrato).
+- **Pannelli** (barra in alto):
+  - **Disposizione**: orizzontale, verticale, capovolta, lineare, radiale, libera; rami a destra/sinistra/automatici;
+    **Distanze**: spazio tra tutti i nodi, **distanza tra fratelli** (i nodi uno sotto l'altro, 20%-600%) e, con un
+    nodo scelto che ha più figli, la distanza solo tra i suoi figli (`spaziaturaFratelli` sulla mappa,
+    `distanzaFigli` sul nodo); la griglia di allineamento.
+  - **Tema e linee**: 4 temi di serie e quelli tuoi, creati con **Nuovo tema** partendo dall'aspetto della mappa e
+    salvati nelle impostazioni (validi per tutte le mappe); linee della mappa (forma, affusolamento, spessori).
+  - **Stile**, in quest'ordine: *Stili predefiniti*; *Testo* (B I U S, **dimensione in punti** come in Word, con
+    l'elenco 8, 9, 10, 10,5, 11, 12, 14… o un numero qualsiasi; allineamento; e subito sotto i colori **Testo**,
+    **Ramo** e **Riempimento**, ognuno con il suo campione: un clic apre la tavolozza); *Forma e bordo* (con la forma
+    sottolineata, la **linea sotto il nodo**: colore, tratto e spessore solo suoi, senza toccare le linee verso il
+    genitore e i figli — `stile.sottolineatura { colore, tratto, spessore }`); *Linea verso il nodo padre*;
+    *Dimensioni del nodo*; copia/incolla stile e stile del tema.
+  - Icone, Nota (con link, data, casella da spuntare, immagini), Struttura (elenco rientrato).
+- **Stili predefiniti** (pannello Stile, in cima): stili tuoi da dare ai nodi con un clic, per esempio «Dettaglio»
+  piccolo e grigio. **Nuovo** salva lo stile del nodo scelto con un nome; **Aggiorna** lo sostituisce con quello del
+  nodo (e cambiano tutti i nodi che lo usano, in tutte le mappe); *Togli* lo stacca dai nodi scelti. Dal menu di uno
+  stile lo rinomini o lo elimini (i nodi tornano al loro stile). I primi nove si danno anche con Ctrl+Alt+1…9.
+  Le scelte fatte sul singolo nodo vincono sullo stile predefinito. Nel modello: `stiliMappe [{ id, nome, stile }]`
+  nelle impostazioni e `stilePredefinito` sul nodo; l'ordine è tema → stile predefinito → stile del nodo.
+- **Dimensione del testo in punti**: 10,5 pt è la dimensione normale (nel modello resta `scala`, 1 = 10,5 pt);
+  anche le etichette sopra i nodi hanno la loro dimensione in punti.
+- **Eliminare nodi collegati a flashcard**: se il nodo (o un nodo sotto di lui) è la *parte di mappa* di qualche
+  flashcard, prima di eliminarlo compare un avviso con le flashcard coinvolte; se confermi, le flashcard restano ma
+  senza collegamento a quel punto (Ctrl+Z rimette tutto). Anche l'assistente lo dice prima di eliminare.
 - **Immagini**: dal pulsante 🖼 della barra (o dal menu del nodo, o dal pannello Nota) un'immagine va **libera,
   agganciata al nodo**, o **dentro il nodo**. Quella libera segue il suo nodo quando il nodo si sposta, ma non occupa
   spazio nella disposizione: spostandola non sposti i nodi. Si trascina dove si vuole e si ridimensiona tirando il

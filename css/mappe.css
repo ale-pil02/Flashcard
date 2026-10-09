@@ -6,6 +6,14 @@
 
 /* ---- Elenco delle mappe -------------------------------------------------- */
 
+/* Schede delle materie e ordine delle mappe (a mano: si trascinano le tessere) */
+.barra-mappe { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--bordo); }
+.barra-mappe .schede-rev { flex: 1; min-width: 0; margin-bottom: 0; border-bottom: none; }
+.ordine-mappe { display: flex; flex: none; align-items: center; gap: 6px; padding-bottom: 6px; color: var(--testo-2); font-size: .85rem; font-weight: 600; }
+.ordine-mappe .ico { width: 16px; height: 16px; }
+.ordine-mappe select { height: 32px; padding: 0 8px; border: 1.5px solid var(--bordo); border-radius: 8px; background: var(--superficie); color: var(--testo); font: inherit; font-weight: 500; }
+.tessera-mappa[draggable="true"] { cursor: grab; }
+.tessera-mappa.trascinata { opacity: .35; outline: 2px dashed var(--primario); outline-offset: 2px; }
 .griglia-mappe { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
 
 .tessera-mappa {
@@ -324,6 +332,37 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .maniglia.attiva { background: var(--primario); opacity: 1; }
 .maniglia[data-m="larghezza"] { cursor: ew-resize; touch-action: none; }
 .maniglia .freccette { width: 14px; height: 9px; }
+/* Barra sopra il nodo in modifica: grassetto, corsivo, sottolineato e barrato sulla parte di testo selezionata */
+.barra-testo-nodo {
+    position: absolute;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--bordo);
+    border-radius: 9px;
+    background: var(--superficie);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .14);
+    z-index: 3;
+}
+.barra-testo-nodo button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--testo);
+    font: 15px/1 Georgia, 'Times New Roman', serif;
+    cursor: pointer;
+}
+.barra-testo-nodo button:hover { background: var(--superficie-2); }
+.barra-testo-nodo button.attivo { background: var(--primario-tenue); color: var(--primario-testo); }
+.fmt-grassetto { font-weight: 700; }
+.fmt-corsivo { font-style: italic; }
+.fmt-sottolineato { text-decoration: underline; }
+.fmt-barrato { text-decoration: line-through; }
 .guida-larghezza { position: absolute; width: 0; border-left: 2px solid var(--primario); pointer-events: none; }
 .mappa-tela.allargando, .mappa-tela.allargando * { cursor: ew-resize !important; }
 /* Punti di passaggio della linea scelta: pieni = da spostare (doppio clic per toglierli), vuoti = da trascinare per
@@ -624,6 +663,9 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .pop-multipla .pop-titolo { padding: 0 4px; }
 .pop-multipla .btn .ico { width: 15px; height: 15px; }
 .pop-multipla { flex-wrap: wrap; max-width: 420px; }
+/* Barra dei nodi scelti: ferma in alto al centro della mappa (la griglia delle disposizioni si apre sotto) */
+.pop-multipla.in-alto { top: 10px; left: 12px; right: 12px; width: fit-content; max-width: 560px; margin: 0 auto; transform: none; justify-content: center; }
+.pop-multipla.in-alto .griglia-disposizioni-multi { max-height: min(380px, calc(100vh - 260px)); overflow: auto; }
 .pop-multipla .btn.attivo { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); }
 .griglia-disposizioni-multi { flex-basis: 100%; margin-top: 4px; white-space: normal; }
 .segno-graffa { display: inline-block; width: 16px; font: 700 19px/1 Georgia, 'Times New Roman', serif; text-align: center; }
@@ -781,3 +823,47 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .miniatura-figura-img img { width: 100%; height: 100%; object-fit: cover; }
 .miniatura-figura-togli { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 2px solid var(--superficie); border-radius: 50%; background: var(--pericolo); color: #fff; cursor: pointer; }
 .miniatura-figura-togli .ico { width: 12px; height: 12px; }
+
+/* Stili predefiniti, dimensione in punti (pannello Stile) */
+.stili-predefiniti { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-stile { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; border: 1.5px solid var(--bordo); border-radius: 10px; background: var(--superficie); color: var(--testo); font: inherit; font-size: .85rem; cursor: pointer; }
+.chip-stile:hover { border-color: var(--bordo-forte); }
+.chip-stile.attivo { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); }
+.anteprima-stile { display: inline-grid; place-items: center; min-width: 30px; height: 24px; padding: 0 4px; border-radius: 6px; background: var(--superficie-2); line-height: 1; }
+.campo-pt { display: inline-flex; align-items: center; gap: 4px; color: var(--testo-3); font-size: .8rem; }
+.campo-pt input { width: 74px; padding: 5px 6px; border: 1.5px solid var(--bordo); border-radius: 8px; background: var(--superficie); color: var(--testo); font: inherit; font-size: .88rem; }
+.etichetta-campo small { color: var(--testo-3); font-weight: 400; }
+
+/* Colori compatti nel pannello: pulsante con il colore attuale, la tavolozza si apre sotto */
+.campi-colore { display: grid; gap: 6px; }
+.campo-colore { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px 6px 6px; border: 1.5px solid var(--bordo); border-radius: 10px; background: var(--superficie); color: var(--testo); font: inherit; text-align: left; cursor: pointer; }
+.campo-colore:hover { border-color: var(--bordo-forte); }
+.campo-colore > .ico { width: 14px; height: 14px; margin-left: auto; color: var(--testo-3); }
+.campione { display: grid; flex: none; place-items: center; width: 26px; height: 26px; border: 1px solid rgba(0, 0, 0, .12); border-radius: 7px; background: var(--superficie-2); color: var(--testo-2); font-size: .72rem; font-weight: 800; text-shadow: 0 0 3px rgba(255, 255, 255, .8); }
+.campione.senza-colore { background: linear-gradient(135deg, transparent 45%, #e5484d 45%, #e5484d 55%, transparent 55%), var(--superficie); }
+.campo-colore-nome { display: flex; flex-direction: column; font-size: .86rem; font-weight: 600; line-height: 1.2; }
+.campo-colore-nome small { color: var(--testo-3); font-size: .74rem; font-weight: 400; }
+.tendina-colori { width: auto; max-width: 300px; padding: 10px; }
+.tendina-colori .mappa-colori button { justify-content: center; }
+.tendina-colori .mappa-colori button:hover { background: var(--c); transform: scale(1.12); }
+.tendina-colori .mappa-colori .colore-auto:hover { background: var(--superficie-2); }
+.tendina-colori .mappa-colori .colore-nessuno:hover { background: linear-gradient(135deg, transparent 44%, #e5484d 44%, #e5484d 56%, transparent 56%), var(--superficie); }
+
+/* Griglia di allineamento: punti sullo sfondo (passo e posizione li mette l'editor, secondo zoom e vista) */
+.mappa-tela.con-griglia {
+    background-image: radial-gradient(circle, rgba(128, 128, 128, .45) 1.1px, transparent 1.4px);
+    background-size: 20px 20px;
+}
+
+/* Curvatura semplice delle linee: arco o onda, e quanto si piegano */
+.riga-curvatura { display: flex; align-items: center; gap: 8px; }
+.riga-curvatura .riga-bottoni { flex: none; }
+.riga-curvatura input[type=range] { flex: 1; min-width: 0; }
+.riga-curvatura b { min-width: 46px; color: var(--testo-2); font-size: .8rem; text-align: right; }
+.pop-curva { display: flex; align-items: center; gap: 8px; color: var(--testo-2); font-size: .8rem; font-weight: 600; }
+.pop-curva input { flex: 1; min-width: 0; }
+
+/* Avviso: nodi collegati a flashcard */
+.elenco-avviso { display: grid; gap: 3px; margin: 8px 0; padding: 8px 10px; border-radius: 9px; background: var(--superficie-2); font-size: .88rem; }
+.elenco-avviso > span::before { content: '• '; color: var(--testo-2); }
+.elenco-avviso small { color: var(--testo-2); }

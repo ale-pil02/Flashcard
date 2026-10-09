@@ -21,15 +21,18 @@
 
 const Disposizione = (() => {
 
-    function distanze(sp) {
+    // sp = spaziatura di tutta la mappa; fr = distanza tra fratelli (moltiplica solo lo spazio tra nodi con lo stesso padre).
+    // Un nodo può avere la sua distanza tra i figli (n.fratelli, moltiplica quella della mappa)
+    function distanze(sp, fr = 1) {
         return {
-            oriz: { m: l => (l <= 1 ? 64 : 38) * sp, c: l => (l <= 1 ? 26 : 9) * sp },
-            vert: { m: l => (l <= 1 ? 64 : 44) * sp, c: l => (l <= 1 ? 34 : 16) * sp },
-            lin: { rientro: 30 * sp, sopra: 14 * sp, tra: 10 * sp },
+            oriz: { m: l => (l <= 1 ? 64 : 38) * sp, c: l => (l <= 1 ? 26 : 9) * sp * fr },
+            vert: { m: l => (l <= 1 ? 64 : 44) * sp, c: l => (l <= 1 ? 34 : 16) * sp * fr },
+            lin: { rientro: 30 * sp, sopra: 14 * sp, tra: 10 * sp * fr },
             rad: { minimo: 150 * sp },
             sp,
         };
     }
+    const traFigli = n => (+n.fratelli > 0 ? limita(+n.fratelli, 0.1, 6) : 1);
 
     // Disposizione che un figlio eredita dal padre, con il lato (+1 destra, -1 sinistra) per chi va in orizzontale
     function perFiglio(f, modo, dir) {
@@ -137,7 +140,7 @@ const Disposizione = (() => {
     // Figli in colonna a destra (dir +1) o a sinistra (-1); il padre sta a metà tra il primo e l'ultimo figlio
     function colonna(n, figli, dir, o, liv) {
         if (!figli.length) return;
-        const g = o.oriz.c(liv), gm = o.oriz.m(liv);
+        const g = o.oriz.c(liv) * traFigli(n), gm = o.oriz.m(liv);
         const uu = unita(figli);
         impila(uu, 'y', g);
         const [p, u] = primoUltimo(uu);
@@ -179,7 +182,7 @@ const Disposizione = (() => {
     function riga(n, modo, o, liv) {
         n.figli.forEach(f => { const x = perFiglio(f, modo, 1); disponi(f, x.m, x.d, o); });
         const su = modo === 'su';
-        const g = o.vert.c(liv), gm = o.vert.m(liv);
+        const g = o.vert.c(liv) * traFigli(n), gm = o.vert.m(liv);
         const uu = unita(n.figli);
         impila(uu, 'x', g);
         const [p, u] = primoUltimo(uu);
@@ -196,7 +199,7 @@ const Disposizione = (() => {
     function lista(n, o) {
         n.figli.forEach(f => { const x = perFiglio(f, 'lineare', 1); disponi(f, x.m, x.d, o); });
         const uu = unita(n.figli);
-        impila(uu, 'y', o.lin.tra);
+        impila(uu, 'y', o.lin.tra * traFigli(n));
         uu.forEach(x => x.membri.forEach(f => { f.rx = o.lin.rientro - f.blocco.x0; f.dir = 'lineare'; }));
         oltre(uu, 'x', 1, o);
         n.figli.forEach(f => { f.ry += n.ext.basso + o.lin.sopra; });
@@ -246,8 +249,8 @@ const Disposizione = (() => {
         n.figli.forEach(f => { f.x = n.x + f.rx; f.y = n.y + f.ry; assoluti(f); });
     }
 
-    function calcola(r, liberi, { tipo = 'orizzontale', direzione = 'auto', spaziatura = 1 } = {}) {
-        const o = distanze(limita(spaziatura || 1, 0.5, 2.5));
+    function calcola(r, liberi, { tipo = 'orizzontale', direzione = 'auto', spaziatura = 1, fratelli = 1 } = {}) {
+        const o = distanze(limita(spaziatura || 1, 0.5, 2.5), limita(+fratelli || 1, 0.1, 6));
         const modo = r.modo || tipo;
         const orizz = modo === 'orizzontale' || modo === 'libera';
         disponi(r, modo === 'orizzontale' && ['destra', 'sinistra'].includes(direzione) ? direzione : modo, 1, o, orizz ? direzione : null);

@@ -8,7 +8,8 @@ Viste.mappe = {
 
     mostra(el) {
         const ico = Ui.ico;
-        const mappe = Mappe.tutte();
+        const mappe = Mappe.ordinate();
+        const ordine = Mappe.ordineMappe();
         const materie = Dati.materie().filter(mat => mappe.some(x => x.materiaId === mat.id));
         const senza = mappe.filter(x => !x.materiaId || !Dati.materia(x.materiaId));
         if (this.filtro !== 'tutte' && this.filtro !== 'nessuna' && !materie.some(mat => mat.id === this.filtro)) this.filtro = 'tutte';
@@ -34,8 +35,12 @@ Viste.mappe = {
                         <button type="button" class="btn btn-primario" data-azione="nuova">${ico('piu')}<span>Nuova mappa</span></button>
                     </div>
                 </header>
-                ${mappe.length && schede.length > 1 ? `<nav class="schede-rev" role="tablist">${schede.map(s => `
-                    <button type="button" role="tab" class="scheda-rev${this.filtro === s.id ? ' attiva' : ''}" data-filtro="${esc(s.id)}" aria-selected="${this.filtro === s.id}">${esc(s.testo)} <span class="conteggio">${s.conto}</span></button>`).join('')}</nav>` : ''}
+                ${mappe.length ? `<div class="barra-mappe">
+                    ${schede.length > 1 ? `<nav class="schede-rev" role="tablist">${schede.map(s => `
+                    <button type="button" role="tab" class="scheda-rev${this.filtro === s.id ? ' attiva' : ''}" data-filtro="${esc(s.id)}" aria-selected="${this.filtro === s.id}">${esc(s.testo)} <span class="conteggio">${s.conto}</span></button>`).join('')}</nav>` : '<span></span>'}
+                    ${mappe.length > 1 ? `<label class="ordine-mappe" title="Trascina le mappe per metterle nell'ordine che vuoi">${ico('ordina')}<span>Ordine</span>
+                        <select data-ordine-mappe>${Mappe.ORDINI_MAPPE.map(([v, t]) => `<option value="${v}" ${ordine === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
+                </div>` : ''}
                 ${visibili.length ? `<div class="griglia-mappe">${visibili.map(x => this.tessera(x)).join('')}${daRicreare.map(mat => `
                     <button type="button" class="tessera-mappa tessera-ricrea" data-ricrea-panoramica="${mat.id}" title="La mappa d'insieme della materia, tenuta dall'app: titolo, sottorami e concetti principali di tutte le sue mappe">
                         <span class="tessera-ricrea-icona">${ico('piu')}</span>
@@ -54,6 +59,14 @@ Viste.mappe = {
             nuova: () => this.nuova(),
             importa: () => this.importa(),
         });
+        el.addEventListener('change', e => {
+            if (!e.target.matches('[data-ordine-mappe]')) return;
+            Mappe.impostaOrdineMappe(e.target.value);
+            if (e.target.value === 'mano') Ui.toast('Trascina le mappe per metterle nell\'ordine che vuoi', 'info', 3200);
+            App.ridisegna();
+        });
+        const griglia = $('.griglia-mappe', el);
+        if (griglia) this.trascinabili(griglia);
         el.addEventListener('click', e => {
             const f = e.target.closest('[data-filtro]');
             if (f) { this.filtro = f.dataset.filtro; App.ridisegna(); return; }
@@ -73,14 +86,14 @@ Viste.mappe = {
         const s = x.setId && Dati.set(x.setId);
         const dove = [mat ? `${mat.emoji} ${mat.nome}` : '', s ? s.nome : ''].filter(Boolean).join(' › ');
         const anteprima = x.anteprima && /^<svg[\s>]/.test(x.anteprima)
-            ? `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x.anteprima)}" alt="" loading="lazy">`
+            ? `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x.anteprima)}" alt="" loading="lazy" draggable="false">`
             : `<span class="anteprima-vuota">${Ui.ico('mappa')}</span>`;
         return `
-            <article class="tessera-mappa">
-                <a class="anteprima-mappa" href="#/mappa/${x.id}" aria-label="Apri ${esc(x.nome)}">${anteprima}</a>
+            <article class="tessera-mappa" data-id="${x.id}" draggable="true" title="Trascinala per cambiare l'ordine delle mappe">
+                <a class="anteprima-mappa" href="#/mappa/${x.id}" draggable="false" aria-label="Apri ${esc(x.nome)}">${anteprima}</a>
                 <div class="tessera-mappa-piede">
                     <div class="tessera-mappa-testo">
-                        <a class="tessera-mappa-nome" href="#/mappa/${x.id}">${esc(x.nome)}</a>
+                        <a class="tessera-mappa-nome" href="#/mappa/${x.id}" draggable="false">${esc(x.nome)}</a>
                         ${x.panoramica ? `<span class="chip chip-panoramica" title="Mappa d'insieme della materia: la tiene l'app">${Ui.ico('mappa')}d'insieme</span>` : ''}
                         <small>${dove ? esc(dove) + ' · ' : ''}${plurale(Mappe.contaNodi(x), 'nodo', 'nodi')} · modificata ${esc(distanzaGiorni(x.modificata || x.creata))}</small>
                     </div>
@@ -89,10 +102,62 @@ Viste.mappe = {
             </article>`;
     },
 
+    // Le tessere si trascinano per decidere l'ordine delle mappe (si spostano mentre le trascini)
+    trascinabili(griglia) {
+        let presa = null, prima = '';
+        const ordine = () => $$('.tessera-mappa[data-id]', griglia).map(t => t.dataset.id);
+        griglia.addEventListener('dragstart', e => {
+            const t = e.target.closest('.tessera-mappa[data-id]');
+            if (!t) return;
+            presa = t;
+            prima = ordine().join();
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', t.dataset.id);
+            requestAnimationFrame(() => t.classList.add('trascinata'));
+        });
+        griglia.addEventListener('dragover', e => {
+            if (!presa) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const t = e.target.closest('.tessera-mappa[data-id]');
+            if (!t || t === presa) return;
+            const r = t.getBoundingClientRect();
+            const dopo = e.clientX > r.left + r.width / 2;
+            if (dopo ? t.nextElementSibling !== presa : t.previousElementSibling !== presa) griglia.insertBefore(presa, dopo ? t.nextElementSibling : t);
+        });
+        griglia.addEventListener('drop', e => { if (presa) e.preventDefault(); });
+        griglia.addEventListener('dragend', () => {
+            if (!presa) return;
+            presa.classList.remove('trascinata');
+            presa = null;
+            const ids = ordine();
+            if (ids.join() === prima) return;
+            const eraAMano = Mappe.ordineMappe() === 'mano';
+            Mappe.riordina(ids);
+            if (!eraAMano) { Ui.toast('Ordine delle mappe: a mano', 'successo', 2200); App.ridisegna(); }
+        });
+    },
+
+    // Sposta una mappa di un posto tra quelle che si vedono (per chi non può trascinare)
+    spostaDiUno(x, verso) {
+        const tessere = $$('.griglia-mappe .tessera-mappa[data-id]').map(t => t.dataset.id);
+        const i = tessere.indexOf(x.id), j = i + verso;
+        if (i < 0 || j < 0 || j >= tessere.length) return;
+        [tessere[i], tessere[j]] = [tessere[j], tessere[i]];
+        Mappe.riordina(tessere);
+        App.ridisegna();
+    },
+
     menu(ancora, x) {
         if (!x) return;
+        const tessere = $$('.griglia-mappe .tessera-mappa[data-id]').map(t => t.dataset.id);
+        const i = tessere.indexOf(x.id);
         Ui.menu(ancora, [
             { testo: 'Apri', icona: 'mappa', clic: () => Router.vai('/mappa/' + x.id) },
+            ...(tessere.length > 1 ? [
+                i > 0 ? { testo: 'Sposta prima', icona: 'sinistra', clic: () => this.spostaDiUno(x, -1) } : null,
+                i < tessere.length - 1 ? { testo: 'Sposta dopo', icona: 'destra', clic: () => this.spostaDiUno(x, 1) } : null,
+            ].filter(Boolean) : []),
             { testo: 'Nome, materia e set', icona: 'matita', clic: () => this.proprieta(x, () => App.ridisegna()) },
             { testo: 'Duplica', icona: 'copia', clic: () => { Mappe.duplica(x.id); Ui.toast('Mappa duplicata', 'successo'); App.ridisegna(); } },
             { testo: 'Esporta in OPML', icona: 'scarica', clic: () => scaricaFile(nomeFileSicuro(x.nome) + '.opml', FileMappe.inOpml(x), 'text/x-opml') },

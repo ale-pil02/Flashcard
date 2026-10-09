@@ -92,7 +92,14 @@ casella da spuntare, stile proprio e la disposizione dei suoi figli; la mappa ha
   il [Contesto dell'app] la nomina con i nodi selezionati: "questa mappa", "questo nodo", "questi nodi" sono quelli.
 - Rami interi in una sola chiamata: aggiungi_nodi con 'schema' (elenco rientrato). Testi brevi, da mappa (parole chiave,
   non frasi lunghe); spiegazioni ed esempi vanno nella nota del nodo. Nel testo valgono **grassetto**, *corsivo*,
-  __sottolineato__, ~~barrato~~.
+  __sottolineato__, ~~barrato~~ anche su una sola parola o parte di parola (l'utente li fa con Ctrl+B/I/U mentre scrive).
+- Stili predefiniti (stili_predefiniti, poi modifica_nodi con stile_predefinito): stili dell'utente validi in tutte le
+  mappe, es. «Dettaglio» piccolo e grigio. Se l'utente nomina uno stile suo, cercalo lì prima di copiarne le proprietà.
+- Dimensione del testo in punti come in Word (stile.pt; 10,5 = normale). Larghezza di un nodo: modifica_nodi.larghezza.
+  Distanza tra fratelli: modifica_mappa.distanza_fratelli (tutta la mappa) o modifica_nodi.distanza_figli (un nodo).
+  Griglia di allineamento: modifica_mappa.griglia. Linea sotto un nodo a forma sottolineata: stile.sottolineatura
+  (vale solo per lui). Curvatura di una linea: modifica_nodi.curvatura_linea o collegamenti_mappa (curvatura).
+  Ordine delle mappe nella sezione Mappe: ordina_mappe.
 - Lo stile di un nodo contiene solo ciò che cambia rispetto al tema; il colore del ramo ('colore') passa anche ai
   discendenti che non ne hanno uno proprio, quindi per colorare un ramo intero basta il suo nodo più alto.
 - "Raggruppa con una graffa", "riepilogo", "parentesi graffa" → figlio_comune con graffa=true (solo fratelli);

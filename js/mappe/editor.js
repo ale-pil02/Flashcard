@@ -95,9 +95,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                     </div>
                     <div class="mappa-gruppo">
                         ${pulsante('cerca', ico('cerca'), 'Cerca nella mappa (Ctrl+F)')}
+                        ${pulsante('griglia', ico('griglia'), 'Griglia di allineamento (Ctrl+G): i nodi spostati si agganciano ai suoi punti')}
                     </div>
                     <div class="mappa-gruppo mappa-pannelli">
-                        ${pulsante('p-aspetto', ico('tavolozza'), 'Disposizione e tema', 'data-p="aspetto"')}
+                        ${pulsante('p-disposizione', ico('ramo'), 'Disposizione (distanze e griglia)', 'data-p="disposizione"')}
+                        ${pulsante('p-tema', ico('tavolozza'), 'Tema e linee', 'data-p="tema"')}
                         ${pulsante('p-stile', ico('pennello'), 'Stile del nodo', 'data-p="stile"')}
                         ${pulsante('p-icone', ico('faccina'), 'Icone', 'data-p="icone"')}
                         ${pulsante('p-nota', ico('nota'), 'Nota, link e data', 'data-p="nota"')}
@@ -142,7 +144,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     // ---- Storia (Annulla / Ripeti) e salvataggio ------------------------------------------------------
 
-    const CAMPI_STORIA = ['nome', 'nodi', 'relazioni', 'radice', 'tema', 'disposizione', 'direzione', 'spaziatura', 'paletta', 'coloreRadice', 'livelli', 'linee'];
+    const CAMPI_STORIA = ['nome', 'nodi', 'relazioni', 'radice', 'tema', 'disposizione', 'direzione', 'spaziatura', 'spaziaturaFratelli', 'paletta', 'coloreRadice', 'livelli', 'linee'];
     const istantanea = () => JSON.stringify(Object.fromEntries(CAMPI_STORIA.map(k => [k, m[k]])));
     const ripristina = json => Object.assign(m, JSON.parse(json));
 
@@ -334,7 +336,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 id, n, s, livello: i.livello, colore: i.colore, sotto: s.forma === 'sottolineata',
                 lato: !st.focus && n.genitore === m.radice ? n.lato : null, off: n.off || null, figli: [],
                 fx: n.genitore || id === m.radice ? null : n.x, fy: n.genitore || id === m.radice ? null : n.y,
-                modo: id === m.radice ? null : n.disposizione || null,
+                modo: id === m.radice ? null : n.disposizione || null, fratelli: +n.distanzaFigli || null,
             };
             tutti.push(b);
             if (!n.chiuso || SOLA) b.figli = n.figli.filter(f => m.nodi[f]).map(crea);
@@ -460,7 +462,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             alberoB.modo = mf === 'orizzontale' ? st.focusLato || 'destra' : mf;
         }
         const direzione = m.direzione;
-        Disposizione.calcola(alberoB, liberiB, { tipo, direzione, spaziatura: m.spaziatura });
+        Disposizione.calcola(alberoB, liberiB, { tipo, direzione, spaziatura: m.spaziatura, fratelli: m.spaziaturaFratelli });
 
         // 4. Posizioni
         geo.clear();
@@ -499,7 +501,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         return '';
     }
 
-    // Icone delle forme e dei tratti delle linee (pannello Stile e Disposizione e tema)
+    // Icone delle forme e dei tratti delle linee (pannelli Stile e Tema e linee)
     function iconaLinea(tipo) {
         const d = {
             curva: '<path d="M2 13 C13 13 13 3 24 3" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -608,11 +610,15 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             visita(f);
         });
         [alberoB, ...liberiB].forEach(visita);
+        // Linea sotto i nodi sottolineati: continua quella che arriva, salvo colore, tratto e spessore scelti solo per lei
         geo.forEach(b => {
             if (!b.sotto) return;
-            const w = Math.max(1.2, arrivo.get(b.id) || Mappe.spessoreLinea(m, b.livello));
-            parti.push(`<path d="M${b.x.toFixed(1)},${(b.y + b.h).toFixed(1)} H${(b.x + b.w).toFixed(1)}" fill="none" stroke="${b.s.coloreBordo}" stroke-width="${w.toFixed(2)}" stroke-linecap="round"${tratteggio(b.s.tratto, w)}/>`);
-            archi.push({ d: `M${b.x},${b.y + b.h} H${b.x + b.w}`, colore: b.s.coloreBordo, w });
+            const so = b.s.sottolineatura || {};
+            const w = +so.spessore > 0 ? limita(+so.spessore, 0.5, 20) : Math.max(1.2, arrivo.get(b.id) || Mappe.spessoreLinea(m, b.livello));
+            const col = Mappe.coloreValido(so.colore) ? so.colore : b.s.coloreBordo;
+            const tr = ['pieno', 'trattini', 'punti'].includes(so.tratto) ? so.tratto : b.s.tratto;
+            parti.push(`<path d="M${b.x.toFixed(1)},${(b.y + b.h).toFixed(1)} H${(b.x + b.w).toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w.toFixed(2)}" stroke-linecap="round"${tratteggio(tr, w)}/>`);
+            archi.push({ d: `M${b.x},${b.y + b.h} H${b.x + b.w}`, colore: col, w });
         });
         archiEl.innerHTML = parti.join('');
 
@@ -684,6 +690,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         mondo.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`;
         $('.mappa-zoom-valore', radiceEl).textContent = Math.round(v.zoom * 100) + '%';
         editorEl.style.setProperty('--zoom', v.zoom);
+        if (m.griglia && m.griglia.attiva) mostraGriglia();
         posizionaSopra();
     }
 
@@ -833,6 +840,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 parti.push(popDisposizione(b.id, { x: a.x + w / 2, y: sopra ? a.y - 28 : a.y + h + 30 }, sopra));
             }
         }
+        // Nodo in modifica: la barra per formattare la parte di testo selezionata
+        const inMod = st.modifica && st.modifica.tipo === 'nodo' ? geo.get(st.modifica.id) : null;
+        if (inMod) {
+            const a = aSchermo(inMod.x, inMod.y);
+            parti.push(barraTesto({ x: Math.max(4, a.x), y: Math.max(4, a.y - 38) }));
+        }
         // Linea scelta (un ramo o un collegamento): i suoi punti di passaggio, da spostare (doppio clic per toglierli), e a
         // metà di ogni tratto un pallino vuoto per aggiungerne uno
         const linea = !st.modifica && lineaScelta();
@@ -854,16 +867,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 parti.push(`<button type="button" class="punto-togli" data-punto-togli="${scelto}" style="left:${ps.x + 15}px;top:${ps.y - 15}px" title="Togli questo punto (Canc)" aria-label="Togli questo punto">${ico('chiudi')}</button>`);
             }
         }
-        // Più nodi scelti: figlio comune (linee da tutti) o graffa che li raccoglie
+        // Più nodi scelti: figlio comune (linee da tutti) o graffa che li raccoglie. La barra sta ferma in alto al centro
+        // della mappa, così non copre i nodi da scegliere
         const scelti = !st.modifica && !st.collegando && st.sel.size > 1 ? [...st.sel].map(id => geo.get(id)).filter(Boolean) : [];
         if (scelti.length > 1) {
-            const x0 = Math.min(...scelti.map(q => q.x)), x1 = Math.max(...scelti.map(q => q.x + q.w)), y1 = Math.max(...scelti.map(q => q.y + q.h));
-            const y0 = Math.min(...scelti.map(q => q.y));
-            const ps = aSchermo((x0 + x1) / 2, y1), pa = aSchermo((x0 + x1) / 2, y0);
             const fratelli = sonoFratelli([...st.sel]);
-            // Con la griglia delle disposizioni aperta, se sotto non c'è posto va sopra i nodi scelti
-            const sopra = st.popDispMulti && ps.y + 380 > tela.getBoundingClientRect().height && pa.y > 380;
-            parti.push(`<div class="mappa-pop pop-multipla${sopra ? ' sopra' : ''}" data-pop="multi" style="left:${ps.x}px;top:${sopra ? pa.y - 12 : ps.y + 12}px">
+            parti.push(`<div class="mappa-pop pop-multipla in-alto" data-pop="multi">
                 <span class="pop-titolo">${st.sel.size} nodi</span>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="figlio" title="Un nodo nuovo, figlio di tutti i nodi scelti">${ico('piu')}Figlio comune</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="graffa" ${fratelli ? 'title="Una graffa raccoglie i nodi scelti e li porta a un nodo nuovo"' : 'disabled title="La graffa raccoglie nodi con lo stesso genitore"'}><b class="segno-graffa">}</b>Graffa</button>
@@ -899,6 +908,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             }
         }
         sopraEl.innerHTML = parti.join('');
+        if (inMod) segnaFormatiAttivi();
     }
 
     function popFigura(p, sopra = false) {
@@ -937,8 +947,23 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 <button type="button" data-rel-az="dritta" title="Raddrizza">⟋</button>
                 <button type="button" class="pericolo" data-rel-az="elimina" title="Elimina il collegamento">${ico('cestino')}</button>
             </div>
+            <label class="pop-curva" title="Curvatura del collegamento (0 = dritto)"><span>Curvatura</span>
+                <input type="range" min="-100" max="100" step="5" value="${curvaturaRelazione(r)}" data-rel-curva></label>
             ${sceltaColori('data-rel-colore', r.colore, { auto: true })}
         </div>`;
+    }
+
+    // Curvatura di un collegamento per il cursore: quella della curva normale se non è stata cambiata
+    function curvaturaRelazione(r) {
+        const cv = curvaturaDi(r.percorso);
+        if (cv.forma) return cv.valore;
+        if (cv.aMano) return 0;
+        const g = geometriaRelazione(r);
+        if (!g || !g.base) return 36;
+        // Curva normale (punto di controllo c): il punto a metà dista dalla linea dritta metà di quanto dista c
+        const l = Math.hypot(g.cb.x - g.ca.x, g.cb.y - g.ca.y) || 1;
+        const v = ((g.c.y - (g.ca.y + g.cb.y) / 2) * (g.cb.x - g.ca.x) - (g.c.x - (g.ca.x + g.cb.x) / 2) * (g.cb.y - g.ca.y)) / (l * l) / 2;
+        return Math.round(limita(v * 200, -100, 100) / 5) * 5;
     }
 
     // Scelta della disposizione di un nodo (per la radice è quella di tutta la mappa)
@@ -1018,7 +1043,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 <button type="button" class="${s.grassetto ? 'attivo' : ''}" data-et-az="grassetto" title="Grassetto"><b>G</b></button>
                 <button type="button" class="${s.corsivo ? 'attivo' : ''}" data-et-az="corsivo" title="Corsivo"><i>C</i></button>
                 <button type="button" class="${s.sottolineato ? 'attivo' : ''}" data-et-az="sottolineato" title="Sottolineato"><u>S</u></button>
-                <select data-et-scala title="Dimensione">${[0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.4].map(v => `<option value="${v}" ${Math.abs((s.scala || 0.8) - v) < 0.01 ? 'selected' : ''}>${Math.round(v * 100)}%</option>`).join('')}</select>
+                ${campoDimensione('data-et-pt', s.scala || 0.8, "Dimensione dell'etichetta (punti)")}
                 <button type="button" data-et-az="modifica" title="Modifica il testo">${ico('matita')}</button>
                 <button type="button" class="pericolo" data-et-az="elimina" title="Elimina l'etichetta">${ico('cestino')}</button>
             </div>
@@ -1174,12 +1199,35 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (tutti.some(generato)) Ui.toast(`I nodi presi dalle mappe della materia non si eliminano qui: toglili dalla mappa d'origine (o togli «Mostra in ${Panoramica.NOME}»)`, 'info', 7000);
         const ids = tutti.filter(id => !generato(id));
         if (!ids.length) return;
+        // Nodi (o loro discendenti) collegati a flashcard: prima un avviso
+        const via = new Set(ids.flatMap(id => [id, ...Mappe.discendenti(m, id)]));
+        const collegate = Archivio.tutti('carte').filter(c => c.mappa && c.mappa.id === m.id && via.has(c.mappa.nodo));
+        if (collegate.length && !st.eliminaConfermata) { avvisoNodiConFlashcard(ids, via, collegate); return; }
+        st.eliminaConfermata = false;
         const primo = m.nodi[ids[0]];
         const fratelli = primo.genitore ? m.nodi[primo.genitore].figli : [];
         const i = fratelli.indexOf(primo.id);
         const dopo = fratelli.filter(f => !ids.includes(f))[Math.max(0, i - 1)] || primo.genitore || st.focus || m.radice;
         modifica(() => ids.forEach(id => Mappe.eliminaNodo(m, id)));
         seleziona(m.nodi[dopo] ? dopo : m.radice);
+    }
+
+    async function avvisoNodiConFlashcard(ids, via, collegate) {
+        const nome = id => '«' + esc(Ui.tronca(Mappe.testoSemplice(m.nodi[id] && m.nodi[id].testo) || '(vuoto)', 40)) + '»';
+        const nodiCol = [...new Set(collegate.map(c => c.mappa.nodo))];
+        const domanda = c => esc(Ui.tronca(testoDaHtml(c.domanda || ''), 70) || '(senza domanda)');
+        const set = c => { const x = Dati.set(c.setId); return x ? ` <small>· ${esc(x.nome)}</small>` : ''; };
+        const elenco = collegate.slice(0, 6).map(c => `<span>${domanda(c)}${set(c)}</span>`).join('') + (collegate.length > 6 ? `<span>… e altre ${collegate.length - 6}</span>` : '');
+        const quali = ids.length === 1 ? `Il nodo ${nome(ids[0])}` : `I ${ids.length} nodi scelti`;
+        const dentro = nodiCol.some(x => !ids.includes(x)) ? ' (anche nei nodi sotto di lui)' : '';
+        const ok = await Ui.conferma(`${quali}${dentro} ${collegate.length === 1 ? 'è collegato a una flashcard' : `è collegato a ${collegate.length} flashcard`}:
+            <span class="elenco-avviso">${elenco}</span>
+            Se lo elimini le flashcard restano, ma non porteranno più a questo punto della mappa (con Annulla, Ctrl+Z, torna tutto com'era).`,
+            { titolo: 'Nodo collegato a flashcard', ok: 'Elimina comunque', pericolo: true });
+        if (!ok) return;
+        st.sel = new Set(ids.filter(id => m.nodi[id]));
+        st.eliminaConfermata = true;
+        eliminaSelezionati();
     }
 
     function alternaRamo(ids = [...st.sel]) {
@@ -1270,7 +1318,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function copiaStile() {
         const n = m.nodi[st.attivo || st.arco];
         if (!n) { Ui.toast('Seleziona il nodo da cui copiare lo stile'); return; }
-        st.stileCopiato = { ...(n.stile || {}) };
+        st.stileCopiato = { ...(n.stile || {}), ...(n.stilePredefinito ? { __pre: n.stilePredefinito } : {}) };
         Ui.toast('Stile copiato: seleziona altri nodi e premi Ctrl+Alt+V');
         aggiornaPannello(true);
     }
@@ -1279,7 +1327,15 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function incollaStile() {
         if (!st.stileCopiato) { Ui.toast('Prima copia uno stile (Ctrl+Alt+C)'); return; }
         const copiato = st.stileCopiato;
-        if (st.sel.size) modifica(() => st.sel.forEach(id => { if (m.nodi[id]) m.nodi[id].stile = { ...copiato }; }));
+        const { __pre, ...stileCopiato } = copiato;
+        if (st.sel.size) {
+            modifica(() => st.sel.forEach(id => {
+                const n = m.nodi[id];
+                if (!n) return;
+                n.stile = { ...stileCopiato };
+                if (__pre) n.stilePredefinito = __pre; else delete n.stilePredefinito;
+            }));
+        }
         else if (st.arco && m.nodi[st.arco]) {
             modifica(() => {
                 const s = m.nodi[st.arco].stile = m.nodi[st.arco].stile || {};
@@ -1295,10 +1351,81 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     // ---- Modifica del testo (direttamente nel nodo) ----------------------------------------------------
 
-    function rendiModificabile(el) {
-        el.contentEditable = 'plaintext-only';
+    // ricco: il testo del nodo, che si scrive già formattato (grassetto, corsivo… su parti del testo)
+    function rendiModificabile(el, ricco = false) {
+        el.contentEditable = ricco ? 'true' : 'plaintext-only';
         if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
         el.spellcheck = true;
+    }
+
+    // ---- Grassetto, corsivo, sottolineato e barrato su parti del testo -------------------------------
+    // Mentre si scrive nel nodo il testo è formattato com'è; alla fine diventa **grassetto**, *corsivo*,
+    // __sottolineato__, ~~barrato~~ (vedi Mappe.pezziTesto)
+
+    const FORMATI_TESTO = [
+        ['grassetto', 'bold', 'B', 'Grassetto (Ctrl+B)'],
+        ['corsivo', 'italic', 'I', 'Corsivo (Ctrl+I)'],
+        ['sottolineato', 'underline', 'U', 'Sottolineato (Ctrl+U)'],
+        ['barrato', 'strikeThrough', 'S', 'Barrato (Ctrl+Maiusc+X)'],
+    ];
+
+    function formattaTesto(tipo) {
+        const f = FORMATI_TESTO.find(x => x[0] === tipo);
+        if (!f || !st.modifica || st.modifica.tipo !== 'nodo') return;
+        // Se tutto il nodo è già così (dallo stile), una sua parte non si distingue
+        const cs = getComputedStyle(st.modifica.el), dec = cs.textDecorationLine || '';
+        const giaTutto = { grassetto: +cs.fontWeight >= 600, corsivo: cs.fontStyle === 'italic', sottolineato: /underline/.test(dec), barrato: /line-through/.test(dec) }[tipo];
+        if (giaTutto) {
+            Ui.toast(`Tutto il nodo è già ${tipo}: per evidenziarne solo una parte toglilo prima dal pannello Stile`, 'info', 3800);
+            return;
+        }
+        document.execCommand('styleWithCSS', false, false);
+        document.execCommand(f[1]);
+        segnaFormatiAttivi();
+        disegnaPresto();
+    }
+
+    function segnaFormatiAttivi() {
+        $$('[data-fmt]', sopraEl).forEach(b => {
+            const f = FORMATI_TESTO.find(x => x[0] === b.dataset.fmt);
+            let attivo = false;
+            try { attivo = document.queryCommandState(f[1]); } catch (e) { /* niente */ }
+            b.classList.toggle('attivo', attivo);
+        });
+    }
+
+    function barraTesto(p) {
+        return `<div class="barra-testo-nodo" style="left:${p.x}px;top:${p.y}px" role="toolbar" aria-label="Formato del testo selezionato">${FORMATI_TESTO.map(([k, , l, t]) =>
+            `<button type="button" data-fmt="${k}" title="${t}" aria-label="${t}"><span class="fmt-${k}">${l}</span></button>`).join('')}</div>`;
+    }
+
+    // Dal nodo in modifica al testo con i segni
+    function testoDaModifica(el) {
+        const pezzi = [];
+        const visita = (x, f) => {
+            if (x.nodeType === 3) { pezzi.push({ t: x.nodeValue.replace(/\u00a0/g, ' '), ...f }); return; }
+            if (x.nodeType !== 1) return;
+            const tag = x.tagName;
+            if (tag === 'BR') { pezzi.push({ t: '\n', ...f }); return; }
+            if (['DIV', 'P', 'LI'].includes(tag) && pezzi.length && !/\n$/.test(pezzi[pezzi.length - 1].t)) pezzi.push({ t: '\n', ...f });
+            const g = { ...f }, cs = x.style;
+            if (['B', 'STRONG'].includes(tag)) g.b = true;
+            if (cs.fontWeight) g.b = cs.fontWeight === 'bold' || cs.fontWeight === 'bolder' || +cs.fontWeight >= 600;
+            if (['I', 'EM'].includes(tag)) g.i = true;
+            if (cs.fontStyle) g.i = cs.fontStyle === 'italic';
+            const dec = cs.textDecorationLine || cs.textDecoration || '';
+            if (tag === 'U' || /underline/.test(dec)) g.u = true;
+            if (['S', 'STRIKE', 'DEL'].includes(tag) || /line-through/.test(dec)) g.s = true;
+            x.childNodes.forEach(c => visita(c, g));
+        };
+        el.childNodes.forEach(c => visita(c, {}));
+        return Mappe.testoDaPezzi(pezzi).replace(/\n+$/, '').replace(/[ \t]+$/gm, '');
+    }
+
+    function incollaSemplice(e) {
+        e.preventDefault();
+        const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+        if (t) document.execCommand('insertText', false, t);
     }
 
     function selezionaTutto(el, allaFine) {
@@ -1319,13 +1446,18 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const t = $('.nodo-testo', el);
         st.modifica = { tipo: 'nodo', id, el: t, nuovo, originale: n.testo };
         el.classList.add('in-modifica');
-        rendiModificabile(t);
-        t.textContent = sostituisci != null ? sostituisci : n.testo;
+        rendiModificabile(t, true);
+        t.innerHTML = Mappe.testoInHtml(n.testo);
+        // Il testo com'è prima di cambiarlo (per capire alla fine se è cambiato davvero)
+        st.modifica.normale = testoDaModifica(t);
+        if (sostituisci != null) t.textContent = sostituisci;
         t.focus({ preventScroll: true });
         selezionaTutto(t, sostituisci != null);
         posizionaSopra();
         t.addEventListener('input', disegnaPresto);
         t.addEventListener('keydown', tastiModifica);
+        t.addEventListener('paste', incollaSemplice);
+        t.addEventListener('drop', vietaTrascinamento);
         t.addEventListener('blur', () => { if (st.modifica && st.modifica.el === t) concludiModifica(); });
         disegnaPresto();
     }
@@ -1349,8 +1481,15 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         ee.addEventListener('blur', () => { if (st.modifica && st.modifica.el === ee) concludiModifica(); });
     }
 
+    function vietaTrascinamento(e) { e.preventDefault(); }
+
     function tastiModifica(e) {
         e.stopPropagation();
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && st.modifica && st.modifica.tipo === 'nodo') {
+            const k = e.key.toLowerCase();
+            const tipo = e.shiftKey ? (k === 'x' ? 'barrato' : null) : { b: 'grassetto', i: 'corsivo', u: 'sottolineato' }[k];
+            if (tipo) { e.preventDefault(); formattaTesto(tipo); return; }
+        }
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); concludiModifica(); }
         else if (e.key === 'Escape') { e.preventDefault(); concludiModifica(true); }
         else if (e.key === 'Tab' && st.modifica && st.modifica.tipo === 'nodo') {
@@ -1372,10 +1511,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const mod = st.modifica;
         if (!mod) return;
         st.modifica = null;
-        const testo = mod.el.innerText.replace(/ /g, ' ').replace(/\n+$/, '').replace(/[ \t]+$/gm, '');
+        const testo = mod.tipo === 'nodo' ? testoDaModifica(mod.el) : mod.el.innerText.replace(/ /g, ' ').replace(/\n+$/, '').replace(/[ \t]+$/gm, '');
         mod.el.contentEditable = 'false';
         mod.el.removeEventListener('input', disegnaPresto);
         mod.el.removeEventListener('keydown', tastiModifica);
+        mod.el.removeEventListener('paste', incollaSemplice);
+        mod.el.removeEventListener('drop', vietaTrascinamento);
         const el = mod.tipo === 'nodo' ? elementi.get(mod.id) : mod.el;
         if (el) el.classList.remove('in-modifica');
         if (mod.tipo === 'nodo') {
@@ -1383,7 +1524,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             if (el) el._firma = null;
             if (!n) { disegna(); return; }
             if ((annullata || !testo.trim()) && mod.nuovo) { scartaCreazione(); if (n.genitore && m.nodi[n.genitore]) seleziona(n.genitore); return; }
-            if (annullata || testo === mod.originale) { disegna(); posizionaSopra(); return; }
+            if (annullata || testo === mod.originale || testo === mod.normale) { disegna(); posizionaSopra(); return; }
             if (mod.nuovo) { n.testo = testo; cambiato(); } else modifica(() => { n.testo = testo; });
         } else {
             const n = m.nodi[mod.nodo];
@@ -1731,8 +1872,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (!forza && pannelloEl.contains(document.activeElement) && pannelloEl._chiave === chiave
             && document.activeElement.matches('input[type=text], input[type=url], input[type=search], textarea')) return;
         pannelloEl._chiave = chiave;
-        const titoli = { aspetto: 'Disposizione e tema', stile: 'Stile', icone: 'Icone', nota: 'Nota e dettagli', struttura: 'Struttura' };
-        const corpo = { aspetto: pannelloAspetto, stile: pannelloStile, icone: pannelloIcone, nota: pannelloNota, struttura: pannelloStruttura }[st.pannello]();
+        if (st.pannello === 'aspetto') st.pannello = 'disposizione';   // pannello di prima, ricordato nel browser
+        const titoli = { disposizione: 'Disposizione', tema: 'Tema e linee', stile: 'Stile', icone: 'Icone', nota: 'Nota e dettagli', struttura: 'Struttura' };
+        const fabbrica = { disposizione: pannelloDisposizione, tema: pannelloTema, stile: pannelloStile, icone: pannelloIcone, nota: pannelloNota, struttura: pannelloStruttura }[st.pannello];
+        if (!fabbrica) { st.pannello = null; pannelloEl.hidden = true; editorEl.classList.remove('con-pannello'); return; }
+        const corpo = fabbrica();
         const scorrimento = pannelloEl.querySelector('.pannello-corpo') ? pannelloEl.querySelector('.pannello-corpo').scrollTop : 0;
         pannelloEl.innerHTML = `
             <div class="pannello-testa"><h2>${titoli[st.pannello]}</h2>${pulsante('chiudi-pannello', ico('chiudi'), 'Chiudi il pannello')}</div>
@@ -1906,13 +2050,18 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         });
     }
 
-    function pannelloAspetto() {
-        const sp = m.spaziatura || 1;
-        const lin = Mappe.tema(m).linee;
+    // Disposizione: la disposizione di base, le distanze (tra tutti i nodi, tra fratelli e tra i figli del nodo scelto)
+    // e la griglia di allineamento
+    function pannelloDisposizione() {
+        const sp = m.spaziatura || 1, fr = m.spaziaturaFratelli || 1;
         const conDirezione = ['orizzontale', 'libera'].includes(m.disposizione);
+        const g = griglia();
+        const n = st.sel.size === 1 && m.nodi[st.attivo];
+        const nomeNodo = n ? '«' + esc(Ui.tronca(Mappe.testoSemplice(n.testo) || '(vuoto)', 30)) + '»' : '';
+        const perc = v => Math.round(v * 100) + '%';
         return `
             <section class="pannello-sezione">
-                <h3>Disposizione</h3>
+                <h3>Disposizione della mappa</h3>
                 <div class="griglia-disposizioni">${Mappe.DISPOSIZIONI.map(([id, nome]) => `
                     <button type="button" class="scelta-disposizione${m.disposizione === id ? ' attivo' : ''}" data-disp="${id}">${miniaturaDisposizione(id)}<span>${nome}</span></button>`).join('')}
                 </div>
@@ -1922,14 +2071,48 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         ${[['auto', 'Automatico'], ['orario', 'Automatico in senso orario'], ['destra', 'Tutti a destra'], ['sinistra', 'Tutti a sinistra']]
                             .map(([v, t]) => `<option value="${v}" ${m.direzione === v ? 'selected' : ''}>${t}</option>`).join('')}
                     </select></label>` : ''}
-                <label class="campo campo-compatto"><span>Spaziatura <b data-sp-valore>${Math.round(sp * 100)}%</b></span>
-                    <input type="range" min="0.6" max="2" step="0.1" value="${sp}" data-spaziatura></label>
-                <p class="pannello-nota">Questa è la disposizione di base: ogni nodo può averne una sua per i propri figli, dalla maniglia sopra il nodo selezionato.
-                    Trascina un nodo su un altro per spostarlo sotto di lui, sopra o sotto un fratello per riordinarlo.
-                    Nella disposizione libera i nodi restano dove li lasci, e un ramo portato dall'altra parte si ribalta.</p>
+                <p class="pannello-nota">È la disposizione di base: ogni nodo può averne una sua per i propri figli, dalla maniglia sopra il nodo selezionato
+                    (o dalla barra, per più nodi insieme). Nella disposizione libera i nodi restano dove li lasci.</p>
             </section>
             <section class="pannello-sezione">
-                <h3>Linee</h3>
+                <h3>Distanze</h3>
+                <label class="campo campo-compatto"><span>Spazio tra tutti i nodi <b data-sp-valore>${perc(sp)}</b></span>
+                    <input type="range" min="0.6" max="2" step="0.1" value="${sp}" data-spaziatura></label>
+                <label class="campo campo-compatto"><span>Distanza tra fratelli <b data-fr-valore>${perc(fr)}</b></span>
+                    <input type="range" min="0.2" max="6" step="0.1" value="${fr}" data-fratelli></label>
+                ${n && n.figli.length > 1 ? `
+                <label class="campo campo-compatto"><span>Solo tra i figli di ${nomeNodo} <b data-frn-valore>${n.distanzaFigli ? perc(n.distanzaFigli) : 'come la mappa'}</b></span>
+                    <input type="range" min="0.2" max="6" step="0.1" value="${n.distanzaFigli || 1}" data-fratelli-nodo></label>
+                ${n.distanzaFigli ? '<button type="button" class="btn btn-fantasma btn-piccolo" data-fratelli-nodo-via>Come il resto della mappa</button>' : ''}` : `
+                <p class="pannello-nota">Seleziona un nodo con più figli per dare una distanza solo ai suoi.</p>`}
+            </section>
+            <section class="pannello-sezione">
+                <h3>Griglia di allineamento</h3>
+                <label class="spunta-semplice"><input type="checkbox" data-griglia-attiva ${g.attiva ? 'checked' : ''}> <b>Aggancia i nodi alla griglia</b> <small>(Ctrl+G; con Alt premuto li sposti liberamente)</small></label>
+                <label class="campo campo-compatto"><span>Passo della griglia <b data-gr-valore>${g.passo} px</b></span>
+                    <input type="range" min="10" max="80" step="5" value="${g.passo}" data-griglia-passo></label>
+                <p class="pannello-nota">Con la griglia accesa i nodi che sposti (nella disposizione libera, o i nodi liberi) si fermano sui suoi punti, così
+                    restano allineati. Nelle disposizioni automatiche i nodi li sistema l'app.</p>
+            </section>`;
+    }
+
+    // Tema e linee di tutta la mappa
+    function pannelloTema() {
+        const lin = Mappe.tema(m).linee;
+        return `
+            <section class="pannello-sezione">
+                <h3>Tema</h3>
+                <div class="griglia-temi">${Mappe.temi().map(t => `
+                    <div class="scheda-tema">
+                        <button type="button" class="scelta-tema${m.tema === t.id && !m.livelli ? ' attivo' : ''}" data-tema-mappa="${esc(t.id)}">${anteprimaTema(t)}<span>${esc(t.nome)}</span></button>
+                        ${t.personale ? `<button type="button" class="modifica-tema" data-tema-modifica="${esc(t.id)}" title="Modifica il tema" aria-label="Modifica il tema ${esc(t.nome)}">${ico('matita')}</button>` : ''}
+                    </div>`).join('')}
+                    <button type="button" class="scelta-tema nuovo-tema" data-tema-nuovo>${ico('piu')}<span>Nuovo tema</span></button>
+                </div>
+                <p class="pannello-nota">Il nuovo tema parte dall'aspetto attuale della mappa (anche dagli stili importati da SimpleMind); lo modifichi e lo ritrovi in tutte le mappe.</p>
+            </section>
+            <section class="pannello-sezione">
+                <h3>Linee della mappa</h3>
                 <div class="riga-bottoni">${Mappe.FORME_LINEA.map(([v, t]) => `<button type="button" class="${lin.forma === v ? 'attivo' : ''}" data-linee="forma" data-valore="${v}" title="${t}">${iconaLinea(v)}</button>`).join('')}</div>
                 <label class="spunta-semplice"><input type="checkbox" data-linee-auto ${lin.affusolamento ? 'checked' : ''}> <b>Affusolamento automatico</b></label>
                 ${lin.affusolamento ? `
@@ -1942,23 +2125,91 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 <label class="campo campo-compatto"><span>Spessore delle linee <b data-val="spessore">${lin.spessore} px</b></span>
                     <input type="range" min="0.5" max="10" step="0.5" value="${lin.spessore}" data-linee-num="spessore"></label>`}
                 <p class="pannello-nota">Valgono per tutta la mappa. Per cambiare una sola linea, cliccala.</p>
-            </section>
-            <section class="pannello-sezione">
-                <h3>Tema</h3>
-                <div class="griglia-temi">${Mappe.temi().map(t => `
-                    <div class="scheda-tema">
-                        <button type="button" class="scelta-tema${m.tema === t.id && !m.livelli ? ' attivo' : ''}" data-tema-mappa="${esc(t.id)}">${anteprimaTema(t)}<span>${esc(t.nome)}</span></button>
-                        ${t.personale ? `<button type="button" class="modifica-tema" data-tema-modifica="${esc(t.id)}" title="Modifica il tema" aria-label="Modifica il tema ${esc(t.nome)}">${ico('matita')}</button>` : ''}
-                    </div>`).join('')}
-                    <button type="button" class="scelta-tema nuovo-tema" data-tema-nuovo>${ico('piu')}<span>Nuovo tema</span></button>
-                </div>
-                <p class="pannello-nota">Il nuovo tema parte dall'aspetto attuale della mappa (anche dagli stili importati da SimpleMind); lo modifichi e lo ritrovi in tutte le mappe.</p>
             </section>`;
     }
+
+    // ---- Griglia di allineamento --------------------------------------------------------------------
+
+    function griglia() {
+        const g = m.griglia || {};
+        return { attiva: !!g.attiva, passo: limita(+g.passo || 20, 10, 80) };
+    }
+
+    function impostaGriglia(cambi) {
+        m.griglia = { ...griglia(), ...cambi };
+        cambiatoSenzaStoria();
+        mostraGriglia();
+        $$('[data-a="griglia"]', radiceEl).forEach(b => b.classList.toggle('attivo', griglia().attiva));
+    }
+
+    // I punti della griglia sullo sfondo, che seguono zoom e spostamento della vista
+    function mostraGriglia() {
+        const g = griglia();
+        tela.classList.toggle('con-griglia', g.attiva);
+        if (!g.attiva || !st.vista) { tela.style.backgroundSize = ''; tela.style.backgroundPosition = ''; return; }
+        const passo = g.passo * st.vista.zoom;
+        tela.style.backgroundSize = `${passo}px ${passo}px`;
+        tela.style.backgroundPosition = `${st.vista.x}px ${st.vista.y}px`;
+    }
+
+    // Il punto della griglia più vicino (in coordinate della mappa)
+    function sullaGriglia(v) { const p = griglia().passo; return Math.round(v / p) * p; }
 
     function idsCollegamento() {
         if (st.arco && m.nodi[st.arco]) return [st.arco];
         return [...st.sel].filter(id => m.nodi[id] && m.nodi[id].genitore);
+    }
+
+    // ---- Curvatura semplice delle linee ---------------------------------------------------------------
+    // Al posto dei punti di passaggio messi a mano: un punto a metà della linea (arco) o due opposti (onda a S),
+    // lontani dalla linea dritta quanto dice il cursore (−100…100 = metà della lunghezza della linea; 0 = linea normale)
+    function curvaturaDi(percorso) {
+        if (!Disposizione.percorsoValido(percorso)) return { forma: null, valore: 0, aMano: false };
+        const [p, q] = percorso;
+        if (percorso.length === 1 && Math.abs(p.u - 0.5) < 0.01) return { forma: 'arco', valore: Math.round(p.v * 200), aMano: false };
+        if (percorso.length === 2 && Math.abs(p.u - 1 / 3) < 0.01 && Math.abs(q.u - 2 / 3) < 0.01 && Math.abs(p.v + q.v) < 0.002) {
+            return { forma: 'onda', valore: Math.round(p.v * 200), aMano: false };
+        }
+        return { forma: null, valore: 0, aMano: true };
+    }
+
+    function percorsoCurvo(forma, valore) {
+        const v = Math.round(limita(+valore || 0, -100, 100) / 200 * 10000) / 10000;
+        if (!v) return null;
+        return forma === 'onda' ? [{ u: 0.3333, v }, { u: 0.6667, v: -v }] : [{ u: 0.5, v }];
+    }
+
+    function controlliCurvatura(ids) {
+        const n = m.nodi[ids[0]];
+        const cv = curvaturaDi(n.percorso);
+        const forma = cv.forma || st.formaCurva || 'arco';
+        const att = cond => (cond ? ' attivo' : '');
+        return `
+            <span class="etichetta-campo">Curvatura</span>
+            <div class="riga-curvatura">
+                <div class="riga-bottoni">
+                    <button type="button" class="${att(forma === 'arco')}" data-curva-forma="arco" title="Ad arco">${iconaCurva('arco')}</button>
+                    <button type="button" class="${att(forma === 'onda')}" data-curva-forma="onda" title="A onda (S)">${iconaCurva('onda')}</button>
+                </div>
+                <input type="range" min="-100" max="100" step="5" value="${cv.valore}" data-curvatura aria-label="Curvatura della linea">
+                <b data-curva-valore>${cv.aMano ? 'a mano' : cv.valore}</b>
+            </div>
+            <p class="pannello-nota">${cv.aMano ? 'La linea ha punti di passaggio messi a mano: il cursore li sostituisce con una curva semplice.'
+                : '0 = linea normale; verso destra o sinistra si piega da una parte o dall\'altra. Per un percorso preciso trascina la linea sulla mappa.'}</p>`;
+    }
+
+    function iconaCurva(forma) {
+        const d = forma === 'onda' ? 'M2 9 C7 1 10 1 14 8 S21 15 26 7' : 'M2 12 Q14 -2 26 12';
+        return `<svg class="icona-linea" viewBox="0 0 28 16" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    }
+
+    function applicaCurvatura(valore, forma) {
+        const ids = idsCollegamento().filter(id => !st.arcoDa && !(geo.get(id) || {}).raccordo);
+        modificaContinua('curva:' + ids.join(), () => ids.forEach(id => {
+            const n = m.nodi[id];
+            n.piega = null;
+            n.percorso = percorsoCurvo(forma, valore);
+        }));
     }
 
     function controlliCollegamento() {
@@ -1973,7 +2224,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             <div class="riga-bottoni">${Mappe.FORME_LINEA.map(([v, t]) => `<button type="button" class="${att(c.forma === v)}" data-coll="lineaForma" data-valore="${v}" title="${t}">${iconaLinea(v)}</button>`).join('')}</div>
             <span class="etichetta-campo">Tratto</span>
             <div class="lista-scelte">${Mappe.TRATTI_LINEA.map(([v, t]) => `<button type="button" class="${att(c.tratto === v)}" data-coll="linea" data-valore="${v}">${iconaLinea(v)}<span>${t}</span></button>`).join('')}</div>
-            ${c.tratto === 'auto' ? '<p class="pannello-nota">Si assottiglia a ogni livello, senza scendere sotto lo spessore minimo (le misure sono in Disposizione e tema → Linee).</p>' : `
+            ${c.tratto === 'auto' ? '<p class="pannello-nota">Si assottiglia a ogni livello, senza scendere sotto lo spessore minimo (le misure sono in Tema e linee → Linee della mappa).</p>' : `
             <label class="campo campo-compatto"><span>Spessore</span>
                 <select data-coll-num="lineaSpessore">${SPESSORI.map(v => `<option value="${v}" ${Math.abs(c.spessore - v) < 0.01 ? 'selected' : ''}>${v} px</option>`).join('')}
                     ${SPESSORI.some(v => Math.abs(c.spessore - v) < 0.01) ? '' : `<option value="${c.spessore}" selected>${c.spessore} px</option>`}</select></label>`}
@@ -1983,8 +2234,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 <span class="mappa-pop-sep"></span>
                 ${[['nessuna', '—', 'nessuna'], ['semplice', '›', 'semplice'], ['piena', '▶', 'piena']].map(([v, t, d]) => `<button type="button" class="${att(c.frecciaFine === v)}" data-coll="frecciaFine" data-valore="${v}" title="Alla fine: ${d}">${t}</button>`).join('')}
             </div>
-            <span class="etichetta-campo">Colore della linea</span>
-            ${sceltaColori('data-coll-colore="coloreLinea" data-c', (n.stile || {}).coloreLinea || '', { auto: true })}`;
+            <div class="campi-colore">${campoColore('coloreLinea', 'Colore della linea', (n.stile || {}).coloreLinea, c.colore)}</div>
+            ${!st.arcoDa && !(b && b.raccordo) ? controlliCurvatura(ids) : ''}`;
     }
 
     function pannelloCollegamento() {
@@ -2025,70 +2276,232 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             </div>`;
     }
 
+    // Dimensione del testo in punti, come Word: 10,5 pt = la dimensione normale (scala 1, 14 px sullo schermo)
+    const PT_BASE = 10.5;
+    const DIMENSIONI_PT = [6, 7, 8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 48, 60, 72];
+    const inPunti = scala => Math.round((+scala || 1) * PT_BASE * 2) / 2;
+    const testoPunti = pt => String(pt).replace('.', ',');
+
+    // Campo della dimensione: si scrive un numero o si sceglie dall'elenco (come in Word e Fogli Google)
+    function campoDimensione(attributo, scala, titolo = 'Dimensione del testo (punti)') {
+        const pt = inPunti(scala);
+        return `<label class="campo-pt" title="${titolo}"><input type="number" min="4" max="96" step="0.5" value="${pt}" ${attributo} list="mappa-dimensioni-pt" aria-label="${titolo}"><span>pt</span></label>
+            <datalist id="mappa-dimensioni-pt">${DIMENSIONI_PT.map(v => `<option value="${v}">`).join('')}</datalist>`;
+    }
+
+    // Colore compatto: un pulsante con il colore attuale ("A" = automatico) che apre la tavolozza in una tendina.
+    // tipo: coloreTesto | colore | riempimento (stile del nodo), sott (linea sotto il nodo), coloreLinea (linea verso il padre)
+    function campoColore(tipo, nome, proprio, effettivo, titolo = '', nessuno = false) {
+        const auto = !proprio;
+        const vuoto = proprio === 'nessuno' || (!proprio && tipo === 'riempimento' && !effettivo);
+        const mostra = Mappe.coloreValido(proprio) ? proprio : Mappe.coloreValido(effettivo) ? effettivo : null;
+        return `<button type="button" class="campo-colore" data-campo-colore="${tipo}" data-nessuno="${nessuno ? 1 : ''}" title="${esc(titolo || nome)}">
+            <span class="campione${vuoto ? ' senza-colore' : ''}" style="${mostra && !vuoto ? `background:${mostra}` : ''}">${auto ? 'A' : ''}</span>
+            <span class="campo-colore-nome">${esc(nome)}<small>${vuoto ? 'nessuno' : auto ? 'automatico' : esc(proprio)}</small></span>
+            ${ico('giu')}</button>`;
+    }
+
+    function applicaColore(tipo, v) {
+        if (tipo === 'sott') applicaSottolineatura('colore', v);
+        else if (tipo === 'coloreLinea') applicaCollegamento('coloreLinea', v);
+        else applicaStile(tipo, v);
+    }
+
+    function apriTavolozza(bottone) {
+        const tipo = bottone.dataset.campoColore;
+        const attuale = tipo === 'sott' ? ((m.nodi[st.attivo] || {}).stile || {}).sottolineatura?.colore
+            : tipo === 'coloreLinea' ? ((m.nodi[idsCollegamento()[0]] || {}).stile || {}).coloreLinea
+                : ((m.nodi[st.attivo] || {}).stile || {})[tipo];
+        Ui.tendina(bottone, {
+            classe: 'tendina-colori',
+            html: sceltaColori('data-tav data-c', attuale || '', { auto: true, nessuno: !!bottone.dataset.nessuno }),
+            alApri: el => {
+                el.addEventListener('click', e => {
+                    const b = e.target.closest('button[data-tav]');
+                    if (!b) return;
+                    Ui.chiudiMenu();
+                    applicaColore(tipo, coloreScelto(b, 'data-c'));
+                });
+                el.addEventListener('change', e => {
+                    if (!e.target.matches('[data-tav-libero], [data-c-libero]')) return;
+                    Ui.chiudiMenu();
+                    applicaColore(tipo, e.target.value);
+                });
+            },
+        });
+    }
+
+    // Anteprima di uno stile predefinito sul suo pulsante: "Aa" con colore, grassetto, corsivo, dimensione
+    function anteprimaStile(x) {
+        const st2 = x.stile || {};
+        const col = Mappe.coloreValido(st2.coloreTesto) ? st2.coloreTesto : '';
+        const fondo = Mappe.coloreValido(st2.riempimento) ? st2.riempimento : '';
+        return `<span class="anteprima-stile" style="${col ? `color:${col};` : ''}${fondo ? `background:${fondo};` : ''}font-weight:${st2.grassetto ? 700 : 500};font-style:${st2.corsivo ? 'italic' : 'normal'};${st2.sottolineato ? 'text-decoration:underline;' : ''}font-size:${Math.max(0.7, Math.min(1.25, +st2.scala || 1))}em">Aa</span>`;
+    }
+
     function pannelloStile() {
         if (st.arco && m.nodi[st.arco]) return pannelloCollegamento();
         if (!st.sel.size) return nessunNodo('Seleziona uno o più nodi per cambiarne il carattere, la forma e i colori, oppure clicca una linea per cambiarne lo stile.');
         const s = stileAttivo();
-        const proprio = (m.nodi[st.attivo] && m.nodi[st.attivo].stile) || {};
+        const nodo = m.nodi[st.attivo] || {};
+        const proprio = nodo.stile || {};
         const att = (cond) => (cond ? ' attivo' : '');
-        const scala = +s.scala || 1;
+        const stili = Mappe.stiliPredefiniti();
+        const usato = Mappe.stilePredefinito(nodo.stilePredefinito);
+        const so = s.sottolineatura || {};
         return `
             ${st.sel.size > 1 ? `<p class="pannello-nota">${st.sel.size} nodi selezionati: le modifiche valgono per tutti.</p>` : ''}
             <section class="pannello-sezione">
-                <h3>Carattere</h3>
+                <h3>Stili predefiniti</h3>
+                ${stili.length ? `<div class="stili-predefiniti">${stili.map((x, i) => `
+                    <button type="button" class="chip-stile${att(usato && usato.id === x.id)}" data-stile-pre="${x.id}" title="Applica «${esc(x.nome)}» ai nodi scelti${i < 9 ? ` (Ctrl+Alt+${i + 1})` : ''}">${anteprimaStile(x)}<span>${esc(x.nome)}</span></button>`).join('')}
+                </div>` : '<p class="pannello-nota">Uno stile predefinito è un aspetto con un nome (per esempio «Dettaglio»: piccolo e grigio) da dare ai nodi con un clic. Se poi lo cambi, cambiano tutti i nodi che lo usano. Vale per tutte le mappe.</p>'}
+                <div class="pannello-azioni">
+                    <button type="button" class="btn btn-secondario btn-piccolo" data-stile-pre-az="nuovo" title="Un nuovo stile con l'aspetto di questo nodo">${ico('piu')}Nuovo dallo stile del nodo</button>
+                    ${usato ? `<button type="button" class="btn btn-secondario btn-piccolo" data-stile-pre-az="aggiorna" title="Lo stile prende l'aspetto attuale di questo nodo: cambiano tutti i nodi che lo usano">Aggiorna «${esc(usato.nome)}»</button>
+                        <button type="button" class="btn btn-fantasma btn-piccolo" data-stile-pre-az="togli">Togli lo stile</button>
+                        <button type="button" class="btn-icona" data-stile-pre-az="menu" title="Rinomina o elimina «${esc(usato.nome)}»" aria-label="Altre azioni sullo stile">${ico('altro')}</button>` : ''}
+                </div>
+            </section>
+            <section class="pannello-sezione">
+                <h3>Testo</h3>
                 <div class="riga-bottoni">
                     <button type="button" class="${att(s.grassetto)}" data-stile-inv="grassetto" title="Grassetto (Ctrl+B)"><b>G</b></button>
                     <button type="button" class="${att(s.corsivo)}" data-stile-inv="corsivo" title="Corsivo (Ctrl+I)"><i>C</i></button>
                     <button type="button" class="${att(s.sottolineato)}" data-stile-inv="sottolineato" title="Sottolineato (Ctrl+U)"><u>S</u></button>
                     <button type="button" class="${att(s.barrato)}" data-stile-inv="barrato" title="Barrato"><s>B</s></button>
-                    <select data-stile-scala title="Dimensione">${[0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.6, 1.8, 2, 2.5].map(v =>
-                        `<option value="${v}" ${Math.abs(scala - v) < 0.01 ? 'selected' : ''}>${Math.round(v * 100)}%</option>`).join('')}
-                        ${[0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.6, 1.8, 2, 2.5].some(v => Math.abs(scala - v) < 0.01) ? '' : `<option selected value="${scala}">${Math.round(scala * 100)}%</option>`}</select>
+                    <span class="mappa-pop-sep"></span>
+                    ${campoDimensione('data-stile-pt', s.scala)}
                 </div>
                 <div class="riga-bottoni">
-                    ${[['sinistra', '⇤'], ['centro', '↔'], ['destra', '⇥']].map(([v, t]) => `<button type="button" class="${att(s.allinea === v)}" data-stile="allinea" data-valore="${v}" title="Allinea ${v}">${t}</button>`).join('')}
+                    ${[['sinistra', '⇤', 'a sinistra'], ['centro', '↔', 'al centro'], ['destra', '⇥', 'a destra']].map(([v, t, d]) => `<button type="button" class="${att(s.allinea === v)}" data-stile="allinea" data-valore="${v}" title="Allinea ${d}">${t}</button>`).join('')}
                 </div>
-                <span class="etichetta-campo">Colore del testo</span>
-                ${sceltaColori('data-stile-colore="coloreTesto" data-c', proprio.coloreTesto || '', { auto: true })}
+                <div class="campi-colore">
+                    ${campoColore('coloreTesto', 'Testo', proprio.coloreTesto, s.coloreTesto)}
+                    ${campoColore('colore', 'Ramo', proprio.colore, s.colore, 'Linee, bordo e sottolineatura del ramo')}
+                    ${campoColore('riempimento', 'Riempimento', proprio.riempimento, s.riempimento, '', true)}
+                </div>
+                <p class="pannello-nota">Solo una parte del testo in grassetto, corsivo o sottolineato: mentre scrivi nel nodo selezionala e premi Ctrl+B, Ctrl+I o Ctrl+U (o i pulsanti sopra il nodo).</p>
             </section>
             <section class="pannello-sezione">
-                <h3>Forma</h3>
+                <h3>Forma e bordo</h3>
                 <div class="griglia-forme">${Mappe.FORME.map(([id, nome]) => `
                     <button type="button" class="scelta-forma${att(s.forma === id)}" data-stile="forma" data-valore="${id}" title="${nome}"><span class="anteprima-forma forma-${id}"></span></button>`).join('')}
                 </div>
+                ${s.forma === 'sottolineata' ? `
+                <span class="etichetta-campo">Linea sotto il nodo <small>(solo questa, non le linee ai lati)</small></span>
+                <div class="riga-bottoni">
+                    ${['pieno', 'trattini', 'punti'].map(v => `<button type="button" class="${att((so.tratto || s.tratto || 'pieno') === v)}" data-sott="tratto" data-valore="${v}" title="${v}"><span class="tratto-${v}"></span></button>`).join('')}
+                    <select data-sott-spessore title="Spessore della linea sotto il nodo">
+                        <option value="" ${so.spessore ? '' : 'selected'}>Come la linea</option>
+                        ${[0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8].map(v => `<option value="${v}" ${Math.abs((+so.spessore || 0) - v) < 0.01 ? 'selected' : ''}>${v} px</option>`).join('')}</select>
+                </div>
+                <div class="campi-colore">${campoColore('sott', 'Colore', so.colore, so.colore || s.coloreBordo)}</div>` : `
+                <span class="etichetta-campo">Bordo</span>
                 <div class="riga-bottoni">
                     ${['pieno', 'trattini', 'punti'].map(v => `<button type="button" class="${att((s.tratto || 'pieno') === v)}" data-stile="tratto" data-valore="${v}" title="Bordo ${v}"><span class="tratto-${v}"></span></button>`).join('')}
                     <select data-stile-spessore title="Spessore del bordo">${[0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6].map(v =>
                         `<option value="${v}" ${Math.abs((+s.spessore || 0) - v) < 0.01 ? 'selected' : ''}>${v} px</option>`).join('')}</select>
-                </div>
-            </section>
-            <section class="pannello-sezione">
-                <h3>Colori</h3>
-                <span class="etichetta-campo">Ramo (linee, bordo e sottolineatura)</span>
-                ${sceltaColori('data-stile-colore="colore" data-c', proprio.colore || '', { auto: true })}
-                <span class="etichetta-campo">Riempimento</span>
-                ${sceltaColori('data-stile-colore="riempimento" data-c', proprio.riempimento || '', { auto: true, nessuno: true })}
+                </div>`}
             </section>
             ${idsCollegamento().length ? `<section class="pannello-sezione"><h3>Linea verso il nodo padre</h3>${controlliCollegamento()}</section>` : ''}
             <section class="pannello-sezione">
-                <h3>Larghezza</h3>
+                <h3>Dimensioni del nodo</h3>
                 ${[...st.sel].some(id => m.nodi[id] && +m.nodi[id].larghezza > 0)
-                    ? `<p class="pannello-nota">${st.sel.size === 1 ? `Larghezza scelta: ${Math.round(m.nodi[st.attivo].larghezza)} px.` : 'Alcuni nodi hanno una larghezza scelta.'} Trascina la maniglia ◂▸ sotto il nodo per cambiarla.</p>
+                    ? `<p class="pannello-nota">${st.sel.size === 1 ? `Larghezza scelta: ${Math.round(nodo.larghezza)} px.` : 'Alcuni nodi hanno una larghezza scelta.'} Trascina la maniglia ◂▸ sotto il nodo per cambiarla.</p>
                        <button type="button" class="btn btn-secondario btn-piccolo" data-stile-az="larghezza-auto">Larghezza automatica</button>`
-                    : '<p class="pannello-nota">Automatica: il nodo segue il testo. Trascina la maniglia ◂▸ sotto il nodo per sceglierla tu (il testo va a capo).</p>'}
-            </section>
-            <section class="pannello-sezione">
-                <h3>Dimensione minima</h3>
+                    : '<p class="pannello-nota">Larghezza automatica: il nodo segue il testo. Trascina la maniglia ◂▸ sotto il nodo per sceglierla tu (il testo va a capo).</p>'}
                 <div class="riga-campi-piccoli">
-                    <label>Larghezza <input type="number" min="0" max="800" step="10" value="${+s.larghezzaMin || 0}" data-stile-num="larghezzaMin"></label>
-                    <label>Altezza <input type="number" min="0" max="600" step="10" value="${+s.altezzaMin || 0}" data-stile-num="altezzaMin"></label>
+                    <span>Minimo</span>
+                    <label>largo <input type="number" min="0" max="800" step="10" value="${+s.larghezzaMin || 0}" data-stile-num="larghezzaMin"></label>
+                    <label>alto <input type="number" min="0" max="600" step="10" value="${+s.altezzaMin || 0}" data-stile-num="altezzaMin"></label>
                 </div>
             </section>
             <div class="pannello-azioni">
                 <button type="button" class="btn btn-secondario btn-piccolo" data-stile-az="copia" title="Ctrl+Alt+C">Copia stile</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-stile-az="incolla" title="Ctrl+Alt+V" ${st.stileCopiato ? '' : 'disabled'}>Incolla stile</button>
-                <button type="button" class="btn btn-fantasma btn-piccolo" data-stile-az="ripristina">Stile del tema</button>
+                <button type="button" class="btn btn-fantasma btn-piccolo" data-stile-az="ripristina" title="Toglie le scelte fatte su questi nodi (anche lo stile predefinito)">Stile del tema</button>
             </div>`;
+    }
+
+    // ---- Stili predefiniti ------------------------------------------------------------------------
+
+    // Dà lo stile ai nodi: le scelte fatte sul nodo che lo stile decide si tolgono, così si vede lo stile
+    function applicaStilePredefinito(idStile, ids = [...st.sel]) {
+        const x = Mappe.stilePredefinito(idStile);
+        if (!x || !ids.length) return;
+        modifica(() => ids.forEach(id => {
+            const n = m.nodi[id];
+            if (!n) return;
+            n.stilePredefinito = x.id;
+            if (n.stile) Object.keys(x.stile).forEach(k => { delete n.stile[k]; });
+        }));
+    }
+
+    function chiediNome(titolo, iniziale = '') {
+        return new Promise(risolvi => {
+            let valore = null;
+            Ui.modale({
+                titolo, classe: 'modale-piccola',
+                corpo: `<label class="campo"><span>Nome</span><input type="text" name="nome-stile" maxlength="40" value="${esc(iniziale)}" autofocus></label>`,
+                alApri: el => { const i = $('[name=nome-stile]', el); i.select(); i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('.modale-piede .btn-primario', el.closest('.modale') || document).click(); } }); },
+                azioni: [
+                    { testo: 'Annulla', classe: 'btn-fantasma' },
+                    { testo: 'Salva', classe: 'btn-primario', principale: true, clic: md => { valore = $('[name=nome-stile]', md.el).value.trim(); if (!valore) return; md.chiudi(); } },
+                ],
+                alChiudere: () => risolvi(valore),
+            });
+        });
+    }
+
+    // L'aspetto proprio del nodo: lo stile predefinito che usa più le scelte fatte su di lui
+    function aspettoNodo(n) {
+        const pre = Mappe.stilePredefinito(n.stilePredefinito);
+        return { ...(pre ? pre.stile : {}), ...(n.stile || {}) };
+    }
+
+    async function azioneStilePredefinito(az, ancora) {
+        const n = m.nodi[st.attivo];
+        if (!n) return;
+        const usato = Mappe.stilePredefinito(n.stilePredefinito);
+        if (az === 'nuovo') {
+            const nome = await chiediNome('Nuovo stile predefinito', usato ? usato.nome + ' 2' : '');
+            if (!nome) return;
+            const x = Mappe.salvaStilePredefinito({ nome, stile: aspettoNodo(n) });
+            applicaStilePredefinito(x.id, [...st.sel]);
+            Ui.toast(`Stile «${x.nome}» creato: lo trovi in Stile → Stili predefiniti, in tutte le mappe`, 'successo', 3500);
+        } else if (az === 'aggiorna' && usato) {
+            Mappe.salvaStilePredefinito({ ...usato, stile: aspettoNodo(n) });
+            modifica(() => { n.stile = {}; });
+            Ui.toast(`«${usato.nome}» aggiornato: cambiano tutti i nodi che lo usano`, 'successo', 3000);
+        } else if (az === 'togli') {
+            modifica(() => st.sel.forEach(id => { if (m.nodi[id]) delete m.nodi[id].stilePredefinito; }));
+        } else if (az === 'menu' && usato) {
+            Ui.menu(ancora, [
+                { testo: 'Rinomina', icona: 'matita', clic: async () => {
+                    const nome = await chiediNome('Rinomina lo stile', usato.nome);
+                    if (nome) { Mappe.salvaStilePredefinito({ ...usato, nome }); aggiornaPannello(true); }
+                } },
+                { testo: 'Elimina lo stile', icona: 'cestino', pericolo: true, clic: async () => {
+                    if (!await Ui.conferma(`Elimini lo stile <b>${esc(usato.nome)}</b>? I nodi che lo usano (in tutte le mappe) tornano al loro aspetto.`, { titolo: 'Eliminare lo stile?', ok: 'Elimina', pericolo: true })) return;
+                    Mappe.eliminaStilePredefinito(usato.id);
+                } },
+            ]);
+            return;
+        }
+        aggiornaPannello(true);
+    }
+
+    // Linea sotto il nodo (forma sottolineata): colore, tratto e spessore suoi, che non cambiano le linee ai lati
+    function applicaSottolineatura(k, v, ids = [...st.sel]) {
+        modifica(() => ids.forEach(id => {
+            const n = m.nodi[id];
+            if (!n) return;
+            n.stile = n.stile || {};
+            const so = { ...(n.stile.sottolineatura || {}) };
+            if (v == null || v === '') delete so[k]; else so[k] = v;
+            if (Object.keys(so).length) n.stile.sottolineatura = so; else delete n.stile.sottolineatura;
+        }));
     }
 
     function pannelloIcone() {
@@ -2366,7 +2779,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function suPuntatoreGiu(e) {
         if (e.button !== 0 && e.pointerType === 'mouse') return;
         if (e.target.closest('[data-m="larghezza"]')) { trascinaLarghezza(e, st.attivo); return; }
-        if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia')) return;
+        if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia, .barra-testo-nodo')) return;
         puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (puntatori.size === 2) {
             const [a, b] = [...puntatori.values()];
@@ -2554,11 +2967,23 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             });
             if (ridisegna) { disegnaLinee(); disegnaExtra(); }
         };
+        // Griglia di allineamento: il centro del nodo trascinato va sul punto più vicino (con Alt si sposta liberamente).
+        // Vale per i nodi che restano dove li si lascia: liberi o figli di un genitore in disposizione libera
+        const rif = gruppo.includes(id) ? id : gruppo[0];
+        const aMano = x => { const n = m.nodi[x]; return n && (!n.genitore || (geo.get(n.genitore) || {}).disp === 'libera'); };
+        let senzaGriglia = false;
+        const aggancia = (dx, dy) => {
+            const q = origini.get(rif);
+            if (!griglia().attiva || senzaGriglia || !q || !aMano(rif)) return [dx, dy];
+            const g = geo.get(rif), cx = q.x + g.w / 2, cy = q.y + g.h / 2;
+            return [sullaGriglia(cx + dx) - cx, sullaGriglia(cy + dy) - cy];
+        };
         let rafRamo = null, ultimo = [0, 0];
         trascina(e, {
             muovi: (dx, dy, ev) => {
                 editorEl.classList.add('trascinando');
-                ultimo = [dx / st.vista.zoom, dy / st.vista.zoom];
+                senzaGriglia = ev.altKey;
+                ultimo = aggancia(dx / st.vista.zoom, dy / st.vista.zoom);
                 if (!rafRamo) rafRamo = requestAnimationFrame(() => { rafRamo = null; spostaRamo(...ultimo); });
                 segna(bersaglioSotto(ev.clientX, ev.clientY, esclusi));
             },
@@ -2575,7 +3000,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                     return;
                 }
                 const passi = st.passato.length;
-                lasciaNodi(gruppo, dx / st.vista.zoom, dy / st.vista.zoom, b);
+                lasciaNodi(gruppo, ...(b ? [dx / st.vista.zoom, dy / st.vista.zoom] : aggancia(dx / st.vista.zoom, dy / st.vista.zoom)), b);
                 if (st.passato.length === passi) disegna();   // niente è cambiato: tutto torna al suo posto
             },
         });
@@ -3012,9 +3437,16 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             if (e.code === 'KeyC') copiaStile(); else incollaStile();
             return;
         }
+        // Ctrl+Alt+1…9: lo stile predefinito 1…9 ai nodi scelti
+        if (ctrl && e.altKey && /^Digit[1-9]$/.test(e.code)) {
+            const x = Mappe.stiliPredefiniti()[+e.code.slice(5) - 1];
+            if (x && st.sel.size) { e.preventDefault(); applicaStilePredefinito(x.id); aggiornaPannello(true); }
+            return;
+        }
         if (ctrl && k.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); annulla(); return; }
         if (ctrl && (k.toLowerCase() === 'y' || (k.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); ripeti(); return; }
         if (ctrl && k.toLowerCase() === 'f') { e.preventDefault(); apriRicerca(); return; }
+        if (ctrl && k.toLowerCase() === 'g') { e.preventDefault(); $('[data-a="griglia"]', radiceEl)?.click(); return; }
         if (ctrl && k === '0') { e.preventDefault(); adatta(); return; }
         if (ctrl && (k === '+' || k === '=')) { e.preventDefault(); zoomA(st.vista.zoom * 1.2); return; }
         if (ctrl && (k === '-' || k === '_')) { e.preventDefault(); zoomA(st.vista.zoom / 1.2); return; }
@@ -3090,6 +3522,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function suClic(e) {
         if (e.target.closest('[data-indietro]') && opzioni.indietroStoria) { e.preventDefault(); history.back(); return; }
+        const fmt = e.target.closest('[data-fmt]');
+        if (fmt && sopraEl.contains(fmt)) { formattaTesto(fmt.dataset.fmt); return; }
         const a = e.target.closest('[data-a]');
         if (a && radiceEl.contains(a)) {
             const azioni = {
@@ -3104,6 +3538,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 altro: () => menuAltro(a), 'chiudi-pannello': () => apriPannello(null),
                 assistente: () => Assistente.alterna(),
                 flashcard: () => flashcardDaiNodi(),
+                griglia: () => { impostaGriglia({ attiva: !griglia().attiva }); Ui.toast(griglia().attiva ? `Griglia accesa: i nodi spostati si agganciano ogni ${griglia().passo} px` : 'Griglia spenta', 'info', 2200); if (st.pannello === 'disposizione') aggiornaPannello(true); },
                 panoramica: spiegaPanoramica,
             };
             if (a.dataset.p) apriPannello(a.dataset.p);
@@ -3149,6 +3584,25 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             modifica(() => { m.tema = x.dataset.temaMappa; m.paletta = null; m.coloreRadice = null; m.livelli = null; m.linee = null; });
         } else if ((x = t.closest('[data-linee]'))) {
             modifica(() => { m.linee = { ...(m.linee || {}), [x.dataset.linee]: x.dataset.valore }; });
+        } else if ((x = t.closest('[data-curva-forma]'))) {
+            st.formaCurva = x.dataset.curvaForma;
+            const cv = curvaturaDi((m.nodi[idsCollegamento()[0]] || {}).percorso);
+            if (cv.valore) applicaCurvatura(cv.valore, st.formaCurva);
+            aggiornaPannello(true);
+        } else if (t.closest('[data-fratelli-nodo-via]')) {
+            const id = st.attivo;
+            if (m.nodi[id]) modifica(() => { delete m.nodi[id].distanzaFigli; });
+            aggiornaPannello(true);
+        } else if ((x = t.closest('[data-campo-colore]'))) {
+            apriTavolozza(x);
+        } else if ((x = t.closest('[data-stile-pre]'))) {
+            applicaStilePredefinito(x.dataset.stilePre);
+        } else if ((x = t.closest('[data-stile-pre-az]'))) {
+            azioneStilePredefinito(x.dataset.stilePreAz, x);
+        } else if ((x = t.closest('[data-sott]'))) {
+            applicaSottolineatura(x.dataset.sott, x.dataset.valore);
+        } else if ((x = t.closest('[data-sott-colore]')) && x.tagName === 'BUTTON') {
+            applicaSottolineatura('colore', coloreScelto(x, 'data-c'));
         } else if ((x = t.closest('[data-coll]'))) {
             applicaCollegamento(x.dataset.coll, x.dataset.valore);
         } else if ((x = t.closest('[data-coll-colore]')) && x.tagName === 'BUTTON') {
@@ -3188,7 +3642,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             const az = x.dataset.stileAz;
             if (az === 'copia') copiaStile();
             else if (az === 'incolla') incollaStile();
-            else if (az === 'ripristina') modifica(() => st.sel.forEach(id => { m.nodi[id].stile = {}; }));
+            else if (az === 'ripristina') modifica(() => st.sel.forEach(id => { m.nodi[id].stile = {}; delete m.nodi[id].stilePredefinito; }));
             else if (az === 'larghezza-auto') larghezzaAutomatica([...st.sel]);
         } else if ((x = t.closest('[data-icona]'))) {
             const v = x.dataset.icona || null;
@@ -3252,6 +3706,21 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (t.matches('[data-spaziatura]')) {
             $('[data-sp-valore]', pannelloEl).textContent = Math.round(t.value * 100) + '%';
             modificaContinua('spaziatura', () => { m.spaziatura = +t.value; });
+        } else if (t.matches('[data-fratelli]')) {
+            $('[data-fr-valore]', pannelloEl).textContent = Math.round(t.value * 100) + '%';
+            modificaContinua('fratelli', () => { m.spaziaturaFratelli = Math.abs(+t.value - 1) < 0.01 ? null : +t.value; });
+        } else if (t.matches('[data-fratelli-nodo]')) {
+            const id = st.attivo;
+            $('[data-frn-valore]', pannelloEl).textContent = Math.round(t.value * 100) + '%';
+            modificaContinua('fratelli:' + id, () => { m.nodi[id].distanzaFigli = +t.value; });
+        } else if (t.matches('[data-curvatura]')) {
+            const v = +t.value;
+            $('[data-curva-valore]', pannelloEl).textContent = v;
+            const cv = curvaturaDi((m.nodi[idsCollegamento()[0]] || {}).percorso);
+            applicaCurvatura(v, cv.forma || st.formaCurva || 'arco');
+        } else if (t.matches('[data-griglia-passo]')) {
+            $('[data-gr-valore]', pannelloEl).textContent = t.value + ' px';
+            impostaGriglia({ passo: +t.value });
         } else if (t.matches('[data-linee-num]')) {
             const k = t.dataset.lineeNum, v = +t.value;
             const etichetta = $(`[data-val="${k}"]`, pannelloEl);
@@ -3275,12 +3744,18 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const t = e.target;
         if (t.matches('[data-direzione]')) modifica(() => { m.direzione = t.value; m.nodi[m.radice].figli.forEach(f => { m.nodi[f].lato = null; }); });
         else if (t.matches('[data-stile-scala]')) applicaStile('scala', +t.value);
+        else if (t.matches('[data-stile-pt]')) {
+            const pt = limita(+t.value || PT_BASE, 4, 96);
+            applicaStile('scala', Math.abs(pt - PT_BASE) < 0.01 ? null : Math.round(pt / PT_BASE * 1000) / 1000);
+        } else if (t.matches('[data-sott-spessore]')) applicaSottolineatura('spessore', +t.value || null);
         else if (t.matches('[data-stile-spessore]')) applicaStile('spessore', +t.value);
         else if (t.matches('[data-stile-num]')) applicaStile(t.dataset.stileNum, Math.max(0, +t.value || 0) || null);
         else if (t.matches('[data-c-libero]')) {
-            if (t.dataset.collColore) applicaCollegamento('coloreLinea', t.value); else applicaStile(t.dataset.stileColore, t.value);
+            if (t.hasAttribute('data-sott-colore')) applicaSottolineatura('colore', t.value);
+            else if (t.dataset.collColore) applicaCollegamento('coloreLinea', t.value); else applicaStile(t.dataset.stileColore, t.value);
         } else if (t.matches('[data-coll-num]')) applicaCollegamento('lineaSpessore', +t.value);
         else if (t.matches('[data-linee-auto]')) modifica(() => { m.linee = { ...(m.linee || {}), affusolamento: t.checked }; });
+        else if (t.matches('[data-griglia-attiva]')) impostaGriglia({ attiva: t.checked });
         else if (t.matches('[data-nodo-campo="link"]')) {
             const v = t.value.trim();
             if (v && !/^https?:\/\//i.test(v)) { Ui.toast('Il link deve iniziare con http:// o https://', 'errore'); return; }
@@ -3344,9 +3819,15 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const t = e.target;
         const r = m.relazioni.find(q => q.id === st.rel);
         if (r && t.matches('[data-rel-testo]')) modifica(() => { r.testo = t.value.trim(); });
+        else if (r && t.matches('[data-rel-curva]')) {
+            const v = +t.value;
+            // A 0 il collegamento è dritto: passa dal punto a metà tra i due nodi
+            modifica(() => { r.percorso = percorsoCurvo('arco', v) || [{ u: 0.5, v: 0 }]; });
+        }
         else if (r && t.matches('[data-rel-colore-libero]')) modifica(() => { r.colore = t.value; });
         const et = st.et && m.nodi[st.et.nodo] && m.nodi[st.et.nodo].etichette.find(q => q.id === st.et.id);
         if (et && t.matches('[data-et-scala]')) modifica(() => { et.stile = { ...(et.stile || {}), scala: +t.value }; });
+        if (et && t.matches('[data-et-pt]')) modifica(() => { et.stile = { ...(et.stile || {}), scala: Math.round(limita(+t.value || 8.4, 4, 96) / PT_BASE * 1000) / 1000 }; });
         else if (et && t.matches('[data-et-colore-libero]')) modifica(() => { et.stile = { ...(et.stile || {}), riempimento: t.value }; });
     }
 
@@ -3510,6 +3991,10 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (r) { seleziona(r.dataset.struttura); modificaNodo(r.dataset.struttura); }
     });
     sopraEl.addEventListener('change', suCambioPop);
+    // I pulsanti della barra del testo non tolgono il cursore (né la selezione) dal nodo in modifica
+    sopraEl.addEventListener('mousedown', e => { if (e.target.closest('.barra-testo-nodo')) e.preventDefault(); });
+    const suSelezioneTesto = () => { if (st.modifica && st.modifica.tipo === 'nodo') segnaFormatiAttivi(); };
+    document.addEventListener('selectionchange', suSelezioneTesto);
     sopraEl.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-rel-testo]')) e.target.blur(); });
     $('[data-ricerca] input', radiceEl).addEventListener('input', debounce(e => cerca(e.target.value), 150));
     nomeEl.addEventListener('change', () => {
@@ -3529,6 +4014,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     aggiornaStoria();
     aggiornaPannello(true);
     disegna();
+    if (griglia().attiva) { mostraGriglia(); $$('[data-a="griglia"]', radiceEl).forEach(b => b.classList.add('attivo')); }
     // La vista si sistema quando l'area di disegno ha davvero una dimensione (all'apertura può non averla ancora)
     let vistaPronta = false;
     const vistaSalvata = !!st.vista;
@@ -3553,6 +4039,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         document.removeEventListener('copy', suCopia);
         document.removeEventListener('cut', suTaglia);
         document.removeEventListener('paste', suIncolla);
+        document.removeEventListener('selectionchange', suSelezioneTesto);
         window.removeEventListener('pointermove', suPuntatoreMosso);
         window.removeEventListener('pointerup', suPuntatoreSu);
         window.removeEventListener('pointercancel', suPuntatoreSu);
