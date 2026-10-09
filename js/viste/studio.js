@@ -272,7 +272,10 @@ Viste.studio = (() => {
 
             corpo.innerHTML = `
                 <div class="studio-scena">
-                    ${etichettaCarta(c, ambito)}
+                    <div class="studio-sopra-carta">
+                        ${etichettaCarta(c, ambito)}
+                        <button type="button" class="btn btn-fantasma btn-piccolo carta-modifica" data-azione="modifica-carta" title="Correggi questa flashcard senza lasciare il ripasso (E)">${ico('matita')}Modifica</button>
+                    </div>
                     <article class="carta-studio">
                         <div class="carta-domanda contenuto-ricco">${c.domanda}</div>
                         ${c.suggerimento ? `<div class="suggerimento" data-suggerimento hidden>${ico('lampadina')}<span>${esc(c.suggerimento)}</span></div>` : ''}
@@ -383,6 +386,19 @@ Viste.studio = (() => {
             setTimeout(disegna, 160);
         }
 
+        // Correzione al volo: la carta si ridisegna com'è adesso, nella stessa fase (se la risposta era già visibile resta
+        // visibile; le carte a scelta multipla tornano alla domanda). Il tempo di risposta non riparte
+        function modificaCarta() {
+            if (!c || !['domanda', 'risposta'].includes(fase)) return;
+            const eraRisposta = fase === 'risposta' && !ordine, inizio = inizioCarta;
+            Viste.editor.modificaVeloce(c, () => {
+                if (sessione.finita || !sessione.coda.length || sessione.coda[0] !== c.id) return;
+                disegna();
+                inizioCarta = inizio;
+                if (eraRisposta) mostra();
+            });
+        }
+
         // ✕ o Esc: se hai già risposto la sessione finisce qui (riepilogo e revisioni), altrimenti si esce e basta
         function termina() {
             if (sessione.finita || !sessione.risposte) { Router.vai(ambito.ritorno); return; }
@@ -458,6 +474,8 @@ Viste.studio = (() => {
 
         impostaTasti(e => {
             if (e.key === 'Escape') { termina(); return; }
+            // E = modifica (con 5 o più risposte a scelta la E sceglie la quinta)
+            if (e.key.toLowerCase() === 'e' && ['domanda', 'risposta'].includes(fase) && !(fase === 'domanda' && ordine && ordine.length > 4)) { e.preventDefault(); modificaCarta(); return; }
             if (fase === 'domanda') {
                 if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); mostra(); }
                 else if (e.key.toLowerCase() === 'h') { const s = $('[data-suggerimento]', corpo); if (s) s.hidden = false; }
@@ -491,6 +509,7 @@ Viste.studio = (() => {
             mostra,
             suggerimento: b => { const s = $('[data-suggerimento]', corpo); if (s) s.hidden = false; b.remove(); },
             scegli: b => scegli(+b.dataset.i),
+            'modifica-carta': modificaCarta,
             valuta: b => valuta(+b.dataset.v),
             ancora: () => App.ridisegna(),
         });

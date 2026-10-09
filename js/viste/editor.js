@@ -428,6 +428,56 @@ Viste.editor = {
         if (nuova) domanda.focus();
     },
 
+    // Modifica veloce in una finestra (es. durante il ripasso, senza lasciare la sessione): domanda, risposte,
+    // suggerimento e spiegazione. Il resto (madre, mappa, fonte, tag) resta nell'editor completo.
+    // alSalvare(carta) dopo il salvataggio
+    modificaVeloce(carta, alSalvare = null) {
+        const c = Dati.carta(carta.id);
+        if (!c) return;
+        const multipla = c.risposte.length > 1;
+        Ui.modale({
+            titolo: 'Modifica la flashcard', classe: 'modale-modifica-carta',
+            corpo: `
+                <div class="campo"><span class="etichetta">Domanda</span><div data-ricco="domanda"></div></div>
+                ${multipla ? `<div class="campo"><span class="etichetta">Risposte <em>spunta quelle corrette</em></span><div class="lista-opzioni" data-opzioni>${c.risposte.map((r, i) => `
+                    <div class="opzione"><label class="spunta-corretta" title="Risposta corretta"><input type="checkbox" ${r.corretta ? 'checked' : ''}><span>${Ui.ico('spunta')}</span></label><div class="opzione-editor" data-opzione="${i}"></div></div>`).join('')}</div></div>`
+                    : '<div class="campo"><span class="etichetta">Risposta</span><div data-ricco="risposta"></div></div>'}
+                <label class="campo"><span class="etichetta">Suggerimento <em>facoltativo</em></span>
+                    <input type="text" name="suggerimento" maxlength="300" value="${esc(c.suggerimento || '')}" placeholder="Un aiuto per ricordare"></label>
+                <div class="campo"><span class="etichetta">Spiegazione <em>facoltativa</em></span><div data-ricco="spiegazione"></div></div>
+                <p class="nota">Domanda madre, parte della mappa, fonte e tag si cambiano dall'editor completo (<a href="#/carta/${c.id}" data-editor-completo>apri</a>).</p>`,
+            alApri: (el, m) => {
+                m.domanda = Ricco.crea($('[data-ricco=domanda]', m.el), { html: c.domanda, segnaposto: 'Scrivi la domanda…' });
+                m.risposta = multipla ? null : Ricco.crea($('[data-ricco=risposta]', m.el), { html: (c.risposte[0] || {}).testo || '', segnaposto: 'Scrivi la risposta…' });
+                m.opzioni = multipla ? c.risposte.map((r, i) => Ricco.crea($(`[data-opzione="${i}"]`, m.el), { html: r.testo, compatto: true })) : [];
+                m.spiegazione = Ricco.crea($('[data-ricco=spiegazione]', m.el), { html: c.spiegazione || '', segnaposto: 'Perché la risposta è questa…' });
+                // Il link all'editor completo esce dalla finestra (e dalla sessione)
+                $('[data-editor-completo]', m.el).addEventListener('click', () => m.chiudi());
+                setTimeout(() => m.domanda.focus(), 30);
+            },
+            azioni: [
+                { testo: 'Annulla', classe: 'btn-fantasma' },
+                { testo: 'Salva', classe: 'btn-primario', principale: true, clic: m => {
+                    const dati = {
+                        domanda: m.domanda.valore(),
+                        risposte: multipla
+                            ? m.opzioni.map((o, i) => ({ testo: o.valore(), corretta: $$('.opzione input', m.el)[i].checked })).filter(r => !Ricco.vuoto(r.testo))
+                            : [{ testo: m.risposta.valore(), corretta: true }],
+                        suggerimento: $('[name="suggerimento"]', m.el).value.trim(),
+                        spiegazione: Ricco.vuoto(m.spiegazione.valore()) ? '' : m.spiegazione.valore(),
+                    };
+                    if (Ricco.vuoto(dati.domanda)) { Ui.toast('Scrivi la domanda', 'errore'); return; }
+                    if (!multipla && Ricco.vuoto(dati.risposte[0].testo) && !c.mappa) { Ui.toast('Scrivi la risposta', 'errore'); return; }
+                    if (multipla && (dati.risposte.length < 2 || !dati.risposte.some(r => r.corretta))) { Ui.toast('Servono almeno due risposte, e una corretta', 'errore'); return; }
+                    const salvata = Dati.aggiornaCarta(c.id, dati);
+                    m.chiudi();
+                    Ui.toast('Flashcard aggiornata', 'successo', 1600);
+                    if (alSalvare && salvata) alSalvare(salvata);
+                } },
+            ],
+        });
+    },
+
     esci() {
         if (this.tasti) document.removeEventListener('keydown', this.tasti);
         this.tasti = null;

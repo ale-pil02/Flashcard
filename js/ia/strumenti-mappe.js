@@ -121,6 +121,9 @@
         if (n.spunta != null) o.spunta = n.spunta ? 'fatta' : 'da_fare';
         if (n.chiuso) o.ramo_chiuso = true;
         if (n.disposizione) o.disposizione_figli = n.disposizione;
+        if (+n.larghezza > 0) o.larghezza = Math.round(n.larghezza);
+        if (+n.distanzaFigli > 0) o.distanza_figli = n.distanzaFigli;
+        if (n.stilePredefinito) { const x = Mappe.stilePredefinito(n.stilePredefinito); o.stile_predefinito = x ? { id: x.id, nome: x.nome } : n.stilePredefinito; }
         if (n.raccordo) o.raccordo = { nodi: n.raccordo.nodi, graffa: !!n.raccordo.graffa };
         if (n.rif && n.rif.mappa) o.origine = { mappa_id: n.rif.mappa, nodo_id: n.rif.nodo };
         if (n.inPanoramica) o.in_link_argomenti = true;
@@ -131,6 +134,7 @@
             if (n.off) o.posizione = { dx: Math.round(n.off.dx), dy: Math.round(n.off.dy) };
             if (!n.genitore && id !== m.radice && n.x != null) o.posizione = { x: Math.round(n.x), y: Math.round(n.y || 0) };
             if (n.piega) o.linea_piegata = true;
+            if (n.percorso) o.curvatura_linea = curvaturaPerIA(n.percorso);
         }
         if (n.figli.length) {
             if (livello >= opz.profondita) o.discendenti_non_mostrati = Mappe.discendenti(m, id).length;
@@ -153,7 +157,11 @@
     const bool = v => (typeof v === 'boolean' ? v : undefined);
     const CHIAVI_STILE = {
         grassetto: [bool, S.bool('grassetto')], corsivo: [bool, S.bool('corsivo')], sottolineato: [bool, S.bool('sottolineato')],
-        barrato: [bool, S.bool('barrato')], scala: [tra(0.5, 3), num('dimensione del testo: 1 = normale, 1.5 = una volta e mezza')],
+        barrato: [bool, S.bool('barrato')], scala: [tra(0.4, 9), num('dimensione del testo in scala: 1 = normale (10,5 pt); meglio usare pt')],
+        pt: [tra(4, 96), num('dimensione del testo in punti, come in Word (10,5 = normale; 8 piccolo, 14 grande)')],
+        sottolineatura: [v => (v && typeof v === 'object' ? v : undefined), S.obj({
+            colore: S.str("#rrggbb; '' = quello del ramo"), tratto: S.str('pieno | trattini | punti'), spessore: num('px (0.5-12)'),
+        }, [], "forma 'sottolineata': la linea sotto il nodo, solo per lui (non cambia le linee verso il genitore e i figli)")],
         allinea: [traQuesti(['sinistra', 'centro', 'destra']), S.str('allineamento del testo: sinistra | centro | destra')],
         coloreTesto: [colore, S.str('colore del testo, #rrggbb')],
         forma: [traQuesti(FORME), S.str(`forma del nodo: ${FORME.join(' | ')}`)],
@@ -173,6 +181,19 @@
     const SCHEMA_STILE = S.obj(Object.fromEntries(Object.entries(CHIAVI_STILE).map(([k, [, d]]) => [k, d])), [],
         'solo le proprietà da cambiare rispetto al tema');
 
+    // Linea sotto il nodo (forma sottolineata): solo i campi validi; '' o null tolgono il campo
+    function sottolineatura(attuale, v, avvisi) {
+        const so = { ...(attuale || {}) };
+        Object.entries(v).forEach(([k, x]) => {
+            if (x == null || x === '') { delete so[k]; return; }
+            if (k === 'colore' && Mappe.coloreValido(x)) so.colore = x.toLowerCase();
+            else if (k === 'tratto' && ['pieno', 'trattini', 'punti'].includes(x)) so.tratto = x;
+            else if (k === 'spessore' && isFinite(+x)) so.spessore = limita(+x, 0.5, 12);
+            else avvisi.push(`sottolineatura: valore «${x}» non valido per ${k}`);
+        });
+        return Object.keys(so).length ? so : undefined;
+    }
+
     function applicaStile(n, stile, avvisi) {
         n.stile = n.stile || {};
         Object.entries(stile || {}).forEach(([k, v]) => {
@@ -180,10 +201,34 @@
             if (!c) { avvisi.push(`stile: proprietà «${k}» sconosciuta`); return; }
             const valido = c[0](v);
             if (valido === undefined) { avvisi.push(`stile: valore «${v}» non valido per ${k}`); return; }
+            if (k === 'pt') { n.stile.scala = Math.round(valido / 10.5 * 1000) / 1000; return; }
+            if (k === 'sottolineatura') {
+                const so = sottolineatura(n.stile.sottolineatura, valido, avvisi);
+                if (so) n.stile.sottolineatura = so; else delete n.stile.sottolineatura;
+                return;
+            }
             n.stile[k] = valido;
             if (k === 'frecciaFine') delete n.stile.freccia;
             if (k === 'lineaForma') { n.piega = null; n.percorso = null; }
         });
+    }
+
+    // Curvatura semplice di una linea (come il cursore «Curvatura» dell'editor): un punto di passaggio a metà (arco) o due
+    // opposti (onda a S), a valore/200 della lunghezza dalla linea dritta. Per i rami 0 = linea normale; per i
+    // collegamenti 0 = dritto
+    function percorsoCurvo(forma, valore, collegamento = false) {
+        const v = Math.round(limita(+valore || 0, -100, 100) / 200 * 10000) / 10000;
+        if (!v) return collegamento ? [{ u: 0.5, v: 0 }] : null;
+        return forma === 'onda' ? [{ u: 0.3333, v }, { u: 0.6667, v: -v }] : [{ u: 0.5, v }];
+    }
+    const SCHEMA_CURVATURA = S.obj({ valore: num('da -100 a 100: quanto si piega e da che parte (0 = normale)'), forma: S.str('arco (predefinita) | onda (a S)') }, ['valore']);
+
+    function curvaturaPerIA(percorso) {
+        if (!Disposizione.percorsoValido(percorso)) return undefined;
+        const [p, q] = percorso;
+        if (percorso.length === 1 && Math.abs(p.u - 0.5) < 0.01) return { forma: 'arco', valore: Math.round(p.v * 200) };
+        if (percorso.length === 2 && Math.abs(p.u - 1 / 3) < 0.01 && Math.abs(q.u - 2 / 3) < 0.01) return { forma: 'onda', valore: Math.round(p.v * 200) };
+        return { punti_a_mano: percorso.length };
     }
 
     // ---- Strumenti ------------------------------------------------------------------------------------
@@ -191,7 +236,7 @@
     const LISTA = [
         {
             nome: 'elenca_mappe',
-            descrizione: "Elenca le mappe mentali (id, nome, materia e set, numero di nodi, quale è aperta) e i temi disponibili. Con 'cerca' trova anche i nodi che contengono un testo, in tutte le mappe o in una.",
+            descrizione: "Elenca le mappe mentali nell'ordine della sezione Mappe (id, nome, materia e set, numero di nodi, quale è aperta), i temi e gli stili predefiniti dei nodi. Con 'cerca' trova anche i nodi che contengono un testo, in tutte le mappe o in una.",
             parametri: S.obj({
                 materia_id: S.str('facoltativo: solo le mappe di questa materia'), set_id: S.str('facoltativo: solo le mappe di questo set'),
                 cerca: S.str('facoltativo: testo da cercare nei nodi (testo, nota, etichette)'), mappa_id: S.str('facoltativo: cerca solo in questa mappa'),
@@ -199,7 +244,7 @@
             etichetta: a => (a.cerca ? `Cerco «${a.cerca}» nelle mappe` : 'Guardo le mappe'),
             esegui: a => {
                 const aperta = App.rottaAttiva && App.rottaAttiva.vista === 'mappa' ? App.rottaAttiva.params.id : null;
-                let mappe = Mappe.tutte();
+                let mappe = Mappe.ordinate();
                 if (a.materia_id) mappe = mappe.filter(x => x.materiaId === a.materia_id);
                 if (a.set_id) mappe = mappe.filter(x => x.setId === a.set_id);
                 const out = {
@@ -210,6 +255,8 @@
                         modificata: chiaveGiorno(x.modificata || x.creata), ...(x.id === aperta ? { aperta: true } : {}),
                     })),
                     temi: Mappe.temi().map(t => ({ id: t.id, nome: t.nome, ...(t.personale ? { personale: true } : {}) })),
+                    stili_predefiniti: Mappe.stiliPredefiniti().map((x, i) => ({ id: x.id, nome: x.nome, scorciatoia: i < 9 ? `Ctrl+Alt+${i + 1}` : undefined })),
+                    ordine_mappe: Mappe.ordineMappe(),
                 };
                 if (a.cerca) {
                     const q = String(a.cerca).toLowerCase();
@@ -251,6 +298,7 @@
                     set: m.setId && Dati.set(m.setId) ? Dati.set(m.setId).nome : null, set_id: m.setId,
                     impostazioni: {
                         tema: { id: t.id, nome: t.nome }, disposizione: m.disposizione, direzione_rami: m.direzione, spaziatura: m.spaziatura || 1,
+                        distanza_fratelli: m.spaziaturaFratelli || 1, griglia: m.griglia && m.griglia.attiva ? { attiva: true, passo: m.griglia.passo || 20 } : undefined,
                         linee: { forma: t.linee.forma, affusolamento: t.linee.affusolamento, spessore_radice: t.linee.inizio, riduzione: +(1 - t.linee.fattore).toFixed(2), spessore_minimo: t.linee.minimo, spessore: t.linee.spessore },
                         colori_rami: (m.paletta || []).length ? m.paletta : null, colore_radice: m.coloreRadice || null,
                         stili_per_livello_propri: !!(m.livelli && m.livelli.length) || undefined,
@@ -294,7 +342,7 @@
         },
         {
             nome: 'modifica_mappa',
-            descrizione: "Cambia una mappa: nome, materia e set, tema, disposizione, lato dei rami principali, spaziatura, colori dei rami principali e della radice, linee (forma, affusolamento automatico e spessori), oppure torna allo stile del tema.",
+            descrizione: "Cambia una mappa: nome, materia e set, tema, disposizione, lato dei rami principali, spaziatura, distanza tra i nodi fratelli, griglia di allineamento, colori dei rami principali e della radice, linee (forma, affusolamento automatico e spessori), oppure torna allo stile del tema.",
             parametri: S.obj({
                 mappa_id: S.str('id'), nome: S.str('nuovo nome'),
                 materia_id: S.str("materia; '' = nessuna"), set_id: S.str("set; '' = nessuno"),
@@ -302,6 +350,8 @@
                 disposizione: S.str('orizzontale | destra | sinistra | verticale | su (capovolta) | lineare | radiale | libera'),
                 direzione_rami: S.str('rami principali (disposizione orizzontale o libera): auto | orario | destra | sinistra'),
                 spaziatura: num('distanza tra i nodi, da 0.6 a 2 (1 = normale)'),
+                distanza_fratelli: num('distanza tra i nodi fratelli (uno sotto l\'altro), da 0.2 a 6 (1 = normale)'),
+                griglia: S.obj({ attiva: S.bool('accesa: i nodi spostati a mano si agganciano ai suoi punti'), passo: num('distanza tra i punti, 10-80 px') }, [], 'griglia di allineamento'),
                 colori_rami: S.arr(S.str('#rrggbb'), "colori dei rami principali in ordine; lista vuota = quelli del tema"),
                 colore_radice: S.str("#rrggbb; '' = quello del tema"),
                 linee: S.obj({
@@ -327,6 +377,14 @@
                     fatto.push('lato dei rami');
                 }
                 if (a.spaziatura != null) { m.spaziatura = limita(+a.spaziatura || 1, 0.6, 2); fatto.push('spaziatura'); }
+                if (a.distanza_fratelli != null) { const v = limita(+a.distanza_fratelli || 1, 0.2, 6); m.spaziaturaFratelli = Math.abs(v - 1) < 0.01 ? null : v; fatto.push('distanza tra fratelli'); }
+                if (a.griglia) {
+                    const g = { attiva: !!(m.griglia && m.griglia.attiva), passo: (m.griglia && m.griglia.passo) || 20 };
+                    if (typeof a.griglia.attiva === 'boolean') g.attiva = a.griglia.attiva;
+                    if (a.griglia.passo != null) g.passo = limita(Math.round(+a.griglia.passo || 20), 10, 80);
+                    m.griglia = g;
+                    fatto.push('griglia');
+                }
                 if (Array.isArray(a.colori_rami)) { const c = a.colori_rami.filter(Mappe.coloreValido); m.paletta = c.length ? c : null; fatto.push('colori dei rami'); }
                 if (a.colore_radice !== undefined) { m.coloreRadice = Mappe.coloreValido(a.colore_radice) ? a.colore_radice : null; fatto.push('colore della radice'); }
                 if (a.linee) {
@@ -443,12 +501,12 @@
         },
         {
             nome: 'modifica_nodi',
-            descrizione: "Modifica uno o più nodi: testo, nota, link, data, casella da spuntare, icona, etichette, immagine, disposizione dei figli, ramo aperto o chiuso, stile (carattere, forma, bordo, colori, dimensioni minime, linea verso il genitore), lato dei rami principali, posizione nelle disposizioni libere, raccordi e linee in più.",
+            descrizione: "Modifica uno o più nodi: testo (anche con parti in grassetto, corsivo, sottolineato o barrato), nota, link, data, casella da spuntare, icona, etichette, immagine, larghezza, disposizione dei figli e distanza tra loro, ramo aperto o chiuso, stile (carattere e dimensione in punti, forma, bordo, colori, linea sotto il nodo, dimensioni minime, linea verso il genitore e sua curvatura), stile predefinito, lato dei rami principali, posizione nelle disposizioni libere, raccordi e linee in più.",
             parametri: S.obj({
                 mappa_id: S.str('id della mappa'),
                 modifiche: S.arr(S.obj({
                     nodo_id: S.str('id del nodo'),
-                    testo: S.str('nuovo testo; **grassetto**, *corsivo*, __sottolineato__, ~~barrato~~; a capo con \\n'),
+                    testo: S.str('nuovo testo. Formattare solo una parte: **grassetto**, *corsivo*, __sottolineato__, ~~barrato~~ (anche dentro una parola e insieme: ***grassetto e corsivo***); \\* per un asterisco vero; a capo con \\n'),
                     nota: S.str("nota del nodo ('' per toglierla)"), link: S.str("link http(s) ('' per toglierlo)"),
                     data: S.str("data AAAA-MM-GG ('' per toglierla)"),
                     spunta: S.str('casella da spuntare: nessuna | da_fare | fatta'),
@@ -456,6 +514,10 @@
                     etichette: S.arr(S.obj({ testo: S.str('testo'), colore: S.str("sfondo #rrggbb o 'nessuno'") }, ['testo']), "etichette sopra il nodo (sostituiscono quelle che ci sono; lista vuota = nessuna)"),
                     larghezza_immagine: S.int("larghezza dell'immagine del nodo in px (40-600)"), togli_immagine: S.bool("toglie l'immagine del nodo"),
                     disposizione_figli: S.str("come si dispongono i figli: '' (come il padre) | orizzontale | destra | sinistra | verticale | su | lineare | radiale | libera; per la radice è quella della mappa"),
+                    distanza_figli: num('distanza tra i figli di questo nodo (0.2-6, 1 = normale); 0 = come il resto della mappa'),
+                    larghezza: num('larghezza del nodo in px (40-1200): il testo va a capo dentro; 0 = automatica (segue il testo)'),
+                    stile_predefinito: S.str("id di uno stile predefinito (vedi elenca_mappe) da dare al nodo; '' = nessuno"),
+                    curvatura_linea: SCHEMA_CURVATURA,
                     ramo_chiuso: S.bool('chiude (true) o apre (false) il ramo'),
                     stile: SCHEMA_STILE,
                     ripristina: S.arr(S.str('nome della proprietà di stile'), 'proprietà di stile da riportare come nel tema'),
@@ -515,6 +577,13 @@
                         else avvisi.push('il nodo non ha un\'immagine (le immagini le aggiunge l\'utente)');
                     }
                     if (x.disposizione_figli != null) impostaDisposizione(m, n.id, x.disposizione_figli);
+                    if (x.distanza_figli != null) { const v = +x.distanza_figli; if (v > 0) n.distanzaFigli = limita(v, 0.2, 6); else delete n.distanzaFigli; }
+                    if (x.larghezza != null) n.larghezza = +x.larghezza > 0 ? Math.round(limita(+x.larghezza, 40, 1200)) : null;
+                    if (x.stile_predefinito != null) {
+                        if (!x.stile_predefinito) delete n.stilePredefinito;
+                        else if (Mappe.stilePredefinito(x.stile_predefinito)) n.stilePredefinito = x.stile_predefinito;
+                        else avvisi.push(`stile predefinito «${x.stile_predefinito}» inesistente (vedi elenca_mappe)`);
+                    }
                     if (typeof x.ramo_chiuso === 'boolean') n.chiuso = x.ramo_chiuso && n.figli.length > 0;
                     if (x.ripristina_stile) { n.stile = {}; n.piega = null; n.percorso = null; }
                     if (x.copia_stile_da) {
@@ -524,6 +593,7 @@
                     (x.ripristina || []).forEach(k => { if (n.stile) delete n.stile[k]; });
                     if (x.stile) applicaStile(n, x.stile, avvisi);
                     if (x.raddrizza_linea) { n.piega = null; n.percorso = null; }
+                    if (x.curvatura_linea && n.genitore) { n.piega = null; n.percorso = percorsoCurvo(x.curvatura_linea.forma, x.curvatura_linea.valore); }
                     if (x.lato != null) {
                         if (n.genitore !== m.radice) avvisi.push('il lato vale solo per i rami principali');
                         else n.lato = { destra: 'd', sinistra: 's' }[x.lato] || null;
@@ -622,8 +692,14 @@
                 if (!ids.length) throw new Error('Nessun nodo da eliminare (la radice non si elimina).');
                 const tutti = new Set(ids.flatMap(id => [id, ...Mappe.discendenti(m, id)]));
                 const esempi = ids.slice(0, 4).map(id => `<li>${esc(breve(m.nodi[id].testo))}</li>`).join('');
-                if (!await ctx.conferma(`Eliminare ${plurale(tutti.size, 'nodo', 'nodi')} da <b>${esc(m.nome)}</b>?<ul>${esempi}</ul>${ids.length > 4 ? '…' : ''}`)) return { annullato: true, motivo: "L'utente non ha confermato" };
-                return cambia(m.id, x => { ids.forEach(id => Mappe.eliminaNodo(x, id)); return { eliminati: tutti.size }; });
+                // Flashcard collegate a questi nodi: l'utente lo deve sapere prima
+                const collegate = Archivio.tutti('carte').filter(c => c.mappa && c.mappa.id === m.id && tutti.has(c.mappa.nodo));
+                const avviso = collegate.length ? `<p><b>Attenzione:</b> ${collegate.length === 1 ? 'una flashcard è collegata' : `${collegate.length} flashcard sono collegate`} a questi nodi; resteranno, ma senza il collegamento alla mappa.</p>` : '';
+                if (!await ctx.conferma(`Eliminare ${plurale(tutti.size, 'nodo', 'nodi')} da <b>${esc(m.nome)}</b>?<ul>${esempi}</ul>${ids.length > 4 ? '…' : ''}${avviso}`)) return { annullato: true, motivo: "L'utente non ha confermato" };
+                return cambia(m.id, x => {
+                    ids.forEach(id => Mappe.eliminaNodo(x, id));
+                    return { eliminati: tutti.size, ...(collegate.length ? { flashcard_ora_senza_nodo: collegate.map(c => ({ id: c.id, domanda: Ui.tronca(testoDaHtml(c.domanda), 80) })) } : {}) };
+                });
             },
         },
         {
@@ -673,6 +749,7 @@
                 modifica: S.arr(S.obj({
                     collegamento_id: S.str('id'), testo: S.str('testo'), colore: S.str("#rrggbb; '' = quello del ramo"), tratto: S.str('pieno | trattini | punti'),
                     freccia_inizio: S.bool('freccia all\'inizio'), freccia_fine: S.bool('freccia alla fine'), raddrizza: S.bool('torna alla curva normale'),
+                    curvatura: SCHEMA_CURVATURA,
                 }, ['collegamento_id'])),
                 elimina: S.arr(S.str('id del collegamento')),
             }, ['mappa_id']),
@@ -699,12 +776,68 @@
                     if (typeof x.freccia_inizio === 'boolean') r.frecciaInizio = x.freccia_inizio;
                     if (typeof x.freccia_fine === 'boolean') r.frecciaFine = x.freccia_fine;
                     if (x.raddrizza) { r.curva = null; r.percorso = null; }
+                    if (x.curvatura) r.percorso = percorsoCurvo(x.curvatura.forma, x.curvatura.valore, true);
                 });
                 const via = new Set(a.elimina || []);
                 const prima = m.relazioni.length;
                 m.relazioni = m.relazioni.filter(r => !via.has(r.id));
                 return { creati, modificati: (a.modifica || []).length, eliminati: prima - m.relazioni.length, ...(errori.length ? { errori } : {}) };
             }),
+        },
+        {
+            nome: 'stili_predefiniti',
+            descrizione: "Gli stili predefiniti dei nodi, creati dall'utente e validi per tutte le mappe (es. «Dettaglio»: piccolo e grigio): li elenca, ne crea uno (da proprietà di stile o copiando lo stile di un nodo), lo modifica o lo elimina. Per darlo ai nodi: modifica_nodi con stile_predefinito.",
+            parametri: S.obj({
+                azione: S.str('elenca | crea | modifica | elimina'), stile_id: S.str('modifica ed elimina: id dello stile'),
+                nome: S.str('nome dello stile'), stile: SCHEMA_STILE,
+                da_mappa_id: S.str('crea o modifica: copia lo stile di un nodo di questa mappa…'), da_nodo_id: S.str('…questo nodo'),
+            }, ['azione']),
+            modifica: true,
+            etichetta: a => ({ elenca: 'Guardo gli stili predefiniti', crea: `Creo lo stile «${a.nome || ''}»`, modifica: 'Modifico uno stile predefinito', elimina: 'Elimino uno stile predefinito' })[a.azione] || 'Stili predefiniti',
+            esegui: async (a, ctx) => {
+                const elenco = () => Mappe.stiliPredefiniti().map((x, i) => ({ id: x.id, nome: x.nome, stile: x.stile, scorciatoia: i < 9 ? `Ctrl+Alt+${i + 1}` : undefined }));
+                if (a.azione === 'elenca') return { stili: elenco() };
+                const attuale = a.stile_id ? Mappe.stilePredefinito(a.stile_id) : null;
+                if (['modifica', 'elimina'].includes(a.azione) && !attuale) throw new Error(`Stile «${a.stile_id}» non trovato: usa azione elenca.`);
+                if (a.azione === 'elimina') {
+                    if (!await ctx.conferma(`Eliminare lo stile predefinito <b>${esc(attuale.nome)}</b>? I nodi che lo usano tornano al loro stile.`)) return { annullato: true, motivo: "L'utente non ha confermato" };
+                    Mappe.eliminaStilePredefinito(attuale.id);
+                    return { eliminato: true, stili: elenco() };
+                }
+                if (!['crea', 'modifica'].includes(a.azione)) throw new Error('azione: elenca | crea | modifica | elimina');
+                const avvisi = [];
+                const finto = { stile: a.azione === 'modifica' ? structuredClone(attuale.stile) : {} };
+                if (a.da_mappa_id || a.da_nodo_id) {
+                    const m = richiediMappa(a.da_mappa_id);
+                    finto.stile = structuredClone(richiediNodo(m, a.da_nodo_id).stile || {});
+                }
+                if (a.stile) applicaStile(finto, a.stile, avvisi);
+                const nome = String(a.nome || (attuale && attuale.nome) || '').trim();
+                if (!nome) throw new Error('Serve un nome per lo stile.');
+                const salvato = Mappe.salvaStilePredefinito({ id: attuale ? attuale.id : undefined, nome, stile: finto.stile });
+                // Le mappe aperte lo mostrano subito
+                Mappe.tutte().filter(x => Object.values(x.nodi).some(n => n.stilePredefinito === salvato.id)).forEach(x => Mappe.cambiataDaFuori(x.id));
+                return { salvato: { id: salvato.id, nome: salvato.nome, stile: salvato.stile }, ...(avvisi.length ? { avvisi } : {}) };
+            },
+        },
+        {
+            nome: 'ordina_mappe',
+            descrizione: "Decide l'ordine delle mappe nella sezione Mappe: a mano (con l'elenco delle mappe nell'ordine voluto: anche solo alcune, che prendono i posti che avevano), per nome o per ultima modificata.",
+            parametri: S.obj({
+                ordine: S.str('mano | nome | modifica'), mappe_ids: S.arr(S.str('id'), "con ordine 'mano': le mappe nel nuovo ordine"),
+            }, ['ordine']),
+            modifica: true,
+            etichetta: () => "Riordino le mappe",
+            esegui: a => {
+                if (!Mappe.ORDINI_MAPPE.some(x => x[0] === a.ordine)) throw new Error('ordine: mano | nome | modifica');
+                if (a.ordine === 'mano' && Array.isArray(a.mappe_ids) && a.mappe_ids.length) {
+                    const ignote = a.mappe_ids.filter(id => !Mappe.mappa(id));
+                    if (ignote.length) throw new Error(`Mappe non trovate: ${ignote.join(', ')} (usa elenca_mappe).`);
+                    Mappe.riordina(a.mappe_ids);
+                } else Mappe.impostaOrdineMappe(a.ordine);
+                if (App.rottaAttiva && App.rottaAttiva.vista === 'mappe') App.ridisegna();
+                return { ordine: Mappe.ordineMappe(), mappe: Mappe.ordinate().map(x => ({ id: x.id, nome: x.nome })) };
+            },
         },
         {
             nome: 'tema_mappe',

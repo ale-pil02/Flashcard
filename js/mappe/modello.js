@@ -194,6 +194,8 @@ const Mappe = (() => {
     // prendono la tavolozza in ordine e gli altri ereditano dal genitore
     function coloreRamo(mappa, nodo, livello, indice, ereditato) {
         if (nodo.stile && coloreValido(nodo.stile.colore)) return nodo.stile.colore;
+        const pre = stilePredefinito(nodo.stilePredefinito);
+        if (pre && coloreValido(pre.stile.colore)) return pre.stile.colore;
         const t = tema(mappa);
         if (livello === 0) return coloreValido(mappa.coloreRadice) ? mappa.coloreRadice : t.radice;
         if (livello === 1 || !ereditato) {
@@ -204,11 +206,63 @@ const Mappe = (() => {
         return ereditato;
     }
 
-    // Stile finale di un nodo: base → livello del tema → scelte fatte sul nodo, con i colori risolti
+    // ---- Stili predefiniti (come gli stili di Word) ---------------------------------------------
+    // Creati dall'utente: { id, nome, stile } nelle impostazioni (stiliMappe), validi per tutte le mappe e nel backup. Un
+    // nodo che ne usa uno (nodo.stilePredefinito = id) ne prende l'aspetto sopra il livello del tema; le scelte fatte sul
+    // nodo restano sopra. Cambiando lo stile cambiano tutti i nodi che lo usano
+    const CHIAVI_STILE = ['scala', 'grassetto', 'corsivo', 'sottolineato', 'barrato', 'coloreTesto', 'allinea', 'forma', 'riempimento',
+        'coloreBordo', 'colore', 'spessore', 'tratto', 'larghezzaMin', 'altezzaMin', 'sottolineatura', ...CHIAVI_COLLEGAMENTO];
+
+    // Solo le chiavi conosciute, con i colori validi (gli stili arrivano anche da backup e dall'assistente)
+    function pulisciStile(st) {
+        const fuori = {};
+        CHIAVI_STILE.forEach(k => {
+            if (!(k in (st || {})) || st[k] == null || st[k] === '') return;
+            const v = st[k];
+            if (/^colore|riempimento/.test(k) && typeof v === 'string' && !coloreValido(v) && !['ramo', 'tenue', 'auto', 'nessuno'].includes(v)) return;
+            fuori[k] = k === 'sottolineatura' && typeof v === 'object' ? { ...v } : v;
+        });
+        return fuori;
+    }
+
+    let cacheStili = { fonte: null, lista: [] };
+    function stiliPredefiniti() {
+        const fonte = (typeof Dati !== 'undefined' && Dati.impostazioni().stiliMappe) || [];
+        if (cacheStili.fonte !== fonte) {
+            cacheStili = { fonte, lista: (Array.isArray(fonte) ? fonte : []).filter(x => x && x.id).map(x => ({ id: String(x.id), nome: String(x.nome || 'Stile').slice(0, 40), stile: pulisciStile(x.stile) })) };
+        }
+        return cacheStili.lista;
+    }
+    function stilePredefinito(id) { return id ? stiliPredefiniti().find(x => x.id === id) || null : null; }
+
+    function salvaStilePredefinito(x) {
+        const pulito = { id: String(x.id || uid()), nome: String(x.nome || 'Stile').trim().slice(0, 40) || 'Stile', stile: pulisciStile(x.stile) };
+        const lista = [...stiliPredefiniti().map(y => ({ ...y }))];
+        const i = lista.findIndex(y => y.id === pulito.id);
+        if (i >= 0) lista[i] = pulito; else lista.push(pulito);
+        Dati.salvaImpostazioni({ stiliMappe: lista });
+        return pulito;
+    }
+
+    // I nodi che lo usavano tornano al loro stile (le scelte fatte sul nodo restano)
+    function eliminaStilePredefinito(id) {
+        Dati.salvaImpostazioni({ stiliMappe: stiliPredefiniti().filter(x => x.id !== id) });
+        tutte().forEach(mp => {
+            const usati = Object.values(mp.nodi || {}).filter(n => n.stilePredefinito === id);
+            if (!usati.length) return;
+            primaDiCambiare(mp.id);
+            usati.forEach(n => { delete n.stilePredefinito; });
+            Archivio.salva('mappe', mp);
+            cambiataDaFuori(mp.id);
+        });
+    }
+
+    // Stile finale di un nodo: base → livello del tema → stile predefinito → scelte fatte sul nodo, con i colori risolti
     function stile(mappa, nodo, livello, colore) {
         const t = tema(mappa);
         const livelli = mappa.livelli && mappa.livelli.length ? mappa.livelli : t.livelli;
-        const s = { ...BASE, ...livelli[Math.min(livello, livelli.length - 1)], ...(nodo.stile || {}) };
+        const pre = stilePredefinito(nodo.stilePredefinito);
+        const s = { ...BASE, ...livelli[Math.min(livello, livelli.length - 1)], ...(pre ? pre.stile : {}), ...(nodo.stile || {}) };
         const risolvi = v => (v === 'ramo' ? colore : v === 'tenue' ? mescola(colore, t.sfondo, t.scuro ? 0.32 : 0.2) : v);
         // I colori finiscono nel disegno: si accettano solo #rrggbb (le mappe possono arrivare da file e backup)
         const valido = (c, riserva) => (coloreValido(c) ? c : riserva);
@@ -230,7 +284,8 @@ const Mappe = (() => {
     // Stile della linea che collega un nodo al genitore: tema della mappa + scelte fatte su quel collegamento
     function collegamento(mappa, nodo, colore) {
         const l = tema(mappa).linee;
-        const s = nodo.stile || {};
+        const pre = stilePredefinito(nodo.stilePredefinito);
+        const s = { ...(pre ? pre.stile : {}), ...(nodo.stile || {}) };
         const freccia = v => (['nessuna', 'semplice', 'piena'].includes(v) ? v : null);
         const tratto = TRATTI_LINEA.some(t => t[0] === s.linea) ? s.linea : l.affusolamento ? 'auto' : 'pieno';
         return {
@@ -247,6 +302,32 @@ const Mappe = (() => {
 
     function tutte() { return Archivio.tutti('mappe').sort((a, b) => (b.modificata || 0) - (a.modificata || 0)); }
     function mappa(id) { return Archivio.prendi('mappe', id); }
+
+    // Le mappe nell'ordine scelto nella sezione Mappe: 'mano' (trascinandole), 'nome' o 'modifica' (ultima modificata
+    // prima). Nell'ordine a mano quelle mai spostate (le nuove) vanno in cima, dalla più recente
+    const ORDINI_MAPPE = [['mano', 'A mano'], ['modifica', 'Ultima modificata'], ['nome', 'Per nome']];
+    function ordineMappe() { const o = Dati.impostazioni().ordineMappe; return ORDINI_MAPPE.some(x => x[0] === o) ? o : 'modifica'; }
+    function ordinate() {
+        const lista = tutte(), ordine = ordineMappe();
+        if (ordine === 'nome') return lista.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it', { numeric: true, sensitivity: 'base' }));
+        if (ordine !== 'mano') return lista;
+        const pos = new Map((Dati.impostazioni().ordineMappeMano || []).map((id, i) => [id, i]));
+        return lista.sort((a, b) => (pos.has(a.id) ? pos.get(a.id) : -1) - (pos.has(b.id) ? pos.get(b.id) : -1));
+    }
+    // ids = le mappe (anche solo alcune, es. quelle di una materia) nel nuovo ordine: prendono i posti che avevano
+    function riordina(ids) {
+        const tuttiIds = ordinate().map(x => x.id);
+        const scelti = ids.filter(id => tuttiIds.includes(id));
+        const posti = tuttiIds.map((id, i) => (scelti.includes(id) ? i : -1)).filter(i => i >= 0);
+        posti.forEach((p, k) => { tuttiIds[p] = scelti[k]; });
+        Dati.salvaImpostazioni({ ordineMappe: 'mano', ordineMappeMano: tuttiIds });
+    }
+    function impostaOrdineMappe(ordine) {
+        // Passando all'ordine a mano si parte da quello che si vede adesso
+        const corrente = ordinate().map(x => x.id);
+        Dati.salvaImpostazioni(ordine === 'mano' && !(Dati.impostazioni().ordineMappeMano || []).length
+            ? { ordineMappe: ordine, ordineMappeMano: corrente } : { ordineMappe: ordine });
+    }
 
     function nodoVuoto(dati = {}) {
         return {
@@ -519,24 +600,111 @@ const Mappe = (() => {
 
     // ---- Testo dei nodi --------------------------------------------------------------------------
 
-    // **grassetto**, *corsivo*, __sottolineato__, ~~barrato~~ → HTML sicuro (gli a capo li tiene il CSS)
-    function testoInHtml(t) {
-        return esc(t || '')
-            .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<b>$1</b>')
-            .replace(/__(?=\S)([\s\S]*?\S)__/g, '<u>$1</u>')
-            .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<s>$1</s>')
-            .replace(/(^|[^*\w])\*(?=\S)([^*\n]*?\S)\*(?!\*)/g, '$1<i>$2</i>');
+    // Il testo dei nodi: **grassetto**, *corsivo*, __sottolineato__, ~~barrato~~, anche dentro una parola o uno dentro
+    // l'altro (***grassetto e corsivo***). Ogni segno accende o spegne il suo stile; vale solo se tocca il testo
+    // (a destra quando apre, a sinistra quando chiude) e se più avanti c'è chi lo chiude: così «5 * 3» o «____»
+    // restano come sono. \* (e \_ \~ \\) scrive il carattere così com'è.
+    // → pezzi [{ t, b, i, u, s }] con il testo e gli stili di ogni tratto
+    const SEGNI = { 1: ['i'], 2: ['b'], 3: ['b', 'i'] };
+    function pezziTesto(t) {
+        const s = String(t || '');
+        const segni = [];
+        const re = /\\[*_~\\]|\*+|_{2,}|~{2,}/g;
+        let x;
+        while ((x = re.exec(s))) {
+            const v = x[0];
+            const tipi = v[0] === '\\' ? null : v[0] === '*' ? SEGNI[v.length] : v.length === 2 ? [v[0] === '_' ? 'u' : 's'] : null;
+            segni.push({ da: x.index, a: x.index + v.length, v, tipi, prima: s[x.index - 1], dopo: s[x.index + v.length] });
+        }
+        const tocca = c => c != null && !/\s/.test(c);
+        const pezzi = [];
+        const acceso = {};
+        let testo = '', pos = 0;
+        const chiudiPezzo = () => { if (testo) pezzi.push({ t: testo, ...acceso }); testo = ''; };
+        segni.forEach((g, k) => {
+            testo += s.slice(pos, g.da);
+            pos = g.a;
+            if (!g.tipi) { testo += g.v[0] === '\\' ? g.v[1] : g.v; return; }
+            const validi = g.tipi.filter(tipo => acceso[tipo]
+                ? tocca(g.prima)
+                : tocca(g.dopo) && segni.slice(k + 1).some(h => h.tipi && h.tipi.includes(tipo) && tocca(h.prima)));
+            // I segni che non valgono restano testo (** per il grassetto, * per il corsivo)
+            const resto = g.tipi.filter(tipo => !validi.includes(tipo)).map(tipo => ({ b: '**', i: '*', u: '__', s: '~~' })[tipo]).join('');
+            if (validi.length) {
+                chiudiPezzo();
+                validi.forEach(tipo => { if (acceso[tipo]) delete acceso[tipo]; else acceso[tipo] = true; });
+            }
+            testo += resto;
+        });
+        testo += s.slice(pos);
+        chiudiPezzo();
+        return pezzi;
     }
 
-    function testoSemplice(t) { return String(t || '').replace(/\*\*|__|~~|(?<!\w)\*(?=\S)|(?<=\S)\*(?!\w)/g, '').replace(/\s+/g, ' ').trim(); }
+    // → HTML sicuro (gli a capo li tiene il CSS)
+    function testoInHtml(t) {
+        return pezziTesto(t).map(p => {
+            let h = esc(p.t);
+            if (p.s) h = `<s>${h}</s>`;
+            if (p.u) h = `<u>${h}</u>`;
+            if (p.i) h = `<i>${h}</i>`;
+            if (p.b) h = `<b>${h}</b>`;
+            return h;
+        }).join('');
+    }
+
+    // Pezzi con i loro stili → testo con i segni (il contrario di pezziTesto). Senza stili il testo resta com'è;
+    // con gli stili i caratteri * _ ~ \ del testo si scrivono con la \ davanti, e gli spazi ai bordi di un tratto
+    // restano fuori dai segni (perché valgano)
+    function testoDaPezzi(pezzi) {
+        const CHIAVI = ['b', 'i', 'u', 's'];
+        const stili = p => CHIAVI.filter(k => p[k]);
+        const lista = [];
+        pezzi.filter(p => p.t).forEach(p => {
+            const ultimo = lista[lista.length - 1];
+            if (ultimo && stili(ultimo).join() === stili(p).join()) ultimo.t += p.t; else lista.push({ ...p });
+        });
+        if (!lista.some(p => stili(p).length)) return lista.map(p => p.t).join('');
+        // Spazi ai bordi: tengono solo gli stili comuni ai tratti accanto
+        const tratti = [];
+        lista.forEach(p => {
+            const [, prima, centro, dopo] = p.t.match(/^(\s*)([\s\S]*?)(\s*)$/);
+            if (prima) tratti.push({ t: prima, spazio: true });
+            if (centro) tratti.push({ ...p, t: centro });
+            if (dopo) tratti.push({ t: dopo, spazio: true });
+        });
+        tratti.forEach((p, k) => {
+            if (!p.spazio) return;
+            const a = tratti.slice(0, k).reverse().find(q => !q.spazio) || {}, d = tratti.slice(k + 1).find(q => !q.spazio) || {};
+            CHIAVI.forEach(c => { p[c] = !!(a[c] && d[c]); });
+        });
+        let out = '';
+        const ora = {};
+        const stelle = k => '*'.repeat((k.includes('b') ? 2 : 0) + (k.includes('i') ? 1 : 0));
+        // Prima si chiude (al contrario di come si apre), poi si apre: *__così__*
+        const cambia = verso => {
+            const giro = CHIAVI.filter(c => !!ora[c] !== !!verso[c]);
+            const chiusi = giro.filter(c => ora[c]), aperti = giro.filter(c => !ora[c]);
+            out += (chiusi.includes('s') ? '~~' : '') + (chiusi.includes('u') ? '__' : '') + stelle(chiusi)
+                + stelle(aperti) + (aperti.includes('u') ? '__' : '') + (aperti.includes('s') ? '~~' : '');
+            giro.forEach(c => { ora[c] = !ora[c]; });
+        };
+        tratti.forEach(p => { cambia(p); out += p.t.replace(/[\\*_~]/g, '\\$&'); });
+        cambia({});
+        return out;
+    }
+
+    function testoSemplice(t) { return pezziTesto(t).map(p => p.t).join('').replace(/\s+/g, ' ').trim(); }
 
     return {
         TEMI, FORME, FORME_LINEA, TRATTI_LINEA, CHIAVI_COLLEGAMENTO, DISPOSIZIONI, ICONE, BASE, LINEE_BASE,
+        CHIAVI_STILE, stiliPredefiniti, stilePredefinito, salvaStilePredefinito, eliminaStilePredefinito, pulisciStile,
         temi, tema, temiPersonali, salvaTema, eliminaTema, temaDaMappa, normalizzaTema,
         stile, collegamento, coloreRamo, spessoreLinea, mescola, luminanza, coloreValido,
         tutte, mappa, nuova, crea, aggiungi, salva, elimina, duplica, contaNodi, nodoVuoto, aggiorna, primaDiCambiare, cambiataDaFuori, togliDalSet,
         radiciLibere, livello, antenati, discendenti, antenatoLibero, aggiungiNodo, eliminaNodo, sposta, pulisciLegami,
         copiaRamo, incollaRamo, aggiungiAlbero, alberoDaTesto, testoRientrato,
-        scollegaSet, scollegaMateria, testoInHtml, testoSemplice,
+        scollegaSet, scollegaMateria, testoInHtml, testoSemplice, pezziTesto, testoDaPezzi,
+        ORDINI_MAPPE, ordineMappe, ordinate, riordina, impostaOrdineMappe,
     };
 })();

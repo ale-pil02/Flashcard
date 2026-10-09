@@ -562,10 +562,27 @@ const Materiali = (() => {
 
     // Parti Gemini di un materiale: PDF e immagini come file (inline o caricati), il resto come testo.
     // budget = { inline: byte ancora disponibili nella richiesta }
+    // Fonte della chat che non diventa un materiale (la aggiunge l'utente per una conversazione): letta come un
+    // materiale, ma il file resta solo in memoria finché la chat è aperta
+    async function fonteTemporanea(file) {
+        const tipo = tipoDi(file);
+        if (!tipo) throw new Error(`«${file.name}»: formato non supportato`);
+        if (file.size > MAX_FILE) throw new Error(`«${file.name}» supera ${formattaDimensione(MAX_FILE)}`);
+        const estratto = await estrai(file, tipo);
+        return { id: 'tmp-' + uid(), temporanea: true, blob: file, ...contenutoDa(file, tipo, estratto) };
+    }
+
+    function testoTemporaneo(nome, testo) {
+        const t = String(testo || '');
+        return { id: 'tmp-' + uid(), temporanea: true, nome: String(nome || 'Testo incollato').trim() || 'Testo incollato', tipo: 'testo', testo: t, dimensione: new Blob([t]).size };
+    }
+
     async function partiPerIA(m, budget) {
-        const intestazione = { text: `=== MATERIALE «${m.nome}» (id ${m.id}, ${descrivi(m)}) ===` };
+        const intestazione = { text: m.temporanea
+            ? `=== FONTE «${m.nome}» (${descrivi(m)}): aggiunta dall'utente solo per questa conversazione, non è tra i materiali ===`
+            : `=== MATERIALE «${m.nome}» (id ${m.id}, ${descrivi(m)}) ===` };
         if (m.tipo === 'pdf' || m.tipo === 'immagine') {
-            let blob = await Archivio.leggiFile(m.id);
+            let blob = m.blob || await Archivio.leggiFile(m.id);
             if (blob) {
                 if (m.tipo === 'immagine' && blob.size > 2.5 * MB) blob = await ridimensionaImmagine(blob, 2000, 0.85);
                 const mime = m.tipo === 'pdf' ? 'application/pdf' : (blob.type || 'image/jpeg');
@@ -588,7 +605,8 @@ const Materiali = (() => {
     async function fileRemoto(m, blob, mime) {
         if (m.remoto && m.remoto.scade > Date.now() + 3600e3) return m.remoto.uri;
         const caricato = await Gemini.caricaFile(blob, mime, m.nome);
-        Dati.aggiornaMateriale(m.id, { remoto: { uri: caricato.uri, scade: Date.now() + 47 * 3600e3 } });
+        const remoto = { uri: caricato.uri, scade: Date.now() + 47 * 3600e3 };
+        if (m.temporanea) m.remoto = remoto; else Dati.aggiornaMateriale(m.id, { remoto });
         return caricato.uri;
     }
 
@@ -1028,7 +1046,7 @@ const Materiali = (() => {
     return {
         TIPI, ACCETTATI, MAX_FILE, tipoDi, descrivi, alberoInTesto, alberoDaMarkdown, sembraSchema, contaNodi,
         aggiungiFile, aggiornaDaFile, differenze, differenzeInTesto, caricaMolti, creaNota, aggiornaTestoNota,
-        partiPerIA, apri, apriPredefinito, monta, localizzazione, aggiornaFlashcard, alberoDaMappa, allineaMappe,
+        partiPerIA, fonteTemporanea, testoTemporaneo, apri, apriPredefinito, monta, localizzazione, aggiornaFlashcard, alberoDaMappa, allineaMappe,
         trovaCitazione, fonteDi, fonteHtml, vaiAllaFonte, dovePagina, materialeDiMappa,
     };
 })();
