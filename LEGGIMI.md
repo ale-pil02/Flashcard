@@ -355,8 +355,10 @@ L'editor (rotta `#/mappa/<id>`):
   all'inizio e alla fine e colore, anche per tutto il ramo. L'affusolata automatica si assottiglia a ogni livello
   senza scendere sotto lo spessore minimo; forma e misure di base sono in Disposizione e tema → Linee.
   **Il percorso della linea lo decidi tu**: trascinando un punto qualsiasi della linea scelta aggiungi lì un **punto
-  di passaggio**; i pallini pieni sono i punti (si spostano, doppio clic li toglie), quelli vuoti a metà di ogni
-  tratto ne aggiungono un altro. La linea passa da tutti con una curva morbida, resta attaccata ai due nodi e,
+  di passaggio**; i pallini pieni sono i punti (si spostano), quelli vuoti a metà di ogni tratto ne aggiungono un
+  altro. **Togliere un punto** senza rifare la linea: cliccalo (diventa rosso, con una × accanto) e premi Canc o la
+  ×, oppure doppio clic sul punto, oppure clic destro → *Togli questo punto* (o *Togli tutti i punti*); gli altri
+  punti restano dove sono, e Ctrl+Z lo rimette. La linea passa da tutti con una curva morbida, resta attaccata ai due nodi e,
   quando si spostano, si sposta, gira e si allunga con loro mantenendo la forma (`percorso [{ u, v }]` sul nodo:
   posizione lungo il segmento tra i due attacchi e di lato). **Raddrizza la linea** la riporta normale, e cambiando
   disposizione o forma le linee del ramo tornano normali. Lo stesso per i **collegamenti tra rami** (`percorso` sul

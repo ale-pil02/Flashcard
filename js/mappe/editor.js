@@ -56,7 +56,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         pannello: SOLA ? null : (() => { try { return localStorage.getItem(CHIAVE_PANNELLO) || null; } catch (e) { return null; } })(),
         passato: [], futuro: [], continua: null,
         cerca: { aperta: false, testo: '', trovati: [], indice: -1 },
-        appunti: null, stileCopiato: null, popDisp: null, popDispMulti: false, focusLato: null,
+        appunti: null, stileCopiato: null, popDisp: null, popDispMulti: false, punto: null, focusLato: null,
     };
     const geo = new Map();          // id → riquadro disposto (x, y, w, h, dir, livello, colore, s = stile)
     const elementi = new Map();     // id → <div class="nodo">
@@ -735,6 +735,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function seleziona(id, { aggiungi = false } = {}) {
         if (st.modifica) concludiModifica();
         if (!aggiungi) { st.sel.clear(); st.popDispMulti = false; }
+        st.punto = null;
         if (id && m.nodi[id]) {
             if (aggiungi && st.sel.has(id)) st.sel.delete(id); else st.sel.add(id);
         }
@@ -749,7 +750,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     function selezionaRelazione(id) {
-        st.sel.clear(); st.attivo = null; st.et = null; st.fig = null; st.arco = st.arcoDa = null; st.rel = id;
+        st.sel.clear(); st.attivo = null; st.et = null; st.fig = null; st.arco = st.arcoDa = null; st.rel = id; st.punto = null;
         disegnaLinee(); disegnaExtra(); aggiornaSelezione(); aggiornaPannello();
     }
 
@@ -777,7 +778,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     // Una linea tra un nodo e il suo genitore: si sceglie col clic e si modifica nel pannello Stile
     function selezionaArco(id, da = null) {
         if (st.modifica) concludiModifica();
-        st.sel.clear(); st.attivo = null; st.rel = null; st.et = null; st.fig = null; st.popDisp = null; st.arco = id; st.arcoDa = da || null;
+        st.sel.clear(); st.attivo = null; st.rel = null; st.et = null; st.fig = null; st.popDisp = null; st.arco = id; st.arcoDa = da || null; st.punto = null;
         disegnaLinee();
         aggiornaSelezione();
         if (st.pannello !== 'stile') {
@@ -831,15 +832,22 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         // metà di ogni tratto un pallino vuoto per aggiungerne uno
         const linea = !st.modifica && lineaScelta();
         if (linea) {
-            linea.punti.forEach((q, i) => {
-                const ps = aSchermo(q.x, q.y);
-                parti.push(`<span class="maniglia-punto" data-punto="${i}" style="left:${ps.x}px;top:${ps.y}px" title="Trascina per spostare il punto · doppio clic per toglierlo"></span>`);
-            });
+            const scelto = puntoScelto();
+            const pieni = linea.punti.map(q => aSchermo(q.x, q.y));
+            // Prima i pallini vuoti (sotto), senza quelli troppo vicini a un punto: non devono coprire i punti veri
             const tratti = linea.punti.length ? linea.arc.segmenti : [linea.curva];
             tratti.forEach((g, i) => {
                 const q = Disposizione.puntoBezier(g.a, g.c1, g.c2, g.b, 0.5), ps = aSchermo(q.x, q.y);
+                if (pieni.some(p => Math.hypot(p.x - ps.x, p.y - ps.y) < 18)) return;
                 parti.push(`<span class="maniglia-punto nuovo" data-punto-nuovo="${i}" style="left:${ps.x}px;top:${ps.y}px" title="Trascina per aggiungere un punto di passaggio"></span>`);
             });
+            pieni.forEach((ps, i) => {
+                parti.push(`<span class="maniglia-punto${i === scelto ? ' scelto' : ''}" data-punto="${i}" style="left:${ps.x}px;top:${ps.y}px" title="Trascina per spostare il punto · clic per sceglierlo (poi Canc o × per toglierlo) · doppio clic o clic destro per toglierlo"></span>`);
+            });
+            if (scelto != null) {
+                const ps = pieni[scelto];
+                parti.push(`<button type="button" class="punto-togli" data-punto-togli="${scelto}" style="left:${ps.x + 15}px;top:${ps.y - 15}px" title="Togli questo punto (Canc)" aria-label="Togli questo punto">${ico('chiudi')}</button>`);
+            }
         }
         // Più nodi scelti: figlio comune (linee da tutti) o graffa che li raccoglie
         const scelti = !st.modifica && !st.collegando && st.sel.size > 1 ? [...st.sel].map(id => geo.get(id)).filter(Boolean) : [];
@@ -1998,7 +2006,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         } else {
             testa = `Linea da ${nome(m.nodi[n.genitore])} a ${nome(n)}.`;
             extra = n.piega || Disposizione.percorsoValido(n.percorso)
-                ? `<p class="pannello-nota">Hai deciso tu il percorso della linea: segue i due nodi quando si spostano. Trascina la linea o i pallini vuoti per aggiungere punti di passaggio, i pallini pieni per spostarli; doppio clic su un punto per toglierlo.</p>
+                ? `<p class="pannello-nota">Hai deciso tu il percorso della linea: segue i due nodi quando si spostano. Trascina la linea o i pallini vuoti per aggiungere punti di passaggio, i pallini pieni per spostarli. Per togliere un punto: cliccalo e premi Canc (o la × accanto), oppure doppio clic o clic destro sul punto; gli altri restano dove sono.</p>
                    <button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="raddrizza">Raddrizza la linea</button>`
                 : '<p class="pannello-nota">Trascina un punto qualsiasi della linea per farla passare da lì: ogni punto che aggiungi è un punto di passaggio, che poi sposti o togli (doppio clic).</p>';
         }
@@ -2324,7 +2332,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             ['Ctrl+B · Ctrl+I · Ctrl+U', 'grassetto, corsivo, sottolineato'], ['Ctrl+Alt+C · Ctrl+Alt+V', 'copia e incolla lo stile'],
             ['Ctrl+F', 'cerca'], ['Ctrl+A', 'seleziona tutto'],
             ['Ctrl+clic', 'aggiungi o togli un nodo dalla selezione (trascinandone uno si spostano tutti)'],
-            ['Trascina una linea', 'aggiungi lì un punto di passaggio (i pallini pieni si spostano, doppio clic li toglie)'],
+            ['Trascina una linea', 'aggiungi lì un punto di passaggio (i pallini pieni si spostano)'],
+            ['Clic su un punto + Canc · doppio clic · clic destro', 'togli un punto di passaggio (gli altri restano)'],
             ['Ctrl+0 · Ctrl++ · Ctrl+−', 'adatta alla finestra, ingrandisci, riduci'], ['Rotellina · Maiusc+rotellina', 'zoom · scorri'],
             ['Trascina lo sfondo · Ctrl+trascina (o Maiusc)', 'sposta la mappa · finestra di selezione: prende i nodi che tocca'], ['Doppio clic sullo sfondo', 'nuovo nodo libero'],
             ['**testo** · *testo* · __testo__', 'grassetto, corsivo, sottolineato dentro un nodo'],
@@ -2371,6 +2380,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (e.target.closest('[data-segno-nota]') && nodoEl) { seleziona(nodoEl.dataset.id); if (st.pannello !== 'nota') apriPannello('nota'); return; }
         // Ctrl (o Maiusc) + trascina fuori dai nodi: finestra di selezione, come sul desktop di Windows
         if ((e.ctrlKey || e.metaKey) && !nodoEl && !e.target.closest('.mappa-figura, .mappa-etichetta, [data-punto], [data-punto-nuovo]')) { rettangoloSelezione(e); return; }
+        const togli = e.target.closest('[data-punto-togli]');
+        if (togli) { togliPunto(+togli.dataset.puntoTogli); return; }
         const punto = e.target.closest('[data-punto], [data-punto-nuovo]');
         if (punto) {
             if (punto.dataset.punto != null) trascinaPunto(e, +punto.dataset.punto);
@@ -2782,6 +2793,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 disegnaLinee(); disegnaExtra(); posizionaSopra();
             },
             fine: partito => {
+                // Il punto preso (o appena aggiunto) resta scelto: Canc o la × accanto lo tolgono
+                if ((!nuovo || partito) && !(st.punto && st.punto.linea === chiaveLinea() && st.punto.i === i)) { st.punto = { linea: chiaveLinea(), i }; posizionaSopra(); }
                 if (!partito || !prima) return;
                 st.passato.push(prima);
                 if (st.passato.length > 200) st.passato.shift();
@@ -2793,11 +2806,38 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         });
     }
 
-    // Toglie il punto di passaggio i (senza punti la linea torna normale)
+    const chiaveLinea = () => st.rel || (st.arco && !st.arcoDa ? st.arco : null);
+
+    // L'indice del punto di passaggio scelto sulla linea scelta, o null
+    function puntoScelto() {
+        const L = st.punto && st.punto.linea === chiaveLinea() && lineaScelta();
+        return L && L.punti[st.punto.i] ? st.punto.i : null;
+    }
+
+    // Toglie il punto di passaggio i, lasciando gli altri dove sono (senza punti la linea torna normale)
     function togliPunto(i) {
         const L = lineaScelta();
         if (!L || !L.punti[i]) return;
+        st.punto = null;
         modifica(() => salvaPunti(L, L.punti.filter((q, k) => k !== i)));
+        if (st.arco) aggiornaPannello();
+    }
+
+    // Clic destro su un punto di passaggio
+    function menuPunto(i, x, y) {
+        const ancora = { getBoundingClientRect: () => ({ left: x, right: x + 1, top: y, bottom: y, width: 1, height: 1 }) };
+        st.punto = { linea: chiaveLinea(), i };
+        posizionaSopra();
+        Ui.menu(ancora, [
+            { testo: 'Togli questo punto', icona: 'chiudi', clic: () => togliPunto(i) },
+            { testo: 'Togli tutti i punti (linea normale)', icona: 'annulla', clic: () => {
+                const L = lineaScelta();
+                if (!L) return;
+                st.punto = null;
+                modifica(() => salvaPunti(L, []));
+                if (st.arco) aggiornaPannello();
+            } },
+        ]);
     }
 
     // Clic su una linea: la sceglie. Trascinandola da un punto qualsiasi si aggiunge lì un punto di passaggio, che segue
@@ -2861,6 +2901,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function suMenuContestuale(e) {
         if (e.target.closest('.in-modifica, input, textarea')) return;
         e.preventDefault();
+        const punto = e.target.closest('[data-punto]');
+        if (punto) { menuPunto(+punto.dataset.punto, e.clientX, e.clientY); return; }
         const figEl = e.target.closest('.mappa-figura');
         if (figEl) { selezionaFigura(figEl.dataset.nodo, figEl.dataset.fig); menuFigura(e.clientX, e.clientY); return; }
         const nodoEl = e.target.closest('.nodo');
@@ -2930,6 +2972,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             else if (st.focus) concentra(m.radice);
             return;
         }
+        // Un punto di passaggio scelto: Canc toglie lui (non la linea)
+        if ((k === 'Delete' || k === 'Backspace') && puntoScelto() != null) { e.preventDefault(); togliPunto(puntoScelto()); return; }
         if (st.et && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); eliminaSelezionati(); return; }
         if (st.et && (k === 'F2' || k === 'Enter')) { e.preventDefault(); modificaEtichetta(st.et.nodo, st.et.id); return; }
         if (st.rel && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); eliminaSelezionati(); return; }

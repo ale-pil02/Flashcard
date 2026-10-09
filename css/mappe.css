@@ -334,6 +334,10 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 }
 .maniglia-punto.nuovo { width: 11px; height: 11px; border: 2px solid var(--primario); background: #fff; opacity: .8; }
 .maniglia-punto.nuovo:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+.maniglia-punto.scelto { width: 16px; height: 16px; background: var(--pericolo); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pericolo) 25%, transparent), 0 1px 4px rgba(0, 0, 0, .3); }
+.punto-togli { position: absolute; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 2px solid #fff; border-radius: 50%; background: var(--pericolo); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); transform: translate(-50%, -50%); cursor: pointer; }
+.punto-togli .ico { width: 11px; height: 11px; }
+.punto-togli:hover { transform: translate(-50%, -50%) scale(1.15); }
 .mappa-rettangolo { position: absolute; border: 1.5px dashed var(--primario); background: color-mix(in srgb, var(--primario) 10%, transparent); pointer-events: none; }
 
 .mappa-pop {
