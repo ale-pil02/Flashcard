@@ -166,6 +166,10 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 
 .nodo-riga { display: flex; align-items: center; gap: 6px; }
 .nodo-testo { min-width: 1ch; max-width: 20em; outline: none; white-space: pre-wrap; overflow-wrap: break-word; }
+/* Larghezza scelta con la maniglia ◂▸: il testo riempie il nodo e va a capo */
+.nodo.larghezza-fissa { white-space: normal; }
+.nodo.larghezza-fissa .nodo-riga { width: 100%; }
+.nodo.larghezza-fissa .nodo-testo { flex: 1 1 auto; min-width: 0; max-width: none; }
 .nodo-vuoto { display: inline-block; min-width: 2.5em; }
 .nodo-icona { flex: none; font-size: 1.15em; line-height: 1; }
 .nodo-icona-img { flex: none; width: 1.45em; height: 1.45em; object-fit: contain; }
@@ -318,6 +322,10 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .maniglia[data-m="figlio"] { width: 26px; height: 26px; background: var(--primario); font-size: 18px; }
 .maniglia .ico { width: 14px; height: 14px; }
 .maniglia.attiva { background: var(--primario); opacity: 1; }
+.maniglia[data-m="larghezza"] { cursor: ew-resize; touch-action: none; }
+.maniglia .freccette { width: 14px; height: 9px; }
+.guida-larghezza { position: absolute; width: 0; border-left: 2px solid var(--primario); pointer-events: none; }
+.mappa-tela.allargando, .mappa-tela.allargando * { cursor: ew-resize !important; }
 /* Punti di passaggio della linea scelta: pieni = da spostare (doppio clic per toglierli), vuoti = da trascinare per
    aggiungerne uno a metà del tratto */
 .maniglia-punto {
