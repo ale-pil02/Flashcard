@@ -333,7 +333,11 @@ L'editor (rotta `#/mappa/<id>`):
   i nodi che tocca (mentre trascini sono già evidenziati).
   Trascinando un nodo su un altro lo si sposta sotto di lui, sopra o sotto un fratello per riordinarlo;
   i rami principali si spostano anche da un lato all'altro.
-- **Maniglie** attorno al nodo scelto: ⋯ menu, T etichetta, + figlio, ↗ collegamento a un altro nodo,
+- **Larghezza del nodo** (come SimpleMind): sotto il nodo scelto, verso destra, c'è la maniglia ◂▸. Trascinandola
+  il bordo destro segue il puntatore, con una linea guida, e il testo va a capo; lasciando, la mappa si ridispone.
+  Doppio clic sulla maniglia (o Stile → Larghezza → *Larghezza automatica*, anche per più nodi) torna alla larghezza
+  automatica, che segue il testo. Nel modello: `larghezza` (px) sul nodo.
+- **Maniglie** attorno al nodo scelto: ⋯ menu, T etichetta, + figlio, ↗ collegamento a un altro nodo, ◂▸ larghezza,
   ▾ chiudi ramo, e sopra il nodo la **disposizione dei suoi figli**: ogni nodo può averne una sua (orizzontale,
   a destra, a sinistra, verticale, capovolta, lineare, radiale, libera) o seguire quella del padre; per la radice
   è quella di tutta la mappa. Nella disposizione libera ogni nodo ricorda la distanza dal genitore: spostando un

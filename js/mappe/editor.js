@@ -366,8 +366,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 if (el._firma !== firma) { el.innerHTML = contenuto(b.n); el._firma = firma; }
             }
             const conBordo = !['nessuna', 'sottolineata'].includes(b.s.forma);
-            el.className = `nodo forma-${b.s.forma}${b.id === m.radice ? ' radice' : ''}${inModifica(b.id) ? ' in-modifica' : ''}`;
+            const fissa = +b.n.larghezza > 0;
+            el.className = `nodo forma-${b.s.forma}${b.id === m.radice ? ' radice' : ''}${inModifica(b.id) ? ' in-modifica' : ''}${fissa ? ' larghezza-fissa' : ''}`;
             stileElemento(el, b.s, conBordo);
+            // Larghezza scelta con la maniglia ◂▸: il testo va a capo dentro (senza, il nodo segue il testo)
+            el.style.width = fissa ? limita(+b.n.larghezza, LARGHEZZA_NODO.min, LARGHEZZA_NODO.max) + 'px' : '';
             (b.n.etichette || []).forEach(e => {
                 const chiave = b.id + ':' + e.id;
                 etVisti.add(chiave);
@@ -819,6 +822,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             parti.push(man('disposizione', v === 'su' ? { x: a.x + w / 2, y: a.y + h + 14 } : { x: a.x + w / 2, y: a.y - 14 }, ico('ramo'), 'Disposizione dei figli di questo nodo'));
             parti.push(man('figlio', fuori, '+', 'Nuovo nodo figlio (Tab)'));
             parti.push(man('relazione', { x: a.x + w + 12, y: a.y + h + 12 }, '↗', 'Collega a un altro nodo'));
+            parti.push(man('larghezza', { x: a.x + w - Math.min(26, w / 4), y: a.y + h + 14 }, '<svg class="freccette" viewBox="0 0 16 10" aria-hidden="true"><path d="M1 5 L6 1 V9 Z M15 5 L10 1 V9 Z" fill="currentColor"/></svg>',
+                b.n.larghezza ? `Larghezza ${Math.round(b.n.larghezza)} px: trascina per cambiarla · doppio clic: automatica` : 'Trascina per scegliere la larghezza del nodo (il testo va a capo)'));
             if (b.n.figli.length && b.id !== (st.focus || m.radice)) {
                 parti.push(man('chiudi', dentro, b.n.chiuso ? '▸' : '▾', b.n.chiuso ? 'Apri il ramo (Spazio)' : 'Chiudi il ramo (Spazio)'));
             }
@@ -2066,6 +2071,13 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             </section>
             ${idsCollegamento().length ? `<section class="pannello-sezione"><h3>Linea verso il nodo padre</h3>${controlliCollegamento()}</section>` : ''}
             <section class="pannello-sezione">
+                <h3>Larghezza</h3>
+                ${[...st.sel].some(id => m.nodi[id] && +m.nodi[id].larghezza > 0)
+                    ? `<p class="pannello-nota">${st.sel.size === 1 ? `Larghezza scelta: ${Math.round(m.nodi[st.attivo].larghezza)} px.` : 'Alcuni nodi hanno una larghezza scelta.'} Trascina la maniglia ◂▸ sotto il nodo per cambiarla.</p>
+                       <button type="button" class="btn btn-secondario btn-piccolo" data-stile-az="larghezza-auto">Larghezza automatica</button>`
+                    : '<p class="pannello-nota">Automatica: il nodo segue il testo. Trascina la maniglia ◂▸ sotto il nodo per sceglierla tu (il testo va a capo).</p>'}
+            </section>
+            <section class="pannello-sezione">
                 <h3>Dimensione minima</h3>
                 <div class="riga-campi-piccoli">
                     <label>Larghezza <input type="number" min="0" max="800" step="10" value="${+s.larghezzaMin || 0}" data-stile-num="larghezzaMin"></label>
@@ -2334,6 +2346,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             ['Ctrl+clic', 'aggiungi o togli un nodo dalla selezione (trascinandone uno si spostano tutti)'],
             ['Trascina una linea', 'aggiungi lì un punto di passaggio (i pallini pieni si spostano)'],
             ['Clic su un punto + Canc · doppio clic · clic destro', 'togli un punto di passaggio (gli altri restano)'],
+            ['Maniglia ◂▸ sotto il nodo scelto', 'trascinala per la larghezza del nodo (il testo va a capo); doppio clic: automatica'],
             ['Ctrl+0 · Ctrl++ · Ctrl+−', 'adatta alla finestra, ingrandisci, riduci'], ['Rotellina · Maiusc+rotellina', 'zoom · scorri'],
             ['Trascina lo sfondo · Ctrl+trascina (o Maiusc)', 'sposta la mappa · finestra di selezione: prende i nodi che tocca'], ['Doppio clic sullo sfondo', 'nuovo nodo libero'],
             ['**testo** · *testo* · __testo__', 'grassetto, corsivo, sottolineato dentro un nodo'],
@@ -2352,6 +2365,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function suPuntatoreGiu(e) {
         if (e.button !== 0 && e.pointerType === 'mouse') return;
+        if (e.target.closest('[data-m="larghezza"]')) { trascinaLarghezza(e, st.attivo); return; }
         if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia')) return;
         puntatori.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (puntatori.size === 2) {
@@ -2738,6 +2752,52 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             : { a, b, c1: { x: a.x, y: (a.y + b.y) / 2 }, c2: { x: b.x, y: (a.y + b.y) / 2 } };
     }
 
+    // ---- Larghezza del nodo (maniglia ◂▸, come SimpleMind) -------------------------------------------
+
+    const LARGHEZZA_NODO = { min: 40, max: 1200 };
+
+    // Trascinando la maniglia sotto il nodo scelto il suo bordo destro segue il puntatore e il testo va a capo, con una
+    // linea guida sul bordo; lasciando, la mappa si ridispone. Doppio clic sulla maniglia: larghezza automatica
+    function trascinaLarghezza(e, id) {
+        const n = m.nodi[id], el = elementi.get(id);
+        if (!n || !el) return;
+        const w0 = el.offsetWidth, z = st.vista.zoom;
+        let w1 = w0;
+        const guida = document.createElement('div');
+        guida.className = 'guida-larghezza';
+        const mostraGuida = () => {
+            const r = el.getBoundingClientRect(), rt = tela.getBoundingClientRect();
+            Object.assign(guida.style, { left: (r.right - rt.left) + 'px', top: (r.top - rt.top - 14) + 'px', height: (r.height + 28) + 'px' });
+            const man = $('[data-m="larghezza"]', sopraEl);
+            if (man) Object.assign(man.style, { left: (r.right - rt.left - Math.min(26, r.width / 4)) + 'px', top: (r.bottom - rt.top + 14) + 'px' });
+        };
+        trascina(e, {
+            soglia: 2,
+            muovi: dx => {
+                if (!guida.parentNode) { sopraEl.appendChild(guida); tela.classList.add('allargando'); }
+                w1 = Math.round(limita(w0 + dx / z, LARGHEZZA_NODO.min, LARGHEZZA_NODO.max));
+                el.style.width = w1 + 'px';
+                el.classList.add('larghezza-fissa');
+                mostraGuida();
+            },
+            fine: partito => {
+                guida.remove();
+                tela.classList.remove('allargando');
+                if (!partito) return;
+                if (w1 === w0 && n.larghezza) { disegna(); return; }
+                modifica(() => { n.larghezza = w1; });
+                aggiornaPannello();
+            },
+        });
+    }
+
+    function larghezzaAutomatica(ids) {
+        const con = ids.filter(id => m.nodi[id] && m.nodi[id].larghezza);
+        if (!con.length) return;
+        modifica(() => con.forEach(id => { delete m.nodi[id].larghezza; }));
+        aggiornaPannello();
+    }
+
     // ---- Percorso delle linee: punti di passaggio scelti a mano ---------------------------------------
 
     // La linea scelta, se si può modificare: un ramo (la linea dal genitore) o un collegamento tra rami.
@@ -2884,6 +2944,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     function suDoppioClic(e) {
+        if (e.target.closest('[data-m="larghezza"]')) { larghezzaAutomatica([st.attivo]); return; }
         const punto = e.target.closest('[data-punto]');
         if (punto) { togliPunto(+punto.dataset.punto); return; }
         if (e.target.closest('.mappa-pop, [data-ricerca], [data-focus], .maniglia, [data-punto-nuovo], .in-modifica')) return;
@@ -3055,7 +3116,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             const r = man.getBoundingClientRect();
             ({ figlio: () => aggiungiFiglio(id), etichetta: () => aggiungiEtichetta(id), relazione: () => iniziaCollegamento(id),
                 disposizione: () => { st.popDisp = st.popDisp === id ? null : id; posizionaSopra(); },
-                chiudi: () => alternaRamo([id]), menu: () => menuNodo(id, r.left, r.bottom) })[man.dataset.m]();
+                chiudi: () => alternaRamo([id]), menu: () => menuNodo(id, r.left, r.bottom), larghezza: () => {} })[man.dataset.m]();
             return;
         }
         const fv = e.target.closest('[data-focus-vai]');
@@ -3128,6 +3189,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             if (az === 'copia') copiaStile();
             else if (az === 'incolla') incollaStile();
             else if (az === 'ripristina') modifica(() => st.sel.forEach(id => { m.nodi[id].stile = {}; }));
+            else if (az === 'larghezza-auto') larghezzaAutomatica([...st.sel]);
         } else if ((x = t.closest('[data-icona]'))) {
             const v = x.dataset.icona || null;
             const tutte = [...st.sel].every(id => m.nodi[id].icona === v);
