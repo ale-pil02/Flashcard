@@ -307,17 +307,24 @@ const Disposizione = (() => {
     }
 
     // Collegamento genitore → figlio: { orizzontale, a, b, d } con forma 'curva' | 'ortogonale' | 'arrotondata' | 'dritta';
-    // piega = punti di controllo scelti a mano (la linea diventa una curva libera)
-    function arco(p, f, forma, piega = null) {
+    // piega = punti di controllo scelti a mano (la linea diventa una curva libera); percorso = punti di passaggio scelti
+    // a mano (vedi percorsoValido): la linea passa da tutti, lasciando e raggiungendo i nodi dal loro lato
+    function arco(p, f, forma, piega = null, percorso = null) {
         if (!piegaValida(piega)) piega = null;
+        if (!percorsoValido(percorso)) percorso = null;
         let a, b, orizz = true;
         const pc = centro(p), fc = centro(f);
-        const dir = f.dir === 'radiale' || f.dir === 'libera' || !f.dir
-            ? (Math.abs(fc.x - pc.x) >= Math.abs(fc.y - pc.y) * 0.6 ? (fc.x >= pc.x ? 'd' : 's') : (fc.y >= pc.y ? 'giu' : 'su'))
-            : f.dir;
+        // Disposizione libera: la linea si attacca sempre di lato (a destra o a sinistra, da dove sta il figlio), anche
+        // se il figlio sta sopra o sotto; sopra o sotto solo se il figlio dispone i suoi in verticale o capovolti
+        const dir = f.dir === 'libera'
+            ? (f.verso === 'giu' || f.verso === 'su' ? (fc.y >= pc.y ? 'giu' : 'su') : (fc.x >= pc.x ? 'd' : 's'))
+            : f.dir === 'radiale' || !f.dir
+                ? (Math.abs(fc.x - pc.x) >= Math.abs(fc.y - pc.y) * 0.6 ? (fc.x >= pc.x ? 'd' : 's') : (fc.y >= pc.y ? 'giu' : 'su'))
+                : f.dir;
         if (dir === 'lineare') {
             a = { x: p.x + Math.min(16, p.w / 2), y: p.y + p.h };
             b = { x: f.x, y: f.sotto ? f.y + f.h : fc.y };
+            if (percorso) return { ...curvaPer(a, b, daPercorso(a, b, percorso), { x: 0, y: 1 }, { x: 1, y: 0 }), orizzontale: true };
             if (piega) return piegato(a, b, piega, true);
             const r = Math.min(8, Math.abs(b.y - a.y) / 2, Math.abs(b.x - a.x));
             return { a, b, orizzontale: true, d: `M${a.x},${a.y} V${b.y - r} Q${a.x},${b.y} ${a.x + r},${b.y} H${b.x}`, angolare: true };
@@ -329,6 +336,10 @@ const Disposizione = (() => {
             orizz = false;
             a = attacco(p, dir === 'giu' ? 'giu' : 'su');
             b = attacco(f, dir === 'giu' ? 'su' : 'giu');
+        }
+        if (percorso) {
+            const via = orizz ? { x: dir === 's' ? -1 : 1, y: 0 } : { x: 0, y: dir === 'su' ? -1 : 1 };
+            return { ...curvaPer(a, b, daPercorso(a, b, percorso), via, via), orizzontale: orizz };
         }
         if (piega) return piegato(a, b, piega, orizz);
         if (forma === 'dritta') return { a, b, orizzontale: orizz, d: `M${a.x},${a.y} L${b.x},${b.y}` };
@@ -360,22 +371,76 @@ const Disposizione = (() => {
         };
     }
 
-    // Linea che si assottiglia da w0 a w1: un nastro chiuso attorno alla curva
+    // Linea che si assottiglia da w0 a w1: un nastro chiuso attorno alla curva (anche fatta di più tratti)
     function nastro(arc, w0, w1) {
-        const N = 18, sx = [], dx = [];
-        for (let i = 0; i <= N; i++) {
-            const t = i / N;
-            const p = puntoBezier(arc.a, arc.c1, arc.c2, arc.b, t);
-            const q = puntoBezier(arc.a, arc.c1, arc.c2, arc.b, Math.min(1, t + 0.01));
-            const r = puntoBezier(arc.a, arc.c1, arc.c2, arc.b, Math.max(0, t - 0.01));
-            let tx = q.x - r.x, ty = q.y - r.y;
-            const l = Math.hypot(tx, ty) || 1;
-            tx /= l; ty /= l;
-            const w = (w0 + (w1 - w0) * t) / 2;
-            sx.push(`${(p.x - ty * w).toFixed(1)},${(p.y + tx * w).toFixed(1)}`);
-            dx.push(`${(p.x + ty * w).toFixed(1)},${(p.y - tx * w).toFixed(1)}`);
-        }
+        const tratti = arc.segmenti || [{ a: arc.a, c1: arc.c1, c2: arc.c2, b: arc.b }];
+        const N = 18, tot = tratti.length * N, sx = [], dx = [];
+        tratti.forEach((g, k) => {
+            for (let i = k ? 1 : 0; i <= N; i++) {
+                const t = i / N;
+                const p = puntoBezier(g.a, g.c1, g.c2, g.b, t);
+                const q = puntoBezier(g.a, g.c1, g.c2, g.b, Math.min(1, t + 0.01));
+                const r = puntoBezier(g.a, g.c1, g.c2, g.b, Math.max(0, t - 0.01));
+                let tx = q.x - r.x, ty = q.y - r.y;
+                const l = Math.hypot(tx, ty) || 1;
+                tx /= l; ty /= l;
+                const w = (w0 + (w1 - w0) * (k * N + i) / tot) / 2;
+                sx.push(`${(p.x - ty * w).toFixed(1)},${(p.y + tx * w).toFixed(1)}`);
+                dx.push(`${(p.x + ty * w).toFixed(1)},${(p.y - tx * w).toFixed(1)}`);
+            }
+        });
         return `M${sx.join(' L')} L${dx.reverse().join(' L')} Z`;
+    }
+
+    // ---- Linee con i punti di passaggio scelti a mano ------------------------------------------
+    // Un punto è { u, v } nel riferimento del segmento da A a B: P = A + u·(B − A) + v·(B − A) ruotato di 90°. Così,
+    // quando i nodi si spostano, il percorso si sposta, gira e si allunga con loro mantenendo la sua forma.
+
+    const percorsoValido = punti => Array.isArray(punti) && punti.length > 0 && punti.every(q => q && Number.isFinite(q.u) && Number.isFinite(q.v));
+
+    function daPercorso(A, B, punti) {
+        const dx = B.x - A.x, dy = B.y - A.y;
+        return punti.map(q => ({ x: A.x + q.u * dx - q.v * dy, y: A.y + q.u * dy + q.v * dx }));
+    }
+
+    function inPercorso(A, B, P) {
+        const dx = B.x - A.x, dy = B.y - A.y, l2 = dx * dx + dy * dy || 1;
+        const rx = P.x - A.x, ry = P.y - A.y;
+        const tondo = v => Math.round(v * 10000) / 10000;
+        return { u: tondo((rx * dx + ry * dy) / l2), v: tondo((ry * dx - rx * dy) / l2) };
+    }
+
+    // Curva morbida che passa da a, dai punti e da b (Catmull-Rom in tratti di Bézier). viaA / viaB = direzione con cui
+    // la linea lascia a e arriva in b (per i rami: dal lato del nodo); senza, verso il punto vicino
+    function curvaPer(a, b, punti, viaA = null, viaB = null) {
+        const P = [a, ...punti, b];
+        const n = P.length;
+        const dist = (p, q) => Math.hypot(q.x - p.x, q.y - p.y);
+        const T = P.map((p, i) => {
+            if (i === 0) return viaA ? { x: viaA.x * dist(P[0], P[1]), y: viaA.y * dist(P[0], P[1]) } : { x: P[1].x - P[0].x, y: P[1].y - P[0].y };
+            if (i === n - 1) return viaB ? { x: viaB.x * dist(P[n - 2], P[n - 1]), y: viaB.y * dist(P[n - 2], P[n - 1]) } : { x: P[n - 1].x - P[n - 2].x, y: P[n - 1].y - P[n - 2].y };
+            return { x: (P[i + 1].x - P[i - 1].x) / 2, y: (P[i + 1].y - P[i - 1].y) / 2 };
+        });
+        const segmenti = [];
+        for (let i = 0; i < n - 1; i++) {
+            segmenti.push({ a: P[i], c1: { x: P[i].x + T[i].x / 3, y: P[i].y + T[i].y / 3 }, c2: { x: P[i + 1].x - T[i + 1].x / 3, y: P[i + 1].y - T[i + 1].y / 3 }, b: P[i + 1] });
+        }
+        const f = v => v.toFixed(1);
+        const d = `M${f(a.x)},${f(a.y)} ` + segmenti.map(g => `C${f(g.c1.x)},${f(g.c1.y)} ${f(g.c2.x)},${f(g.c2.y)} ${f(g.b.x)},${f(g.b.y)}`).join(' ');
+        return { a, b, c1: segmenti[0].c1, c2: segmenti[segmenti.length - 1].c2, segmenti, punti, d, conPercorso: true };
+    }
+
+    // Il punto della linea più vicino a q: { i (tratto), t, p, distanza }
+    function vicinoSuCurva(arc, q) {
+        const tratti = arc.segmenti || [{ a: arc.a, c1: arc.c1, c2: arc.c2, b: arc.b }];
+        let migliore = { distanza: Infinity };
+        tratti.forEach((g, i) => {
+            for (let k = 0; k <= 40; k++) {
+                const p = puntoBezier(g.a, g.c1, g.c2, g.b, k / 40), d = Math.hypot(p.x - q.x, p.y - q.y);
+                if (d < migliore.distanza) migliore = { i, t: k / 40, p, distanza: d };
+            }
+        });
+        return migliore;
     }
 
     // Graffa lungo un lato, da a a b (dall'alto in basso o da sinistra a destra), con la punta verso
@@ -400,5 +465,8 @@ const Disposizione = (() => {
         return { x: c.x + dx * s, y: c.y + dy * s };
     }
 
-    return { calcola, limiti, arco, nastro, graffa, centro, attacco, bordoVerso, puntoBezier, piegaValida };
+    return {
+        calcola, limiti, arco, nastro, graffa, centro, attacco, bordoVerso, puntoBezier, piegaValida,
+        percorsoValido, daPercorso, inPercorso, curvaPer, vicinoSuCurva,
+    };
 })();

@@ -328,17 +328,23 @@ L'editor (rotta `#/mappa/<id>`):
   il ramo, Ctrl+Z/Y, Ctrl+C/X/V (si incollano anche elenchi rientrati da altri programmi), Ctrl+B/I/U,
   Ctrl+Alt+C / Ctrl+Alt+V copia e incolla lo stile, Ctrl+F cerca, Ctrl+0 adatta. Nel testo: `**grassetto**`, `*corsivo*`, `__sottolineato__`, `~~barrato~~`.
 - **Mouse e touch**: trascina lo sfondo per spostarti, rotellina (o due dita) per lo zoom, Maiusc+rotellina
-  per scorrere, Maiusc+trascina per selezionare un'area, doppio clic sullo sfondo per un nodo libero.
+  per scorrere, doppio clic sullo sfondo per un nodo libero. **Finestra di selezione**: tieni premuto Ctrl (o
+  Maiusc) e trascina dallo sfondo: compare un riquadro, come sul desktop di Windows, e si aggiungono alla selezione
+  i nodi che tocca (mentre trascini sono già evidenziati).
   Trascinando un nodo su un altro lo si sposta sotto di lui, sopra o sotto un fratello per riordinarlo;
   i rami principali si spostano anche da un lato all'altro.
 - **Maniglie** attorno al nodo scelto: ⋯ menu, T etichetta, + figlio, ↗ collegamento a un altro nodo,
   ▾ chiudi ramo, e sopra il nodo la **disposizione dei suoi figli**: ogni nodo può averne una sua (orizzontale,
   a destra, a sinistra, verticale, capovolta, lineare, radiale, libera) o seguire quella del padre; per la radice
   è quella di tutta la mappa. Nella disposizione libera ogni nodo ricorda la distanza dal genitore: spostando un
-  nodo si sposta tutto il suo ramo, e portandolo dall'altra parte del genitore il ramo si ribalta.
+  nodo si sposta tutto il suo ramo, e portandolo dall'altra parte del genitore il ramo si ribalta. La linea verso
+  un figlio si attacca sempre di lato (a destra o a sinistra), anche se il figlio sta sopra o sotto il genitore;
+  sopra o sotto solo se quel figlio dispone i suoi in verticale o capovolti.
 - **Trascinamento**: mentre trascini si muovono in diretta il nodo, il suo ramo e tutte le linee. Con Ctrl+clic
   si scelgono più nodi (un altro Ctrl+clic ne toglie uno): trascinandone uno si spostano tutti insieme.
-- **Figlio comune e graffa**: con più nodi scelti compare una barra (anche nel menu del nodo).
+- **Più nodi scelti**: compare una barra con **Disposizione** (la disposizione dei figli di tutti i nodi scelti,
+  in un colpo solo e con un solo Ctrl+Z; se c'è la radice cambia quella della mappa), Flashcard, Figlio comune e Graffa.
+- **Figlio comune e graffa**: dalla barra dei nodi scelti (anche nel menu del nodo).
   **Figlio comune** crea un nodo collegato a tutti: se i nodi sono fratelli il nuovo nodo sta oltre di loro, a
   metà della loro altezza, con una linea da ognuno; se non lo sono sta sotto il primo scelto e gli altri hanno una
   linea in più verso di lui. **Graffa** (solo fratelli) li raccoglie con una parentesi graffa che porta al nuovo
@@ -348,9 +354,15 @@ L'editor (rotta `#/mappa/<id>`):
   arrotondato, dritta), tratto (affusolata automatica, affusolata, piena, a trattini, a punti), spessore, frecce
   all'inizio e alla fine e colore, anche per tutto il ramo. L'affusolata automatica si assottiglia a ogni livello
   senza scendere sotto lo spessore minimo; forma e misure di base sono in Disposizione e tema → Linee.
-  **Trascinando un punto qualsiasi di una linea la si piega** (resta attaccata ai due nodi e li segue quando si
-  spostano; `piega` sul nodo); **Raddrizza la linea** la riporta normale, e cambiando disposizione le linee
-  piegate del ramo tornano normali. Anche i collegamenti tra rami si piegano da qualsiasi punto; le etichette si trascinano.
+  **Il percorso della linea lo decidi tu**: trascinando un punto qualsiasi della linea scelta aggiungi lì un **punto
+  di passaggio**; i pallini pieni sono i punti (si spostano, doppio clic li toglie), quelli vuoti a metà di ogni
+  tratto ne aggiungono un altro. La linea passa da tutti con una curva morbida, resta attaccata ai due nodi e,
+  quando si spostano, si sposta, gira e si allunga con loro mantenendo la forma (`percorso [{ u, v }]` sul nodo:
+  posizione lungo il segmento tra i due attacchi e di lato). **Raddrizza la linea** la riporta normale, e cambiando
+  disposizione o forma le linee del ramo tornano normali. Lo stesso per i **collegamenti tra rami** (`percorso` sul
+  collegamento, rispetto ai centri dei due nodi): il loro testo sta a metà e trascinandolo si sposta il punto di
+  mezzo. Le linee piegate col vecchio sistema (un solo punto, `piega` / `curva`) diventano una linea con un punto
+  appena le tocchi.
 - **Pannelli** (barra in alto): Disposizione e tema (orizzontale, verticale, capovolta, lineare, radiale,
   libera; rami a destra/sinistra/automatici; spaziatura; linee della mappa; 4 temi di serie e quelli tuoi, creati
   con **Nuovo tema** partendo dall'aspetto della mappa e salvati nelle impostazioni, quindi validi per tutte le mappe), Stile (carattere, forma, bordo, colori
