@@ -1,7 +1,7 @@
 # Flashcard
 
 Web app per studiare all'università con le flashcard e la **ripetizione spaziata**: organizza le materie, programma i ripassi e collega ogni risposta alla mappa mentale da cui viene.
-L'ho progettata e sviluppata da solo con **Claude Code**, per il mio studio di psicologia, e la uso per studiare, da PC e da telefono.
+L'ho progettata e sviluppata da solo con **Claude Code** per il mio studio di psicologia, e la uso da PC e da telefono.
 
 **Online:** [flashcard-ale.web.app](https://flashcard-ale.web.app) · l'accesso è riservato al mio account Google, perché contiene i miei dati di studio. Le schermate qui sotto usano i dati di prova inclusi nell'app.
 
