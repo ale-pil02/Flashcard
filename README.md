@@ -22,9 +22,13 @@ L'ho progettata e sviluppata da solo con **Claude Code** per il mio studio di ps
 |---|---|
 | ![Studio di una flashcard](screenshot/studio.png) | ![Editor delle mappe mentali](screenshot/mappa.png) |
 
-| Revisioni | Da telefono |
-|---|---|
-| ![Tabella delle revisioni](screenshot/revisioni.png) | <img src="screenshot/telefono.png" alt="Home da telefono" width="300"> |
+| Revisioni |
+|---|
+| ![Tabella delle revisioni](screenshot/revisioni.png) |
+
+| Da telefono |
+|:---:|
+| <img src="screenshot/telefono.png" alt="Home da telefono" width="300"> |
 
 ## Come è fatta
 
