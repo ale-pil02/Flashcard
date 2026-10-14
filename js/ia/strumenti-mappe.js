@@ -122,7 +122,7 @@
         if (n.chiuso) o.ramo_chiuso = true;
         if (n.disposizione) o.disposizione_figli = n.disposizione;
         if (+n.larghezza > 0) o.larghezza = Math.round(n.larghezza);
-        if (+n.distanzaFigli > 0) o.distanza_figli = n.distanzaFigli;
+        if (+n.distanzaPrima > 0) o.distanza_dal_fratello_prima = n.distanzaPrima;
         if (n.stilePredefinito) { const x = Mappe.stilePredefinito(n.stilePredefinito); o.stile_predefinito = x ? { id: x.id, nome: x.nome } : n.stilePredefinito; }
         if (n.raccordo) o.raccordo = { nodi: n.raccordo.nodi, graffa: !!n.raccordo.graffa };
         if (n.rif && n.rif.mappa) o.origine = { mappa_id: n.rif.mappa, nodo_id: n.rif.nodo };
@@ -350,7 +350,7 @@
                 disposizione: S.str('orizzontale | destra | sinistra | verticale | su (capovolta) | lineare | radiale | libera'),
                 direzione_rami: S.str('rami principali (disposizione orizzontale o libera): auto | orario | destra | sinistra'),
                 spaziatura: num('distanza tra i nodi, da 0.6 a 2 (1 = normale)'),
-                distanza_fratelli: num('distanza tra i nodi fratelli (uno sotto l\'altro), da 0.2 a 6 (1 = normale)'),
+                distanza_fratelli: num('distanza tra i nodi fratelli (uno sotto l\'altro), da 0.2 a 12 (1 = normale)'),
                 griglia: S.obj({ attiva: S.bool('accesa: i nodi spostati a mano si agganciano ai suoi punti'), passo: num('distanza tra i punti, 10-80 px') }, [], 'griglia di allineamento'),
                 colori_rami: S.arr(S.str('#rrggbb'), "colori dei rami principali in ordine; lista vuota = quelli del tema"),
                 colore_radice: S.str("#rrggbb; '' = quello del tema"),
@@ -377,7 +377,7 @@
                     fatto.push('lato dei rami');
                 }
                 if (a.spaziatura != null) { m.spaziatura = limita(+a.spaziatura || 1, 0.6, 2); fatto.push('spaziatura'); }
-                if (a.distanza_fratelli != null) { const v = limita(+a.distanza_fratelli || 1, 0.2, 6); m.spaziaturaFratelli = Math.abs(v - 1) < 0.01 ? null : v; fatto.push('distanza tra fratelli'); }
+                if (a.distanza_fratelli != null) { const v = limita(+a.distanza_fratelli || 1, 0.2, 12); m.spaziaturaFratelli = Math.abs(v - 1) < 0.01 ? null : v; fatto.push('distanza tra fratelli'); }
                 if (a.griglia) {
                     const g = { attiva: !!(m.griglia && m.griglia.attiva), passo: (m.griglia && m.griglia.passo) || 20 };
                     if (typeof a.griglia.attiva === 'boolean') g.attiva = a.griglia.attiva;
@@ -514,7 +514,8 @@
                     etichette: S.arr(S.obj({ testo: S.str('testo'), colore: S.str("sfondo #rrggbb o 'nessuno'") }, ['testo']), "etichette sopra il nodo (sostituiscono quelle che ci sono; lista vuota = nessuna)"),
                     larghezza_immagine: S.int("larghezza dell'immagine del nodo in px (40-600)"), togli_immagine: S.bool("toglie l'immagine del nodo"),
                     disposizione_figli: S.str("come si dispongono i figli: '' (come il padre) | orizzontale | destra | sinistra | verticale | su | lineare | radiale | libera; per la radice è quella della mappa"),
-                    distanza_figli: num('distanza tra i figli di questo nodo (0.2-6, 1 = normale); 0 = come il resto della mappa'),
+                    distanza_figli: num('distanza tra tutti i figli di questo nodo (0.2-12, 1 = come gli altri fratelli); 0 = normale. Per pochi nodi usa distanza_tra_nodi'),
+                    distanza_dal_fratello_prima: num('distanza di questo nodo dal fratello che gli sta prima nella sua pila (0.2-12, 1 = come gli altri); 0 = normale'),
                     larghezza: num('larghezza del nodo in px (40-1200): il testo va a capo dentro; 0 = automatica (segue il testo)'),
                     stile_predefinito: S.str("id di uno stile predefinito (vedi elenca_mappe) da dare al nodo; '' = nessuno"),
                     curvatura_linea: SCHEMA_CURVATURA,
@@ -577,7 +578,12 @@
                         else avvisi.push('il nodo non ha un\'immagine (le immagini le aggiunge l\'utente)');
                     }
                     if (x.disposizione_figli != null) impostaDisposizione(m, n.id, x.disposizione_figli);
-                    if (x.distanza_figli != null) { const v = +x.distanza_figli; if (v > 0) n.distanzaFigli = limita(v, 0.2, 6); else delete n.distanzaFigli; }
+                    if (x.distanza_figli != null) {
+                        const v = +x.distanza_figli;
+                        n.figli.slice(1).forEach(f => { if (!m.nodi[f]) return; if (v > 0 && Math.abs(v - 1) > 0.01) m.nodi[f].distanzaPrima = limita(v, 0.2, 12); else delete m.nodi[f].distanzaPrima; });
+                        delete n.distanzaFigli;
+                    }
+                    if (x.distanza_dal_fratello_prima != null) { const v = +x.distanza_dal_fratello_prima; if (v > 0 && Math.abs(v - 1) > 0.01) n.distanzaPrima = limita(v, 0.2, 12); else delete n.distanzaPrima; }
                     if (x.larghezza != null) n.larghezza = +x.larghezza > 0 ? Math.round(limita(+x.larghezza, 40, 1200)) : null;
                     if (x.stile_predefinito != null) {
                         if (!x.stile_predefinito) delete n.stilePredefinito;
@@ -910,6 +916,48 @@
                 const ed = Viste.mappa && Viste.mappa.editor;
                 if (ed && !a.applica_a_mappa_id && (Mappe.mappa(ed.id) || {}).tema === salvato.id) { Mappe.primaDiCambiare(ed.id); Mappe.cambiataDaFuori(ed.id); }
                 return { salvato: true, tema_id: salvato.id, nome: salvato.nome, applicato_a: a.applica_a_mappa_id || undefined };
+            },
+        },
+        {
+            nome: 'allinea_nodi',
+            descrizione: "Allinea dei nodi in disposizione libera (figli di un nodo con disposizione libera, o nodi liberi): stesso bordo sinistro, stesso centro o stesso bordo destro, senza cambiarne l'altezza; ogni ramo segue il suo nodo. Se tra i nodi ce ne sono che non si spostano a mano (la radice, nodi in una disposizione automatica) gli altri si allineano a loro, altrimenti al riquadro che li contiene tutti. Apre la mappa (servono le posizioni disegnate).",
+            parametri: S.obj({
+                mappa_id: S.str('id della mappa'), nodi_ids: S.arr(S.str('id'), 'almeno due nodi'),
+                allineamento: S.str('sinistra | centro | destra'),
+            }, ['mappa_id', 'nodi_ids', 'allineamento']),
+            etichetta: a => `Allineo ${(a.nodi_ids || []).length} nodi ${a.allineamento === 'centro' ? 'al centro' : 'a ' + a.allineamento}`,
+            esegui: async a => {
+                const m = richiediMappa(a.mappa_id);
+                const ids = [...new Set(a.nodi_ids || [])];
+                ids.forEach(id => richiediNodo(m, id));
+                if (!['sinistra', 'centro', 'destra'].includes(a.allineamento)) throw new Error('allineamento: sinistra | centro | destra');
+                const ed = await apriMappa(m.id);
+                const p = ed.preparaAllineamento(a.allineamento, ids);
+                if (!p) throw new Error('Servono almeno due nodi, e almeno uno in disposizione libera (figlio di un nodo con disposizione libera, o nodo libero): gli altri li sistema la disposizione automatica.');
+                if (!p.mossi) return { gia_allineati: true };
+                cambia(m.id, () => p.applica());
+                return { allineati: p.mobili, spostati: p.mossi };
+            },
+        },
+        {
+            nome: 'distanza_tra_nodi',
+            descrizione: "Allontana (o avvicina) solo alcuni nodi tra loro nelle disposizioni automatiche (orizzontale, verticale, capovolta, lineare), come il cursore «Tra i nodi scelti»: cambia gli spazi dal primo all'ultimo dei nodi dati nella loro pila (con A e C e B in mezzo, sia A–B sia B–C); i nodi restano allineati e i loro rami li seguono. Con nodi di padri diversi si allontanano i rami che li contengono, padri compresi. Non vale nella disposizione radiale o libera. Apre la mappa (servono le posizioni disegnate).",
+            parametri: S.obj({
+                mappa_id: S.str('id della mappa'), nodi_ids: S.arr(S.str('id'), 'almeno due nodi'),
+                distanza: num('1 = come gli altri fratelli, 2 = il doppio, 0.5 = la metà (0.2-12)'),
+            }, ['mappa_id', 'nodi_ids', 'distanza']),
+            etichetta: a => `Cambio la distanza tra ${(a.nodi_ids || []).length} nodi`,
+            esegui: async a => {
+                const m = richiediMappa(a.mappa_id);
+                const ids = [...new Set(a.nodi_ids || [])];
+                ids.forEach(id => richiediNodo(m, id));
+                const v = +a.distanza;
+                if (!(v > 0)) throw new Error('distanza: un numero da 0.2 a 12 (1 = come gli altri fratelli)');
+                const ed = await apriMappa(m.id);
+                const p = ed.preparaDistanza(ids);
+                if (!p) throw new Error("Tra questi nodi non c'è uno spazio da cambiare: servono almeno due nodi nella stessa pila di una disposizione automatica (nella radiale o libera i nodi si spostano con le posizioni).");
+                cambia(m.id, () => p.applica(limita(v, 0.2, 12)));
+                return { cambiati: p.bersagli.length, distanza: limita(v, 0.2, 12) };
             },
         },
         {

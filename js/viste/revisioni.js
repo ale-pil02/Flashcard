@@ -1,6 +1,6 @@
 // Revisioni: la sezione "master" della spaced repetition (js/revisioni.js), come il database di Notion.
 // Due pannelli: "Per set" (gli argomenti, una riga per set aggiornata dallo studio) e "Per flashcard" (tutte le carte e
-// come stanno rispetto al loro set; "Solo sfasate" lascia quelle che vanno per conto loro). Schede: tutte, una per
+// come stanno rispetto al loro mazzo; "Solo sfasate" lascia quelle che vanno per conto loro). Schede: tutte, una per
 // materia, "Da ripassare".
 // Qui si modifica tutto, anche il set di una riga; nella pagina di un set si vedono e si modificano solo gli
 // argomenti di quel set e dei suoi sotto-set.
@@ -10,7 +10,7 @@ Viste.revisioni = {
     titolo: 'Revisioni',
     scheda: 'tutte',     // 'tutte' | 'da-ripassare' | id di una materia
     pannello: 'set',     // 'set' | 'carte'
-    soloSfasate: false,  // pannello "Per flashcard": solo le carte sfasate rispetto al set
+    soloSfasate: false,  // pannello "Per flashcard": solo le carte sfasate rispetto al loro mazzo
 
     mostra(el) {
         const ico = Ui.ico;
@@ -55,7 +55,7 @@ Viste.revisioni = {
                 <header class="pagina-testa">
                     <div>
                         <h1>Revisioni</h1>
-                        <p class="sottotitolo">${carte ? 'Tutte le flashcard e come stanno rispetto al loro set. «Solo sfasate» lascia quelle che non vanno al passo: mai valutate, Scarso o con la prossima revisione in un altro giorno'
+                        <p class="sottotitolo">${carte ? 'Tutte le flashcard e come stanno rispetto al loro mazzo. «Solo sfasate» lascia quelle che non vanno al passo: mai valutate, Scarso, con la prossima revisione in un altro giorno o già valutate in un mazzo mai ripassato'
                             : `Ripasso dei mazzi a intervalli crescenti: ${Srs.anteprimaSequenza(6).join(', ')}… giorni (la sequenza si cambia nelle Impostazioni)`}</p>
                     </div>
                     <div class="azioni-testa">
@@ -90,7 +90,7 @@ Viste.revisioni = {
                     ${carte ? `<button type="button" class="btn btn-secondario btn-piccolo" data-azione="studio-libero"
                         title="Hai un po' di tempo? Scegli quanto e quali flashcard studiare">${ico('orologio')}Studio libero</button>` : ''}
                     ${carte && daFareMostrate.length ? `<button type="button" class="btn btn-primario btn-piccolo" data-azione="ripassa-carte"
-                        title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il loro set">${ico('fulmine')}Ripassa le sfasate da fare (${daFareMostrate.length})</button>` : ''}
+                        title="Le flashcard sfasate da ripassare oggi o in ritardo: le altre si ripassano con il loro mazzo">${ico('fulmine')}Ripassa le sfasate da fare (${daFareMostrate.length})</button>` : ''}
                 </div>` : ''}
 
                 <nav class="schede-rev" role="tablist">
@@ -126,11 +126,11 @@ Viste.revisioni = {
                 ordinamento: filtri.ordine, alOrdinare, nascoste: filtri.nascoste,
                 dopo: ridisegna,
                 vuoto: vuotoFiltri() || (this.scheda === 'da-ripassare'
-                    ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard sfasata è da ripassare: le altre si ripassano con il loro set. 🎉' })
+                    ? Ui.vuoto({ icona: 'ok-cerchio', titolo: 'Niente da ripassare', testo: 'Nessuna flashcard sfasata è da ripassare: le altre si ripassano con il loro mazzo. 🎉' })
                     : this.soloSfasate
                         ? Ui.vuoto({
                             icona: 'ok-cerchio', titolo: 'Tutte al passo',
-                            testo: 'Nessuna flashcard è sfasata rispetto al suo set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate e quelle ripassate o cambiate per conto loro.',
+                            testo: 'Nessuna flashcard è sfasata rispetto al suo mazzo. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo e mai valutate, quelle ripassate o cambiate per conto loro e quelle già valutate di un mazzo mai ripassato.',
                         })
                         : Ui.vuoto({ icona: 'carte', titolo: 'Ancora nessuna flashcard', testo: 'Crea o importa qualche flashcard nei tuoi set.' })),
             });

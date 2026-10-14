@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// App privata: solo l'account Google del proprietario può leggere e scrivere, e solo nella propria cartella.
+// Qualunque altro account, anche autenticato, viene rifiutato: l'app lo usa per capire che l'accesso non è
+// autorizzato (js/cloud.js). Per cambiare account: modifica l'email qui e in storage.rules, poi "firebase deploy".
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function proprietario(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email == 'alessandropillot01@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /utenti/{uid} {
+      allow read, write: if proprietario(uid);
+
+      // Un documento per oggetto dell'app: materie, set, carte, ripassi, esami, impostazioni, materiali, chat,
+      // argomenti, mappe, e i file dei materiali (solo dimensione e tipo: il contenuto sta in Cloud Storage)
+      match /{collezione}/{documento} {
+        allow read, write: if proprietario(uid);
+      }
+    }
+
+    // Tutto il resto è vietato
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

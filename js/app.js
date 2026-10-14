@@ -34,14 +34,26 @@ const App = {
         if (!persistente) Ui.toast('Questo browser non permette di salvare i dati: alla chiusura andranno persi', 'errore', 8000);
         this.pronta = true;
         Router.gestisci();
-        Cartelle.inizializza();
         Dati.correggiTagConcetti().catch(e => console.error(e));
+
+        // Cloud (js/cloud.js): accesso e sincronizzazione; le modifiche degli altri dispositivi ridisegnano la pagina
+        document.addEventListener('dati-remoti', e => {
+            if (e.detail.nome === 'impostazioni') this.applicaTema(Dati.impostazioni().tema);
+            this.aggiornaDaRemoto();
+        });
+        document.addEventListener('cloud-stato', () => {
+            const errore = Cloud.livello() === 'errore' && navigator.onLine;
+            $$('.nav-cloud').forEach(p => { p.hidden = !errore; });
+        });
+        Cloud.avvia().catch(e => console.error('Cloud non avviato', e));
     },
 
     mostra(rotta, mantieniScorrimento = false) {
         Ui.chiudiMenu();
         const vista = Viste[rotta.vista];
         if (this.vistaAttiva && this.vistaAttiva.esci) this.vistaAttiva.esci();
+        // Uno studio lasciato per aprire una mappa riprende tornando indietro dalla mappa; altrove si conclude
+        if (rotta.vista !== 'studio' && rotta.vista !== 'mappa') Viste.studio.concludiSospesa();
         VistaMappa.chiudiTutte();
         this.vistaAttiva = vista;
         this.rottaAttiva = rotta;
@@ -80,6 +92,23 @@ const App = {
         if (vista === 'mappa' && Viste.mappa.editor) { Mappe.primaDiCambiare(Viste.mappa.editor.id); Mappe.cambiataDaFuori(Viste.mappa.editor.id); }
         if (vista === 'editor' || vista === 'studio' || vista === 'mappa') return;
         this.ridisegna();
+    },
+
+    // Dati arrivati da un altro dispositivo: la pagina si ridisegna appena non disturba. Studio ed editor no (si
+    // perderebbe il lavoro in corso): si aggiornano quando li lasci. Con una finestra o un menu aperti, o mentre scrivi
+    // in un campo, si aspetta che tu abbia finito
+    aggiornaDaRemoto() {
+        clearTimeout(this.timerRemoto);
+        this.timerRemoto = setTimeout(() => {
+            this.aggiornaPiede();
+            const vista = this.rottaAttiva && this.rottaAttiva.vista;
+            if (vista === 'editor' || vista === 'studio' || vista === 'mappa') return;
+            const attivo = document.activeElement;
+            const occupato = $('#livello-modali .modale-sfondo') || $('body > .menu')
+                || (attivo && attivo !== document.body && (attivo.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(attivo.tagName)));
+            if (occupato) { this.timerRemoto = setTimeout(() => this.aggiornaDaRemoto(), 1500); return; }
+            this.ridisegna();
+        }, 500);
     },
 
     // Numero delle revisioni da fare accanto alla voce del menu

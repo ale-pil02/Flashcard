@@ -2,22 +2,29 @@
 //
 // All'avvio carica tutte le collezioni da IndexedDB in memoria; da lì in poi le letture
 // sono sincrone (dalla memoria) e ogni scrittura aggiorna la memoria subito e il disco
-// in background. Il resto dell'app non tocca mai IndexedDB direttamente: per aggiungere
-// in futuro la sincronizzazione col cloud basta agganciarsi a Archivio.alCambio().
+// in background. Il resto dell'app non tocca mai IndexedDB direttamente.
 //
-// Due archivi stanno a parte e non vengono caricati in memoria, si leggono solo quando servono:
-//   file      il contenuto dei materiali (PDF, immagini, slide…), con lo stesso id del materiale
+// Il cloud (js/cloud.js) si aggancia qui: riceve ogni modifica locale da alCambio() e alCambioFile(), e porta quelle
+// degli altri dispositivi con applicaRemoto(), che non avvisa gli ascoltatori (non sono modifiche da registrare né da
+// rimandare al cloud) ma lancia l'evento "dati-remoti" perché la pagina si ridisegni.
+//
+// Tre archivi stanno a parte e non vengono caricati in memoria, si leggono solo quando servono:
+//   file      il contenuto dei materiali (PDF, immagini, slide…), con lo stesso id del materiale. Con il cloud un file
+//             che manca qui si scarica la prima volta che serve (fonteRemota)
 //   storia    le modifiche che si possono annullare (js/storia.js)
+//   coda      le modifiche non ancora arrivate al cloud (js/cloud.js)
 
 const Archivio = (() => {
     const NOME_DB = 'flashcard';
-    const VERSIONE_DB = 5;
+    const VERSIONE_DB = 6;
     const COLLEZIONI = ['materie', 'set', 'carte', 'ripassi', 'esami', 'impostazioni', 'materiali', 'chat', 'argomenti', 'mappe'];
-    const SEPARATI = ['file', 'storia'];
+    const SEPARATI = ['file', 'storia', 'coda'];
 
     const cache = {};
     const ascoltatori = [];
     const osservatoriFile = [];
+    const ascoltatoriFile = [];   // dopo che un file è cambiato (il cloud)
+    let fonteRemota = null;       // id → Blob | null: scarica dal cloud un file che qui non c'è
     const separatiInMemoria = Object.fromEntries(SEPARATI.map(n => [n, new Map()]));   // ripiego senza IndexedDB
     let db = null;
     let soloMemoria = false;
@@ -135,6 +142,12 @@ const Archivio = (() => {
         return transazione(nome, store => store.put(riga)).catch(segnalaErrore);
     }
 
+    function salvaRighe(nome, righe) {
+        if (!righe.length) return Promise.resolve();
+        if (soloMemoria || !db) { righe.forEach(r => separatiInMemoria[nome].set(r.id, r)); return Promise.resolve(); }
+        return transazione(nome, store => righe.forEach(r => store.put(r))).catch(segnalaErrore);
+    }
+
     function eliminaRighe(nome, ids) {
         ids = [].concat(ids).filter(Boolean);
         if (!ids.length) return Promise.resolve();
@@ -152,29 +165,98 @@ const Archivio = (() => {
         for (const fn of osservatoriFile) { try { await fn(ids); } catch (e) { console.error(e); } }
     }
 
-    async function salvaFile(id, blob) {
-        await primaDeiFile([id]);
-        return salvaRiga('file', { id, blob });
+    function avvisaFile(ids, tipo) {
+        ascoltatoriFile.forEach(fn => { try { fn(ids, tipo); } catch (e) { console.error(e); } });
     }
 
+    async function salvaFile(id, blob) {
+        await primaDeiFile([id]);
+        await salvaRiga('file', { id, blob });
+        avvisaFile([id], 'salva');
+    }
+
+    // Il file di un materiale: quello salvato qui, oppure (con il cloud) scaricato e tenuto per le volte dopo
     async function leggiFile(id) {
         const riga = await leggiRiga('file', id);
-        return riga ? riga.blob : null;
+        if (riga && riga.blob) return riga.blob;
+        if (!fonteRemota || !id) return null;
+        let blob = null;
+        try { blob = await fonteRemota(id); } catch (e) { console.warn('File non scaricato dal cloud', id, e); }
+        if (blob) await salvaRiga('file', { id, blob });
+        return blob;
     }
 
     async function eliminaFile(ids) {
         ids = [].concat(ids).filter(Boolean);
         if (!ids.length) return;
         await primaDeiFile(ids);
-        return eliminaRighe('file', ids);
+        await eliminaRighe('file', ids);
+        avvisaFile(ids, 'elimina');
+    }
+
+    // ---- Modifiche arrivate dal cloud ------------------------------------------------
+
+    // Gli oggetti già in memoria si aggiornano sul posto: chi li sta mostrando (per esempio l'editor di una mappa) tiene
+    // il riferimento giusto. Niente ascoltatori: non sono modifiche di questo dispositivo
+    async function applicaRemoto(nome, salvati = [], eliminati = []) {
+        const c = cache[nome];
+        const operazioni = [];
+        salvati.forEach(o => {
+            const vecchio = c.get(o.id);
+            if (vecchio && vecchio !== o) {
+                Object.keys(vecchio).forEach(k => { if (!(k in o)) delete vecchio[k]; });
+                Object.assign(vecchio, o);
+                operazioni.push({ tipo: 'salva', valore: vecchio });
+            } else {
+                c.set(o.id, o);
+                operazioni.push({ tipo: 'salva', valore: o });
+            }
+        });
+        eliminati.forEach(id => { c.delete(id); operazioni.push({ tipo: 'elimina', id }); });
+        if (!operazioni.length) return;
+        if (!soloMemoria && db) {
+            await transazione(nome, store => operazioni.forEach(op => (op.tipo === 'salva' ? store.put(op.valore) : store.delete(op.id))))
+                .catch(segnalaErrore);
+        }
+        document.dispatchEvent(new CustomEvent('dati-remoti', {
+            detail: { nome, ids: operazioni.map(op => (op.tipo === 'salva' ? op.valore.id : op.id)) },
+        }));
+    }
+
+    // Il file è cambiato (o è stato eliminato) su un altro dispositivo: la copia di qui non vale più, la prossima
+    // lettura lo riscarica
+    function dimenticaFile(ids) { return eliminaRighe('file', ids); }
+
+    // Solo i file salvati qui, senza scaricare niente (per mandarli al cloud)
+    async function fileLocale(id) {
+        const riga = await leggiRiga('file', id);
+        return riga && riga.blob ? riga.blob : null;
+    }
+
+    // Svuota questo dispositivo senza avvisare nessuno (prima di prendere tutti i dati dal cloud)
+    async function svuotaInSilenzio() {
+        for (const nome of COLLEZIONI) {
+            cache[nome] = new Map();
+            if (!soloMemoria && db) await transazione(nome, store => store.clear());
+        }
+        for (const nome of SEPARATI) {
+            if (soloMemoria || !db) separatiInMemoria[nome].clear();
+            else await transazione(nome, store => store.clear());
+        }
     }
 
     // ---- Backup ------------------------------------------------------------
 
-    // Fotografia completa dei dati, file dei materiali compresi (in base64)
+    // Fotografia completa dei dati, file dei materiali compresi (in base64). Con il cloud prima scarica i file dei
+    // materiali che su questo dispositivo non ci sono ancora
     async function esporta() {
         const dati = {};
         COLLEZIONI.forEach(nome => { dati[nome] = tutti(nome); });
+        if (fonteRemota) {
+            const presenti = new Set((await tutteLeRighe('file')).map(r => r.id));
+            const mancanti = tutti('materiali').filter(m => !m.mappaId && m.tipo !== 'nota' && !presenti.has(m.id));
+            for (const m of mancanti) await leggiFile(m.id);
+        }
         const file = [];
         for (const { id, blob } of await tutteLeRighe('file')) {
             if (blob) file.push({ id, tipo: blob.type, dati: await bloInBase64(blob) });
@@ -184,12 +266,15 @@ const Archivio = (() => {
 
     // Sostituisce tutto il contenuto (ripristino da backup o cancellazione totale).
     // La storia delle modifiche riguarda i dati di prima: si svuota.
+    // L'operazione "sostituisci" porta gli id di prima e di dopo, così il cloud sa cosa togliere e cosa mandare.
     async function sostituisciTutto(dati, file = []) {
+        const fileDiPrima = new Set([...(await tutteLeRighe('file')).map(r => r.id), ...tutti('materiali').map(m => m.id)]);
         for (const nome of COLLEZIONI) {
             const lista = Array.isArray(dati[nome]) ? dati[nome].filter(o => o && o.id) : [];
+            const prima = [...cache[nome].keys()];
             cache[nome] = new Map(lista.map(o => [o.id, o]));
             if (!soloMemoria && db) await transazione(nome, store => { store.clear(); lista.forEach(o => store.put(o)); });
-            notifica(nome, [{ tipo: 'sostituisci' }]);
+            notifica(nome, [{ tipo: 'sostituisci', prima, dopo: lista.map(o => o.id) }]);
         }
         const righe = (file || []).filter(f => f && f.id && f.dati).map(f => ({ id: f.id, blob: base64InBlob(f.dati, f.tipo) }));
         if (soloMemoria || !db) {
@@ -199,6 +284,8 @@ const Archivio = (() => {
             await transazione('file', store => { store.clear(); righe.forEach(r => store.put(r)); });
             await transazione('storia', store => store.clear());
         }
+        righe.forEach(r => fileDiPrima.add(r.id));
+        avvisaFile([...fileDiPrima], 'sostituisci');
     }
 
     async function spazioUsato() {
@@ -208,11 +295,13 @@ const Archivio = (() => {
 
     return {
         COLLEZIONI, apri, tutti, prendi, salva, salvaMolti, elimina, eliminaMolti, fotografia,
-        leggiRiga, salvaRiga, eliminaRighe, tutteLeRighe,
-        salvaFile, leggiFile, eliminaFile,
-        esporta, sostituisciTutto, spazioUsato,
+        leggiRiga, salvaRiga, salvaRighe, eliminaRighe, tutteLeRighe,
+        salvaFile, leggiFile, eliminaFile, fileLocale, dimenticaFile,
+        esporta, sostituisciTutto, spazioUsato, applicaRemoto, svuotaInSilenzio,
         alCambio: fn => ascoltatori.push(fn),
         osservaFile: fn => osservatoriFile.push(fn),
+        alCambioFile: fn => ascoltatoriFile.push(fn),
+        impostaFonteRemota: fn => { fonteRemota = fn; },
         get soloMemoria() { return soloMemoria; },
     };
 })();

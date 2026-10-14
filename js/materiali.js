@@ -4,8 +4,8 @@
 // Al caricamento il file viene conservato così com'è (Archivio "file") e se ne estrae il testo;
 // dalle mappe si ricava anche l'albero { titolo, corpo, figli }, che serve alle flashcard di
 // creazione flashcard per profondità. Nella chat del set i materiali diventano le fonti dell'assistente.
-// I materiali possono arrivare anche da una cartella o da file collegati al set (js/cartelle.js): restano
-// allineati al file e, quando cambia, il visualizzatore mostra le novità rispetto alla versione prima.
+// Ogni file caricato è una copia conservata nell'app. Per una versione nuova dello stesso file: ⋯ → Carica una nuova
+// versione; il visualizzatore mostra le novità rispetto a quella di prima e propone di aggiornare le flashcard.
 // Le mappe mentali create nell'app (sezione Mappe) che stanno in un set compaiono tra i suoi materiali: un
 // materiale "mappa" con mappaId e senza file, che segue la mappa a ogni salvataggio; il clic apre l'editor.
 
@@ -361,7 +361,7 @@ const Materiali = (() => {
         };
     }
 
-    // extra: campi in più del materiale (es. cartella = { percorso, modificato, dimensione })
+    // extra: campi in più del materiale
     async function aggiungiFile(setId, file, extra = {}) {
         const tipo = tipoDi(file);
         if (!tipo) throw new Error(`«${file.name}»: formato non supportato`);
@@ -372,7 +372,7 @@ const Materiali = (() => {
         return m;
     }
 
-    // Nuova versione del file di un materiale (cartella collegata). Se il contenuto letto è cambiato,
+    // Nuova versione del file di un materiale (⋯ → Carica una nuova versione). Se il contenuto letto è cambiato,
     // la versione di prima resta in "precedente" per mostrare le novità. Restituisce { materiale, cambiato }
     async function aggiornaDaFile(id, file, extra = {}) {
         const m = Dati.materiale(id);
@@ -385,7 +385,7 @@ const Materiali = (() => {
         Dati.aggiornaMateriale(id, {
             ...nuovo, remoto: null, ...extra,
             ...(uguale ? {} : {
-                precedente: { testo: m.testo || '', albero: m.albero || null, modificato: (m.cartella || m.collegato || {}).modificato || m.creato },
+                precedente: { testo: m.testo || '', albero: m.albero || null, modificato: m.aggiornato || m.creato },
                 novita: true, aggiornato: Date.now(),
             }),
         });
@@ -691,8 +691,7 @@ const Materiali = (() => {
         Ui.modale({
             titolo: m.nome, classe: 'modale-materiale',
             corpo: `
-                <p class="nota">${Ui.ico(TIPI[m.tipo] ? TIPI[m.tipo].icona : 'documento')}${esc(descrivi(m))}${m.cartella ? ` · ${Ui.ico('collega')}dalla cartella collegata: ${esc(m.cartella.percorso)}` : ''}${m.collegato ? ` · ${Ui.ico('collega')}file collegato: ${esc(m.collegato.percorso)}` : ''}</p>
-                ${m.collegato && Cartelle.fileMancante(m.id) ? `<p class="nota nota-cartella">${Ui.ico('avviso')}<span>Il file non si trova più (spostato, rinominato o Drive non avviato): qui vedi l'ultima versione letta. Dal menu ⋯ puoi ricollegarlo.</span></p>` : ''}
+                <p class="nota">${Ui.ico(TIPI[m.tipo] ? TIPI[m.tipo].icona : 'documento')}${esc(descrivi(m))}</p>
                 ${novita}${qui}
                 <div class="vista-materiale">${contenuto}</div>
                 ${m.albero && m.tipo !== 'mappa' ? `<details class="altri-campi"><summary>${Ui.ico('documento')}Testo originale</summary><div class="vista-testo">${esc(m.testo)}</div></details>` : ''}
@@ -716,7 +715,10 @@ const Materiali = (() => {
     }
 
     // ---- Aprire con il programma del computer -------------------------------------------
-    // Per PDF, Word, PowerPoint, immagini… Le mappe di SimpleMind no: SimpleMind non si usa più, si leggono nell'app
+    // Per PDF, Word, PowerPoint, immagini… Le mappe di SimpleMind no: SimpleMind non si usa più, si leggono nell'app.
+    // Solo con l'app aperta da Flashcard.bat: server.py salva una copia temporanea e la apre. Online (Firebase) un sito
+    // non può aprire i programmi del computer, quindi la voce non c'è.
+    const SUL_COMPUTER = ['localhost', '127.0.0.1'].includes(location.hostname);
 
     function eSimpleMind(m) { return m.estensione === 'smmx' || /\.smmx$/i.test(m.nome); }
 
@@ -782,15 +784,47 @@ const Materiali = (() => {
     }
 
     async function apriSulComputer(m) {
-        const programma = 'il suo programma';
         try {
-            const { copia } = await Cartelle.apriSulComputer(m);
+            const blob = await Archivio.leggiFile(m.id);
+            if (!blob) throw new Error("Il file di questo materiale non c'è");
+            const nome = /\.[a-z0-9]{2,5}$/i.test(m.nome) ? m.nome : `${m.nome}.${m.estensione || ''}`;
+            let r;
+            try {
+                r = await fetch('/api/file/apri-copia?' + new URLSearchParams({ nome }), { method: 'POST', headers: { 'X-Flashcard': '1' }, cache: 'no-store', body: blob });
+            } catch (e) {
+                throw new Error('Il server di Flashcard non risponde: è ancora aperta la finestra nera? Riapri Flashcard.bat');
+            }
+            const dati = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(dati.errore || `Errore ${r.status}`);
             segnaVisto(m.id);
-            if (copia) Ui.toast(`Aperta una copia con ${programma}: le modifiche fatte lì non tornano qui. Per lavorare sul file vero, collegalo (Collega → Uno o più file)`, 'info', 9000);
-            else Ui.toast(`Aperto con ${programma}: quando salvi, qui si aggiorna da solo`, 'successo', 4500);
+            Ui.toast("Aperta una copia con il suo programma: le modifiche fatte lì non tornano qui. Per portarle nell'app, salva il file e poi ⋯ → Carica una nuova versione", 'info', 9000);
         } catch (e) {
-            Ui.toast(e.message || `Non riesco ad aprirlo con ${programma}`, 'errore', 6000);
+            Ui.toast(e.message || 'Non riesco ad aprirlo con il suo programma', 'errore', 6000);
         }
+    }
+
+    // Una versione nuova dello stesso file: il materiale tiene nome e posto, il visualizzatore mostra le novità
+    function caricaVersione(id) {
+        const m = Dati.materiale(id);
+        if (!m) return;
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = ACCETTATI;
+        input.addEventListener('change', async () => {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > MAX_FILE) { Ui.toast(`«${file.name}» supera ${formattaDimensione(MAX_FILE)}`, 'errore', 6000); return; }
+            Ui.toast(`Leggo «${file.name}»…`, 'info', 2500);
+            try {
+                const { cambiato } = await aggiornaDaFile(id, file, { nome: m.nome });
+                aggiorna();
+                if (cambiato) Ui.toast(`«${m.nome}»: nuova versione caricata`, 'successo', 8000, { testo: 'Vedi le novità', clic: () => apri(id) });
+                else Ui.toast('Nuova versione caricata: il testo è uguale a quello di prima', 'info', 5000);
+            } catch (e) {
+                console.error(e);
+                Ui.toast(e.message || 'Non riesco a leggere il file', 'errore', 6000);
+            }
+        });
+        input.click();
     }
 
     // Avvia la skill: la chiede l'utente esplicitamente, premendo il pulsante
@@ -804,36 +838,9 @@ const Materiali = (() => {
     let aggiorna = () => {};
     let montato = null;   // { contenitore, setId } della sezione visibile
 
-    // La cartella collegata ha cambiato qualcosa (o il suo stato): si ridisegna la sezione
-    document.addEventListener('cartella-cambiata', e => {
-        if (montato && document.contains(montato.contenitore) && e.detail.setId === montato.setId) aggiorna();
-    });
-
-    function strisciaCartella(s) {
-        const ico = Ui.ico;
-        const st = Cartelle.stato(s.id);
-        const pulsante = (azione, testo, icona = 'sincronizza') => `<button type="button" class="btn btn-secondario btn-piccolo" data-mat="${azione}">${ico(icona)}${testo}</button>`;
-        let testo, azione = '', avviso = false;
-        if (st.errore) { testo = st.errore; azione = pulsante('sincronizza', 'Riprova'); avviso = true; }
-        else if (!st.controllata) testo = 'Controllo la cartella…';
-        else testo = 'Collegata: file nuovi, modificati o tolti si aggiornano da soli';
-        const nonLeggibili = st.nonLeggibili || [], troppoGrandi = st.troppoGrandi || [];
-        return `
-            <div class="striscia-cartella${avviso ? ' avviso' : ''}">
-                <span class="striscia-icona">${ico('cartella')}</span>
-                <div class="striscia-testo" title="${esc(s.cartella.percorso || '')}"><b>${esc(s.cartella.nome)}</b><small>${esc(testo)}</small></div>
-                ${azione}
-                <button type="button" class="btn-icona" data-mat="menu-cartella" aria-label="Opzioni della cartella">${ico('altro')}</button>
-            </div>
-            ${nonLeggibili.length ? `<p class="nota nota-cartella">${ico('avviso')}<span>${plurale(nonLeggibili.length, 'file di Google (Documenti, Presentazioni…) non si legge', 'file di Google (Documenti, Presentazioni…) non si leggono')} da qui
-                (${esc(nonLeggibili.slice(0, 3).join(', '))}${nonLeggibili.length > 3 ? '…' : ''}): in Drive scaricali come PDF o PowerPoint nella stessa cartella.</span></p>` : ''}
-            ${troppoGrandi.length ? `<p class="nota nota-cartella">${ico('avviso')}<span>Oltre ${formattaDimensione(MAX_FILE)}, non letti: ${esc(troppoGrandi.join(', '))}</span></p>` : ''}`;
-    }
-
     function monta(contenitore, setId) {
         aggiorna = () => monta(contenitore, setId);
         montato = { contenitore, setId };
-        const s = Dati.set(setId);
         const lista = Dati.materialiDiSet(setId);
         const ico = Ui.ico;
         contenitore.innerHTML = `
@@ -842,38 +849,34 @@ const Materiali = (() => {
                     ${Ui.titoloApribile('materiali', `Materiali ${lista.length ? `<span class="conteggio">${lista.length}</span>` : ''}`)}
                     <div class="azioni-riga">
                         ${lista.length ? `<button type="button" class="btn btn-fantasma btn-piccolo" data-mat="chiedi">${ico('scintille')}Chiedi</button>` : ''}
-                        <button type="button" class="btn btn-fantasma btn-piccolo" data-mat="menu-collega" title="Collega una cartella o dei file del computer o di Google Drive: restano allineati da soli">${ico('collega')}Collega</button>
                         <button type="button" class="btn btn-fantasma btn-piccolo" data-mat="nota">${ico('matita')}Nota</button>
                         <button type="button" class="btn btn-fantasma btn-piccolo" data-mat="mappa" title="Una mappa mentale nuova, in questo set">${ico('mappa')}Mappa</button>
                         <button type="button" class="btn btn-secondario btn-piccolo" data-mat="carica">${ico('carica')}Carica</button>
                     </div>
                 </div>
                 <div class="sezione-corpo">
-                ${s.cartella ? strisciaCartella(s) : ''}
                 ${lista.length ? `
                 <div class="griglia-materiali">
                     ${lista.map(m => `
-                        <div class="tessera-materiale${m.usaInChat === false ? ' esclusa' : ''}${haNovita(m) ? ' con-novita' : ''}" data-id="${m.id}" ${m.cartella || m.collegato ? `title="${esc((m.cartella || m.collegato).percorso)}"` : ''}>
+                        <div class="tessera-materiale${m.usaInChat === false ? ' esclusa' : ''}${haNovita(m) ? ' con-novita' : ''}" data-id="${m.id}">
                             <button type="button" class="materiale-anteprima tipo-${m.tipo}" data-mat="apri" title="Apri">
                                 ${m.anteprima ? `<img src="${esc(m.anteprima)}" alt="">` : ico(TIPI[m.tipo] ? TIPI[m.tipo].icona : 'documento')}
                             </button>
                             <div class="materiale-info">
                                 <b title="${esc(m.nome)}">${esc(m.nome)}</b>
-                                <small>${haNovita(m) ? '<span class="etichetta-novita" title="Il file è cambiato: aprilo per vedere le novità">aggiornato</span>' : ''}${m.collegato && Cartelle.fileMancante(m.id) ? '<span class="etichetta-mancante">file non trovato</span>' : ''}${m.cartella || m.collegato ? ico('collega', 'ico-cartella') : ''}${esc(descrivi(m))}${m.usaInChat === false ? ' · escluso dalla chat' : ''}</small>
+                                <small>${haNovita(m) ? '<span class="etichetta-novita" title="Nuova versione del file: aprilo per vedere le novità">aggiornato</span>' : ''}${esc(descrivi(m))}${m.usaInChat === false ? ' · escluso dalla chat' : ''}</small>
                             </div>
                             <button type="button" class="btn-icona" data-mat="menu" aria-label="Azioni sul materiale">${ico('altro')}</button>
                         </div>`).join('')}
                 </div>
                 <p class="nota nota-trascina">Trascina qui altri file per aggiungerli.</p>`
-                : s.cartella ? '<p class="nota">Nella cartella non ci sono ancora file leggibili.</p>' : `
+                : `
                 <button type="button" class="zona-file zona-materiali" data-mat="carica">
                     ${ico('carica')}
                     <b>Carica i materiali di questo set</b>
                     <small>Slide e PDF, mappe mentali (SimpleMind, OPML, XMind, FreeMind, Markdown), Word, PowerPoint, immagini e testi.
                         L'assistente li usa come fonti, come in NotebookLM. Anche le mappe che crei nell'app per questo set compaiono qui.</small>
-                </button>
-                <p class="nota nota-collega">Oppure collega <button type="button" class="link" data-mat="collega">una cartella</button> o
-                    <button type="button" class="link" data-mat="collega-file">dei file</button> del computer o di Google Drive: quando li modifichi, qui si aggiornano da soli.</p>`}
+                </button>`}
                 </div>
             </section>`;
 
@@ -883,7 +886,7 @@ const Materiali = (() => {
             if (!b) return;
             const tessera = b.closest('[data-id]');
             const id = tessera ? tessera.dataset.id : null;
-            if (['carica', 'nota', 'mappa', 'menu-collega', 'collega', 'collega-file'].includes(b.dataset.mat)) Ui.apriSezione('materiali');
+            if (['carica', 'nota', 'mappa'].includes(b.dataset.mat)) Ui.apriSezione('materiali');
             switch (b.dataset.mat) {
                 case 'carica': {
                     const input = document.createElement('input');
@@ -895,14 +898,6 @@ const Materiali = (() => {
                 case 'nota': if (await formNota(setId)) aggiorna(); break;
                 case 'mappa': Viste.mappe.nuova(); break;
                 case 'chiedi': Assistente.apri({ setId }); break;
-                case 'collega': collegaCartella(setId); break;
-                case 'collega-file': collegaFile(setId); break;
-                case 'menu-collega': Ui.menu(b, [
-                    !s.cartella && { testo: 'Una cartella intera', icona: 'cartella', clic: () => collegaCartella(setId) },
-                    { testo: 'Uno o più file', icona: 'documento', clic: () => collegaFile(setId) },
-                ]); break;
-                case 'sincronizza': Cartelle.sincronizza(setId).then(aggiorna, e => Ui.toast(e.message, 'errore', 6000)); break;
-                case 'menu-cartella': menuCartella(b, setId); break;
                 case 'apri': apriPredefinito(id); break;
                 case 'menu': menu(b, id); break;
             }
@@ -921,34 +916,26 @@ const Materiali = (() => {
     function menu(ancora, id) {
         const m = Dati.materiale(id);
         if (!m) return;
-        // I file di una cartella collegata si rinominano, spostano ed eliminano dalla cartella;
-        // un file collegato prende il nome dal file, ma si può spostare o togliere dal set
-        const libero = !m.cartella;
-        const collegato = !!m.collegato;
         if (m.mappaId) { menuMappa(ancora, m); return; }
         Ui.menu(ancora, [
             { testo: 'Apri', icona: 'occhio', clic: () => apri(id) },
-            !eSimpleMind(m) && m.tipo !== 'nota' && { testo: 'Apri con il programma del computer', icona: 'presentazione', clic: () => apriSulComputer(m) },
+            SUL_COMPUTER && !eSimpleMind(m) && m.tipo !== 'nota' && { testo: 'Apri con il programma del computer', icona: 'presentazione', clic: () => apriSulComputer(m) },
+            m.tipo !== 'nota' && { testo: 'Carica una nuova versione', icona: 'carica', clic: () => caricaVersione(id) },
             m.precedente && { testo: 'Aggiorna le flashcard con le novità', icona: 'sincronizza', clic: () => aggiornaFlashcard(m) },
             haNovita(m) && { testo: 'Segna come visto', icona: 'spunta', clic: () => segnaVisto(id) },
             (m.albero || m.tipo === 'pdf' || m.tipo === 'immagine') && { testo: 'Creazione flashcard per profondità', icona: 'ramo', clic: () => localizzazione(m) },
             { testo: m.usaInChat === false ? 'Includi nella chat del set' : 'Escludi dalla chat del set', icona: 'scintille', clic: () => { Dati.aggiornaMateriale(id, { usaInChat: m.usaInChat === false }); aggiorna(); } },
-            collegato && { testo: 'Collega a un altro file', icona: 'collega', clic: async () => {
-                try { if (await Cartelle.ricollegaFile(id)) { Ui.toast('File ricollegato', 'successo'); aggiorna(); } } catch (e) { Ui.toast(e.message, 'errore', 6000); }
-            } },
-            collegato && { testo: 'Scollega (tieni la copia)', icona: 'scollega', clic: () => { Cartelle.scollegaFile(id); Ui.toast('Ora è una copia: non segue più il file'); aggiorna(); } },
-            libero && !collegato && { testo: 'Rinomina', icona: 'matita', clic: async () => {
+            { testo: 'Rinomina', icona: 'matita', clic: async () => {
                 const nome = await chiediNome(m.nome);
                 if (nome) { Dati.aggiornaMateriale(id, { nome }); aggiorna(); }
             } },
-            libero && { testo: 'Sposta in un altro set', icona: 'cartella', clic: async () => {
+            { testo: 'Sposta in un altro set', icona: 'cartella', clic: async () => {
                 const dest = await Ui.scegliSet({ titolo: 'Sposta il materiale in…', testoOk: 'Sposta' });
                 if (dest && dest !== m.setId) { Dati.aggiornaMateriale(id, { setId: dest }); Ui.toast('Materiale spostato', 'successo'); aggiorna(); }
             } },
-            libero && '-',
-            libero && { testo: collegato ? 'Togli dal set' : 'Elimina', icona: 'cestino', pericolo: true, clic: async () => {
-                const ok = await Ui.conferma(collegato ? `Togli <b>${esc(m.nome)}</b> dai materiali del set? Il file sul computer non viene toccato.`
-                    : `Elimini <b>${esc(m.nome)}</b> dai materiali del set?`, { titolo: collegato ? 'Togliere il file collegato?' : 'Eliminare il materiale?', ok: collegato ? 'Togli' : 'Elimina', pericolo: true });
+            '-',
+            { testo: 'Elimina', icona: 'cestino', pericolo: true, clic: async () => {
+                const ok = await Ui.conferma(`Elimini <b>${esc(m.nome)}</b> dai materiali del set?`, { titolo: 'Eliminare il materiale?', ok: 'Elimina', pericolo: true });
                 if (ok) { Dati.eliminaMateriale(id); aggiorna(); }
             } },
         ]);
@@ -983,49 +970,6 @@ const Materiali = (() => {
                 if (ok) { Mappe.elimina(x.id); aggiorna(); }
             } },
         ]);
-    }
-
-    // ---- Cartella collegata ---------------------------------------------------------------
-
-    async function collegaCartella(setId) {
-        try {
-            if (await Cartelle.collega(setId)) aggiorna();
-        } catch (e) {
-            console.error(e);
-            Ui.toast(e.message || 'Non riesco a collegare la cartella', 'errore', 6000);
-        }
-    }
-
-    async function collegaFile(setId) {
-        try {
-            if (await Cartelle.collegaFile(setId)) aggiorna();
-        } catch (e) {
-            console.error(e);
-            Ui.toast(e.message || 'Non riesco a collegare i file', 'errore', 6000);
-        }
-    }
-
-    function menuCartella(ancora, setId) {
-        Ui.menu(ancora, [
-            { testo: 'Aggiorna adesso', icona: 'sincronizza', clic: () => Cartelle.sincronizza(setId).then(aggiorna) },
-            { testo: 'Collega un\'altra cartella', icona: 'collega', clic: () => collegaCartella(setId) },
-            '-',
-            { testo: 'Scollega la cartella', icona: 'scollega', pericolo: true, clic: () => scollegaCartella(setId) },
-        ]);
-    }
-
-    function scollegaCartella(setId) {
-        const n = Dati.materialiDiSet(setId).filter(m => m.cartella).length;
-        Ui.modale({
-            titolo: 'Scollegare la cartella?', classe: 'modale-piccola',
-            corpo: `<p class="testo-conferma">L'app smette di seguire la cartella. I file nella cartella non vengono toccati.
-                ${n ? `Che cosa faccio dei ${plurale(n, 'materiale che ne viene', 'materiali che ne vengono')}?` : ''}</p>`,
-            azioni: [
-                { testo: 'Annulla', classe: 'btn-fantasma' },
-                n ? { testo: 'Toglili dall\'app', classe: 'btn-pericolo-tenue', clic: md => { md.chiudi(); Cartelle.scollega(setId, { tieniFile: false }); aggiorna(); } } : null,
-                { testo: n ? 'Tienili come copie' : 'Scollega', classe: 'btn-primario', principale: true, clic: md => { md.chiudi(); Cartelle.scollega(setId, { tieniFile: true }); aggiorna(); } },
-            ].filter(Boolean),
-        });
     }
 
     function chiediNome(attuale) {

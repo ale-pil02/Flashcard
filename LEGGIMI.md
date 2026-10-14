@@ -5,13 +5,15 @@ Niente da installare né compilare: HTML, CSS e JavaScript semplici.
 
 ## Come aprirla
 
-Doppio clic su **`Flashcard.bat`**: avvia un piccolo server (`server.py`) e apre
-`http://localhost:8010`. Non chiudere la finestra nera finché usi l'app.
-Dopo un aggiornamento dell'app basta ricaricare la pagina.
+- **Online** (dopo averla pubblicata con Firebase, vedi [ISTRUZIONI-FIREBASE.md](ISTRUZIONI-FIREBASE.md)): l'indirizzo
+  del sito, da PC e telefono, con l'accesso Google. I dati sono uguali su tutti i dispositivi.
+- **Sul PC**: doppio clic su **`Flashcard.bat`**: avvia un piccolo server (`server.py`) e apre
+  `http://localhost:8010`. Non chiudere la finestra nera finché usi l'app. Dopo un aggiornamento dell'app basta
+  ricaricare la pagina. Con il cloud configurato chiede lo stesso accesso e si sincronizza come il sito; in più può
+  aprire i materiali con il loro programma del computer.
 
-> I dati restano nel browser con cui apri l'app, legati all'indirizzo `localhost:8010`.
-> Usa sempre lo stesso browser e lo stesso indirizzo, e ogni tanto fai
-> **Impostazioni → Backup → Esporta**.
+> Senza cloud i dati restano nel browser con cui apri l'app, legati all'indirizzo `localhost:8010`: usa sempre lo
+> stesso browser e lo stesso indirizzo. Con il cloud o senza, ogni tanto fai **Impostazioni → Backup → Esporta**.
 
 Per provarla senza toccare i tuoi dati: **Impostazioni → Dati di prova → Carica**
 (si tolgono con **Rimuovi**, che lascia intatto il resto). Ogni set di prova ha uno scenario delle revisioni (mai
@@ -28,14 +30,14 @@ Impostazioni → Dati di prova → Tutorial).
 | **Libreria** | Materie → set → sotto-set → flashcard, con ricerca su tutto il testo |
 | **Set** | Avanzamento (Perfetto / Buono / Ok / Scarso / Mai studiate), riquadro con le carte da fare e **Personalizza** (il pulsante Studia non c'è più: lo studio parte dalle revisioni), sotto-set, revisioni, materiali, elenco delle carte ad albero. Sotto-set, Revisioni, Materiali e Flashcard si aprono e chiudono con un clic sul titolo (lo stato resta per tutti i set) |
 | **Selezione** | Nel set e nella ricerca: più flashcard insieme → tag, domanda madre, sposta, valutazione, progressi, assistente, elimina |
-| **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni. **Modifica** (sopra la carta, o il tasto E) corregge domanda, risposta, suggerimento e spiegazione senza lasciare il ripasso: la carta si aggiorna subito, nella stessa fase |
+| **Studio** | Una sola modalità: domanda → mostra risposta → Scarso / Ok / Buono / Perfetto (Ok e Scarso tornano in fondo); sotto la risposta, la parte di mappa collegata; a fine sessione si aggiornano le revisioni. **Modifica** (sopra la carta, o il tasto E) corregge domanda, risposta, suggerimento e spiegazione senza lasciare il ripasso: la carta si aggiorna subito, nella stessa fase. **Frecce ‹ ›** ai lati dei pulsanti (o ← →), come in Vaia: si torna alle carte già valutate e si rivalutano, o si salta la carta di adesso (vedi *Studio: frecce e mappe*) |
 | **Revisioni** | Ripasso dei set e dei mazzi come nel database "Spaced Repetition System" di Notion, a intervalli crescenti (Fibonacci, modificabile) che si adattano a ritardi e anticipi, più il pannello delle flashcard da ripassare per conto loro: sezione propria e, in ogni set, quelli del set. Guida «Come funziona» con simulatore |
 | **Sessione personalizzata** | Scegli uno o più set, lo stato delle carte, i tag, quante carte e l'ordine |
 | **Editor** | Domanda, risposta, fonte della risposta, parte della mappa, domanda madre, suggerimento, spiegazione, tag, immagini |
 | **Statistiche** | Carte di oggi, tempo di studio, grafico giornaliero, calendario, avanzamento per materia |
 | **Piano di studio** | Date degli esami con conto alla rovescia, collegate alle materie |
-| **Impostazioni** | Nome, carte per sessione (anche senza limite), ordine, studio a cascata, carte di dettaglio, sequenza delle revisioni, assistente IA, tema, import, backup, dati di prova e tutorial |
-| **Materiali** | In ogni set: PDF, slide, mappe mentali, Word, PowerPoint, immagini, testi e note, anche da una cartella o da file collegati (Drive) |
+| **Impostazioni** | Cloud (account, stato della sincronizzazione), nome, carte per sessione (anche senza limite), ordine, studio a cascata, carte di dettaglio, sequenza delle revisioni, assistente IA, tema, import, backup, dati di prova e tutorial |
+| **Materiali** | In ogni set: PDF, slide, mappe mentali, Word, PowerPoint, immagini, testi e note (l'app ne tiene una copia; ⋯ → *Carica una nuova versione* mostra le novità) |
 | **Assistente IA** | Gemini: fa le operazioni dell'app, risponde sui materiali, crea flashcard per profondità |
 | **Annulla** | Ogni messaggio dell'assistente e ogni azione su più carte si annulla (e si ripristina) |
 
@@ -87,33 +89,23 @@ anche l'albero dei nodi. Ogni materiale si apre in un visualizzatore e si può e
   mappa nell'app (albero e novità), e per lavorarci la si importa nella sezione Mappe.
 - PDF, Word, PowerPoint, immagini e testi si possono aprire anche con il loro programma del computer
   (⋯ → *Apri con il programma del computer*; non per le mappe SimpleMind). Lo fa `server.py`, solo per i formati
-  dei materiali.
+  dei materiali, quindi la voce c'è solo con l'app aperta da `Flashcard.bat`: online un sito non può aprire i
+  programmi del computer. Si apre una copia: le modifiche fatte lì non tornano nell'app.
 
-### Cartella o file collegati (anche Google Drive)
+### Una nuova versione di un file
 
-Invece di caricare una copia, nella sezione Materiali di un set: **Collega** → **Una cartella intera** oppure
-**Uno o più file**. Si apre la finestra di Windows, che parte da `G:\Il mio Drive` (Drive per desktop).
-Cartelle e file li legge `server.py`, in **sola lettura**: funziona con qualsiasi browser (anche Brave) e non
-chiede permessi a ogni apertura. Per questo l'app va aperta con `Flashcard.bat`.
+Ogni file caricato è una **copia** conservata nell'app (e, con il cloud, in Cloud Storage): cartelle e file
+collegati dal computer non ci sono più, perché online non si possono leggere. I set e i materiali che erano
+collegati sono diventati copie normali (si rinominano, spostano ed eliminano come gli altri).
 
-- Mentre l'app è aperta (e la sua scheda è quella in vista) li ricontrolla ogni 5 secondi.
-- **Cartella**: i suoi file e quelli delle sottocartelle diventano materiali; un file nuovo compare, uno
-  cancellato sparisce, uno modificato viene riletto.
-- **File singoli**: ognuno è un materiale che viene riletto quando lo modifichi. Se lo sposti o lo rinomini il
-  materiale resta con l'avviso "file non trovato": dal suo menu ⋯ **Collega a un altro file**, oppure
-  **Scollega** per tenerlo come copia normale. **Togli dal set** non tocca il file sul computer.
-- Di un file modificato l'app tiene la versione di prima: aprendolo vedi **cosa è cambiato** (nodi della mappa
-  aggiunti, tolti o cambiati; righe nuove e tolte per PDF e testi) e con **Aggiorna le flashcard** l'assistente
-  crea le carte nuove agganciandole all'albero, corregge quelle superate e ti chiede quali eliminare.
-- Un file appena cambiato ha l'etichetta **aggiornato**: sparisce quando lo apri (nell'app o nel suo programma,
-  per esempio SimpleMind), quando aggiorni le flashcard con le novità, con ⋯ → *Segna come visto*, o da sola
-  dopo 3 giorni. Le novità restano consultabili aprendo il materiale fino al cambiamento successivo.
-- I file nativi di Google (Documenti, Presentazioni: `.gdoc`, `.gslides`) non contengono il testo: salvali in
-  Drive anche come PDF o PowerPoint nella stessa cartella.
-- Se la cartella non si raggiunge (spostata, rinominata, Drive non avviato) la striscia lo dice e i materiali
-  restano com'erano finché non torna disponibile.
-- I file della cartella si rinominano ed eliminano dalla cartella, non dall'app. **Scollega** (menu ⋯ della
-  striscia) li tiene come copie normali oppure li toglie.
+Quando il file cambia (per esempio hai aggiornato la dispensa): ⋯ del materiale → **Carica una nuova versione**.
+Il materiale tiene nome e posto, e l'app tiene la versione di prima:
+
+- aprendolo vedi **cosa è cambiato** (nodi della mappa aggiunti, tolti o cambiati; righe nuove e tolte per PDF e
+  testi) e con **Aggiorna le flashcard** l'assistente crea le carte nuove agganciandole all'albero, corregge
+  quelle superate e ti chiede quali eliminare;
+- il materiale ha l'etichetta **aggiornato** finché non lo apri, aggiorni le flashcard, fai ⋯ → *Segna come visto*,
+  o al massimo per 3 giorni. Le novità restano consultabili aprendolo fino alla versione successiva.
 
 ## Selezione di più flashcard
 
@@ -149,7 +141,7 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   del set, .smmx compresi), aggiunge, modifica, sposta, copia (anche in un'altra mappa) ed elimina nodi; cambia
   testo (anche il grassetto o il corsivo di una sola parte), note, etichette, icone, date, caselle, stile (anche la
   dimensione in punti e la linea sotto il nodo), larghezza dei nodi, linee e loro curvatura, disposizioni, distanze
-  tra fratelli, griglia, tema e colori; crea, modifica, dà ai nodi ed elimina gli stili predefiniti; crea raccordi
+  tra fratelli (anche solo tra alcuni nodi), allineamento dei nodi liberi, griglia, tema e colori; crea, modifica, dà ai nodi ed elimina gli stili predefiniti; crea raccordi
   con linee o graffa e figli comuni, collegamenti tra rami e temi personali; decide l'ordine delle mappe; seleziona
   nodi, si concentra su un ramo, esporta in PNG, OPML o testo. Prima di eliminare nodi collegati a flashcard lo dice.
   Non aggiunge immagini e non mette a mano i singoli punti di passaggio delle linee (usa la curvatura). Strumenti in
@@ -272,19 +264,23 @@ nel menu c'è anche la cronologia dei ripassi.
 
 **Pannello «Per flashcard»** (nella sezione Revisioni e nella pagina di ogni set). Ogni carta ha la stessa ripetizione
 del set (vedi *Ripetizione spaziata*), con il suo N° Rep. Il pannello mostra **tutte** le flashcard, nell'ordine dei set,
-con la colonna **Rispetto al set**: *Al passo con il set*, *Set mai ripassato*, *Mai valutata*, *Scarso: da rifare*,
-oppure *N giorni prima / dopo il set* (con *(Ok)* se è stata valutata Ok). **Solo sfasate** lascia le carte dei set già
-ripassati che non vanno al passo con il loro set (o mazzo), le più urgenti prima: mai ripassate (aggiunte dopo) o
-con la prossima revisione in un giorno diverso da quella del set (valutate Ok o Scarso, ripassate per conto loro,
-cambiate a mano). Si modificano come le righe (valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione),
+con la colonna **Rispetto al mazzo** (il set è il contenitore delle flashcard nella Libreria; il mazzo è la riga delle
+Revisioni che la carta segue: di solito quella con tutte le carte del set): *Al passo con il mazzo*, *Mazzo mai
+ripassato*, *Valutata, mazzo mai ripassato*, *Mai valutata*, *Scarso: da rifare*, oppure *N giorni prima / dopo il
+mazzo* (con *(Ok)* se è stata valutata Ok). **Solo sfasate** lascia le carte che non vanno al passo con il loro mazzo,
+le più urgenti prima: mai ripassate (aggiunte dopo), con la prossima revisione in un giorno diverso da quella del mazzo
+(valutate Ok o Scarso, ripassate per conto loro, cambiate a mano) e quelle **già valutate di un mazzo mai ripassato**
+(per esempio 2 carte su 40 valutate in un ripasso lasciato a metà: hanno già il loro N° Rep, il mazzo è ancora a 0).
+Le carte mai valutate di un mazzo mai ripassato restano fuori: sono nuove come lui.
+Si modificano come le righe (valutazione, N° Rep, ultimo ripasso, intervallo, prossima revisione),
 ⚡ ripassa una carta, **Ripassa le sfasate da fare** le prende tutte, **Studio libero** ti fa scegliere cosa studiare. Il ripasso dal pannello non conta come ripasso del set, ma aggiorna le carte. Una carta torna al passo
-quando la valuti Buono o Perfetto nel ripasso completo del set. **Riadegua al set** (nella riga) lo fa subito: la carta
+quando la valuti Buono o Perfetto nel ripasso completo del mazzo. **Riadegua al mazzo** (nella riga) lo fa subito: la carta
 prende ultimo ripasso e intervallo del set (la stessa prossima revisione) ed esce dall'elenco, anche se è Scarso o mai
 valutata; valutazione e N° Rep restano i suoi (quindi lo stato del set non cambia). Si annulla dall'avviso.
 **Carte in più mazzi.** Una flashcard sta sempre in un solo set, ma può stare in più mazzi dello stesso
 set: la riga di tutto il set e quelli con alcune flashcard. Ha una sola data, quindi **segue un mazzo solo**: quello
 scelto con *Riadegua…*, se no il primo mazzo con alcune flashcard che la contiene (già ripassato), se no la riga del set.
-Si allinea solo al mazzo che segue, e *Solo sfasate* guarda lui. La colonna *Rispetto al set* lo nomina («2 giorni
+Si allinea solo al mazzo che segue, e *Solo sfasate* guarda lui. La colonna *Rispetto al mazzo* lo nomina («2 giorni
 prima di «Mazzo A»») e sotto, più piccolo, dice come sta rispetto agli altri mazzi (*anche in «Bowlby» (tutto il set):
 al passo*). In questi casi il pulsante diventa **Riadegua…** e fa scegliere il mazzo: la carta prende la sua data e da
 lì in poi segue lui (`srs.segue`). Quando scegli le flashcard di un mazzo, l'app avvisa se alcune sono già in un altro
@@ -300,7 +296,7 @@ mazzo con alcune carte.
   Rep dei set) o di prova.
 - **Filtri** (sezione Revisioni, sopra la tabella, in *Per set* e in *Per flashcard*): **Set** (uno o più),
   **Stato** (Revisione: in ritardo, da fare oggi, in attesa, mai ripassati; nei set lo Stato, nelle flashcard la
-  Valutazione e *Rispetto al set*; dentro un gruppo basta una scelta, tra gruppi servono tutte), **Ordina** per
+  Valutazione e *Rispetto al mazzo*; dentro un gruppo basta una scelta, tra gruppi servono tutte), **Ordina** per
   prossima revisione, ultimo ripasso, intervallo, N° Rep, nome, set, stato, in ordine **crescente o decrescente** (le
   righe senza quel dato vanno in fondo), **Colonne** da nascondere (la prima resta). Accanto compare *N di M* e
   **Azzera filtri**. I filtri valgono finché l'app è aperta; ordine e colonne nascoste restano in questo browser.
@@ -342,7 +338,9 @@ mappe e nella barra dell'editor ha l'etichetta *d'insieme*. Se la elimini, nell'
 **Crea «link argomenti»** per ricrearla (i nodi tornano dalle mappe della materia; aspetto e aggiunte fatte lì no).
 
 La **freccia indietro** dell'editor torna alla pagina da cui si è aperta la mappa (per esempio i materiali del set o la
-«link argomenti»), come il tasto Indietro; dallo studio o senza pagina precedente va all'elenco delle mappe.
+«link argomenti»), come il tasto Indietro; senza pagina precedente va all'elenco delle mappe. Aperta dallo studio
+(*Apri nell'editor* dalla parte di mappa della risposta, o *Apri la mappa* da un materiale) la freccia diventa **Torna al
+ripasso** e riporta alla stessa carta: il ripasso continua (vedi *Studio: frecce e mappe*).
 
 L'editor (rotta `#/mappa/<id>`):
 
@@ -384,6 +382,12 @@ L'editor (rotta `#/mappa/<id>`):
 - **Più nodi scelti**: in alto al centro della mappa compare una barra ferma (non copre i nodi che stai scegliendo)
   con **Disposizione** (la disposizione dei figli di tutti i nodi scelti, in un colpo solo e con un solo Ctrl+Z; se c'è
   la radice cambia quella della mappa), Flashcard, Figlio comune e Graffa.
+- **Allinea** (nella stessa barra, quando tra i nodi scelti ce n'è almeno uno in disposizione libera: figlio di un nodo
+  con disposizione libera, o nodo libero): tre pulsanti per mettere i nodi con lo stesso **bordo sinistro**, lo stesso
+  **centro** o lo stesso **bordo destro**, come stanno i fratelli nella disposizione orizzontale; l'altezza non cambia e
+  ogni ramo segue il suo nodo (un solo Ctrl+Z). Se tra i nodi scelti ce ne sono che non si spostano a mano (la radice,
+  nodi in una disposizione automatica) gli altri si allineano a loro; se no al riquadro che li contiene tutti. I
+  fratelli non scelti restano dove sono. Lo fa anche l'assistente (`allinea_nodi`).
 - **Figlio comune e graffa**: dalla barra dei nodi scelti (anche nel menu del nodo).
   **Figlio comune** crea un nodo collegato a tutti: se i nodi sono fratelli il nuovo nodo sta oltre di loro, a
   metà della loro altezza, con una linea da ognuno; se non lo sono sta sotto il primo scelto e gli altri hanno una
@@ -409,11 +413,12 @@ L'editor (rotta `#/mappa/<id>`):
   collegamento, rispetto ai centri dei due nodi): il loro testo sta a metà e trascinandolo si sposta il punto di
   mezzo. Le linee piegate col vecchio sistema (un solo punto, `piega` / `curva`) diventano una linea con un punto
   appena le tocchi.
-- **Pannelli** (barra in alto):
-  - **Disposizione**: orizzontale, verticale, capovolta, lineare, radiale, libera; rami a destra/sinistra/automatici;
-    **Distanze**: spazio tra tutti i nodi, **distanza tra fratelli** (i nodi uno sotto l'altro, 20%-600%) e, con un
-    nodo scelto che ha più figli, la distanza solo tra i suoi figli (`spaziaturaFratelli` sulla mappa,
-    `distanzaFigli` sul nodo); la griglia di allineamento.
+- **Pannelli** (barra in alto). Niente testi di spiegazione: solo i comandi (i dettagli stanno nei suggerimenti al
+  passaggio del mouse).
+  - **Disposizione**, in quattro sezioni: *Disposizione della mappa* (orizzontale, verticale, capovolta, lineare,
+    radiale, libera; rami a destra/sinistra/automatici); *Distanze globali*, che cambiano tutta la mappa (spazio tra
+    tutti i nodi, **distanza tra fratelli**, 20%-1200%, `spaziatura` e `spaziaturaFratelli`); *Distanze tra nodi
+    selezionati* (**tra i nodi scelti**, vedi sotto; spento se non ci sono nodi da distanziare); *Griglia di allineamento*.
   - **Tema e linee**: 4 temi di serie e quelli tuoi, creati con **Nuovo tema** partendo dall'aspetto della mappa e
     salvati nelle impostazioni (validi per tutte le mappe); linee della mappa (forma, affusolamento, spessori).
   - **Stile**, in quest'ordine: *Stili predefiniti*; *Testo* (B I U S, **dimensione in punti** come in Word, con
@@ -421,8 +426,41 @@ L'editor (rotta `#/mappa/<id>`):
     **Ramo** e **Riempimento**, ognuno con il suo campione: un clic apre la tavolozza); *Forma e bordo* (con la forma
     sottolineata, la **linea sotto il nodo**: colore, tratto e spessore solo suoi, senza toccare le linee verso il
     genitore e i figli — `stile.sottolineatura { colore, tratto, spessore }`); *Linea verso il nodo padre*;
-    *Dimensioni del nodo*; copia/incolla stile e stile del tema.
+    *Dimensioni del nodo*; copia/incolla stile e stile del tema (tutto lo stile del nodo, anche quello predefinito).
   - Icone, Nota (con link, data, casella da spuntare, immagini), Struttura (elenco rientrato).
+  - In tutti i pannelli i **titoli delle sezioni** sono ben leggibili e un clic sul titolo (con la freccia: giù =
+    aperta, a destra = chiusa) chiude o riapre la sezione. L'app ricorda quali hai chiuso, in tutte le mappe (in questo
+    browser: `flashcard-mappe-sezioni-chiuse` in localStorage).
+  - **Reset** nel titolo delle sezioni con dei valori da regolare: li riporta a quelli predefiniti (un Ctrl+Z lo
+    annulla, tranne la griglia che non entra nella storia). Il pulsante è spento se i valori sono già quelli.
+    Per la mappa valgono i valori di una mappa nuova, per i nodi scelti quelli del tema (o del loro stile predefinito):
+
+    | Sezione | Reset |
+    |---|---|
+    | Disposizione della mappa | orizzontale, rami principali automatici (anche quelli spostati a mano da un lato) |
+    | Distanze globali | spazio tra tutti i nodi 100%, distanza tra fratelli 100% |
+    | Distanze tra nodi selezionati | gli spazi tra i nodi scelti tornano come gli altri (100%) |
+    | Griglia di allineamento | spenta, passo 20 px |
+    | Tema | tema Naturale, senza colori e livelli propri della mappa (anche le linee) |
+    | Linee della mappa | le linee del tema |
+    | Testo (nodi scelti) | carattere, dimensione, allineamento e colori del tema |
+    | Forma e bordo (nodi scelti) | forma, bordo e linea sotto il nodo del tema |
+    | Linea verso il nodo padre / Linea | linea del tema, senza curve né punti di passaggio |
+    | Dimensioni del nodo | larghezza automatica, senza minimi |
+
+    Anche **Distanza** nella barra dei nodi scelti ha il suo Reset. Nel codice: `RESET` in
+    `js/mappe/editor.js`.
+- **Distanza tra i nodi scelti** (pannello Disposizione → Distanze tra nodi selezionati, oppure **Distanza** nella barra
+  dei nodi scelti): scegli due o più nodi e il cursore (20%-1200%; 100% = come gli altri fratelli) cambia **solo lo
+  spazio tra loro**, non tra tutti i fratelli. I nodi restano allineati come vuole la disposizione (per esempio nella
+  stessa colonna) e i loro rami li seguono, come se li spostassi nella disposizione libera. Con A e C scelti e B in
+  mezzo cambiano sia A–B sia B–C. Con nodi di padri diversi (per esempio l'ultimo figlio di un nodo e il primo del nodo
+  sotto) si allontanano i rami che li contengono, padri compresi. Vale nelle disposizioni orizzontale, verticale,
+  capovolta e lineare (nella radiale e nella libera i nodi si trascinano); ai due lati della radice, tra nodi dello
+  stesso lato. **Reset** rimette lo spazio normale; un solo Ctrl+Z. Nel modello: `distanzaPrima` sul nodo = distanza
+  dal fratello che gli sta prima nella sua pila (moltiplica quella normale). Ha preso il posto del cursore «Solo tra i
+  figli di…»: le mappe che lo usavano sono state convertite all'apertura con gli stessi spazi (`distanzaFigli` →
+  `distanzaPrima` sui figli). Lo fa anche l'assistente (`distanza_tra_nodi`).
 - **Stili predefiniti** (pannello Stile, in cima): stili tuoi da dare ai nodi con un clic, per esempio «Dettaglio»
   piccolo e grigio. **Nuovo** salva lo stile del nodo scelto con un nome; **Aggiorna** lo sostituisce con quello del
   nodo (e cambiano tutti i nodi che lo usano, in tutte le mappe); *Togli* lo stacca dai nodi scelti. Dal menu di uno
@@ -450,6 +488,22 @@ L'editor (rotta `#/mappa/<id>`):
 - **Assistente** (✨ nella barra): fa sulla mappa tutto quello che fai tu, vedi *Assistente IA*.
 - Annulla/Ripeti hanno una storia propria (le modifiche dell'assistente passano anche da `js/storia.js`); il salvataggio è
   automatico mezzo secondo dopo ogni modifica.
+
+## Studio: frecce e mappe
+
+- **Frecce ‹ ›** ai lati dei pulsanti (anche con i tasti ← →), come in Vaia. **‹** torna alle carte già valutate in
+  questa sessione, una alla volta: si vedono domanda e risposta (con la parte di mappa), la valutazione data è
+  evidenziata e se ne può scegliere un'altra (anche con 1-4). La nuova **prende il posto** di quella data allora: N° Rep,
+  date, coda della sessione (una Ok che diventa Buono esce dalla coda, una Buono che diventa Ok ci torna in fondo),
+  revisioni del set e statistiche sono come se avessi scelto subito quella. Una carta valutata più volte si rivaluta
+  solo dall'ultima volta (le volte prima si possono solo rivedere). **›** va avanti fino alla carta di adesso (o *Torna
+  alla carta di adesso*, Invio), che si ritrova com'era, anche con la risposta già visibile; sulla carta di adesso **›
+  la salta**: va in fondo alla coda senza valutazione.
+- **Mappe aperte dallo studio** (*Apri nell'editor* nella vista grande della parte di mappa, *Apri la mappa* da un
+  materiale): lo studio resta in sospeso e nell'editor la freccia indietro diventa **Torna al ripasso**: si torna alla
+  stessa carta, nella stessa fase (risposta visibile), e il ripasso continua senza ripartire da capo né richiedere
+  «effettivo o di prova». Se dalla mappa vai da un'altra parte, il ripasso si chiude come con ✕ (le revisioni dei set
+  si aggiornano e un avviso dice com'è andata). Lo stesso se lasci lo studio con il tasto Indietro del browser.
 
 ## Domande ad albero e studio a cascata
 
@@ -559,11 +613,13 @@ Le formule sono in `js/srs.js` (carte) e `js/revisioni.js` (set, stato dalle car
 
 ```
 index.html              guscio: barra laterale, barra inferiore, icone, ordine degli script
-server.py               server locale senza cache (avviato da Flashcard.bat) e lettura delle cartelle collegate
+manifest.json, icone/   nome e icona dell'app (scheda del browser, schermata Home di Android e iPhone)
+server.py               server locale senza cache (avviato da Flashcard.bat) e apertura dei materiali con il loro programma
 css/stile.css           colori (chiaro e scuro) e tutti gli stili, divisi per sezione
 css/mappe.css           stili della sezione Mappe e del suo editor
 js/utili.js             date, testo, file
-js/archivio.js          unico accesso a IndexedDB (cache in memoria + scrittura su disco)
+js/archivio.js          unico accesso a IndexedDB (cache in memoria + scrittura su disco), agganci per il cloud
+js/cloud.js             accesso Google e sincronizzazione con Firebase (Firestore + Cloud Storage), configurazione
 js/srs.js               ripetizione spaziata: sequenza degli intervalli, ritardi e anticipi, valutazioni (carte e revisioni)
 js/dati.js              modello dei dati: materie, set e sotto-set, carte ad albero, ripassi, esami
 js/router.js            navigazione con l'indirizzo dopo il #
@@ -581,7 +637,6 @@ js/importa.js           import ed export (testo dell'app, Excel, CSV) e backup J
 js/prova.js             dati di prova: un set per ogni scenario delle revisioni, con storico coerente
 js/localizzazione.js    la creazione flashcard per profondità (piano e controlli)
 js/materiali.js         materiali dei set: lettura dei file, novità tra versioni, visualizzatore, sezione nel set
-js/cartelle.js          cartelle e file collegati ai set (Drive per desktop), ricontrollati ogni 5 secondi
 js/mappe/modello.js     mappe mentali: dati, temi, stile dei nodi, operazioni sui rami
 js/mappe/disposizione.js disposizioni (fasce senza sovrapposizioni) e forma dei collegamenti
 js/mappe/importa.js     import da SimpleMind (.smmx), OPML e testo; export OPML
@@ -595,7 +650,35 @@ js/ia/istruzioni.js     istruzioni di sistema dell'assistente
 js/ia/assistente.js     pannello della chat e ciclo agente
 js/viste/*.js           una vista per schermata
 js/app.js               avvio
+firebase.json           pubblicazione (cartella public/, niente cache vecchie) e regole
+firestore.rules         chi può leggere e scrivere i dati: solo il tuo account Google
+storage.rules           lo stesso per i file in Cloud Storage
+cors.json               permette al sito (e a localhost:8010) di scaricare i file da Cloud Storage
+copia-in-public.js      prima di ogni "firebase deploy" copia index.html, manifest.json, css/, js/ e icone/ in public/
 ```
 
-Per un futuro passaggio al cloud (come per Allenamento con Firebase) basta agganciarsi
-a `Archivio.alCambio()`: il resto dell'app non tocca mai il database direttamente.
+## Cloud (Firebase)
+
+Come per Allenamento: il sito è su Firebase Hosting, i dati in Firestore, i file dei materiali in Cloud Storage.
+Come crearlo e pubblicarlo: [ISTRUZIONI-FIREBASE.md](ISTRUZIONI-FIREBASE.md). Il codice è in `js/cloud.js`; finché
+la configurazione lì dentro non è compilata l'app funziona come prima, solo nel browser.
+
+- **Accesso**: l'app si apre solo dopo l'accesso con l'account Google scritto nelle regole (`firestore.rules`,
+  `storage.rules`). Un altro account viene rifiutato. Un browser già verificato si apre subito, anche senza rete.
+  **Impostazioni → Cloud → Esci** blocca di nuovo la pagina.
+- **Sincronizzazione**: ogni modifica parte da sola dopo un attimo (una carta, un ripasso, un argomento… sono
+  documenti separati) e arriva sugli altri dispositivi aperti in pochi secondi; la pagina si ridisegna da sola,
+  tranne durante lo studio e negli editor (si aggiornano quando li lasci; la mappa aperta si aggiorna subito).
+  Senza rete le modifiche restano in coda, anche chiudendo l'app, e partono quando torna.
+- **Conflitti**: se lo stesso elemento cambia su due dispositivi vince l'ultima modifica inviata; se qui c'è una
+  modifica non ancora partita, vince quella di qui.
+- **File dei materiali**: salgono in Cloud Storage; su un altro dispositivo si scaricano la prima volta che li apri
+  e poi restano lì. Il backup li scarica tutti prima di esportare.
+- **Restano su ogni dispositivo**: la chiave di Gemini, le Modifiche recenti (Annulla), le preferenze della vista
+  in localStorage (colonne, sezioni aperte, filtri, larghezza del pannello).
+- **Primo accesso da un dispositivo**: se il cloud è vuoto ci salgono i dati di qui; se qui non c'è niente si
+  scaricano quelli del cloud; se ci sono da entrambe le parti l'app chiede: *Usa quelli del cloud* (sostituisce
+  quelli di qui) oppure *Unisci* (sale quello che c'è solo qui; sugli elementi uguali vince il cloud).
+- **Ripristina backup** ed **Elimina tutto** valgono anche nel cloud e sugli altri dispositivi (la conferma lo dice).
+- Un elemento oltre 900 KB (una mappa con molte immagini, una chat lunghissima) va in Cloud Storage invece che nel
+  database, da solo.

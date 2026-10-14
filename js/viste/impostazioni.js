@@ -1,4 +1,4 @@
-// Impostazioni e profilo: nome, ritmo di studio, tema, backup e gestione dei dati.
+// Impostazioni e profilo: cloud, nome, ritmo di studio, tema, backup e gestione dei dati.
 // Ogni modifica si salva da sola.
 
 Viste.impostazioni = {
@@ -26,6 +26,22 @@ Viste.impostazioni = {
         el.innerHTML = `
             <div class="pagina pagina-stretta">
                 <header class="pagina-testa"><h1>Impostazioni</h1></header>
+
+                ${Cloud.attivo ? `
+                <section class="riquadro gruppo-impostazioni" id="impostazioni-cloud">
+                    <h3>${ico('nuvola')}Cloud</h3>
+                    <div class="impostazione">
+                        <span><b>Account</b><small data-cloud-email></small></span>
+                        <button type="button" class="btn btn-fantasma" data-azione="cloud-esci">${ico('esci')}Esci</button>
+                    </div>
+                    <div class="impostazione">
+                        <span><b>Sincronizzazione</b><small class="stato-cloud"><i class="pallino-cloud" data-cloud-pallino></i><span data-cloud-stato></span></small></span>
+                        <button type="button" class="btn btn-secondario" data-azione="cloud-sincronizza">${ico('sincronizza')}Sincronizza ora</button>
+                    </div>
+                    <p class="nota">Le modifiche partono da sole e arrivano sugli altri dispositivi in pochi secondi; senza rete restano qui e partono
+                        quando torna. I file dei materiali si scaricano su un dispositivo la prima volta che li apri. Restano solo su questo
+                        dispositivo la chiave di Gemini, le Modifiche recenti (Annulla) e le preferenze della vista (colonne, sezioni aperte, filtri).</p>
+                </section>` : ''}
 
                 <section class="riquadro gruppo-impostazioni">
                     <h3>${ico('stella')}Profilo</h3>
@@ -175,8 +191,8 @@ Viste.impostazioni = {
                     </table>
                 </section>
 
-                <p class="nota nota-centrata">I dati sono salvati in questo browser${Archivio.soloMemoria ? ' — <b class="testo-pericolo">ATTENZIONE: il salvataggio non funziona, i dati andranno persi alla chiusura</b>' : ''}.
-                    Fai un backup ogni tanto: è l'unica copia di sicurezza.</p>
+                <p class="nota nota-centrata">${Cloud.attivo ? 'I dati sono salvati in questo browser e nel cloud, uguali su tutti i tuoi dispositivi' : 'I dati sono salvati in questo browser'}${Archivio.soloMemoria ? ' — <b class="testo-pericolo">ATTENZIONE: il salvataggio non funziona, i dati andranno persi alla chiusura</b>' : ''}.
+                    ${Cloud.attivo ? 'Un backup ogni tanto resta una buona idea: è una copia che tieni tu.' : "Fai un backup ogni tanto: è l'unica copia di sicurezza."}</p>
             </div>`;
 
         // Assistente IA: chiave e modello stanno in localStorage, non nell'archivio
@@ -258,6 +274,17 @@ Viste.impostazioni = {
             segnaTema(b.dataset.valore);
         });
 
+        // Stato del cloud, aggiornato finché la pagina è aperta
+        const disegnaCloud = () => {
+            const box = $('#impostazioni-cloud', el);
+            if (!box || !document.contains(box)) { document.removeEventListener('cloud-stato', disegnaCloud); return; }
+            const s = Cloud.stato();
+            $('[data-cloud-email]', box).textContent = s.email ? `Accesso fatto come ${s.email}` : 'Accesso in corso…';
+            $('[data-cloud-stato]', box).textContent = Cloud.descrizione();
+            $('[data-cloud-pallino]', box).dataset.livello = Cloud.livello();
+        };
+        if (Cloud.attivo) { document.addEventListener('cloud-stato', disegnaCloud); disegnaCloud(); }
+
         Archivio.spazioUsato().then(stima => {
             const box = $('[data-spazio]', el);
             if (!box) return;
@@ -268,6 +295,8 @@ Viste.impostazioni = {
 
         Ui.collegaAzioni(el, {
             importa: () => Importa.apriDialogo(),
+            'cloud-esci': () => Cloud.esci(),
+            'cloud-sincronizza': () => { Cloud.sincronizzaOra(); Ui.toast('Sincronizzo…', 'info', 1500); },
             backup: async () => { await Importa.esportaBackup(); App.ridisegna(); },
             storia: () => Storia.elenco(),
             guida: () => Guida.apri(),
@@ -313,7 +342,7 @@ Viste.impostazioni = {
                 if (ok) { Tour.esci(); DatiProva.rimuovi(); App.ridisegna(); }
             },
             'elimina-tutto': async () => {
-                const ok = await Ui.conferma('Cancelli <b>tutto</b>: materie, set, flashcard, statistiche ed esami. Se non hai un backup non potrai recuperarli.',
+                const ok = await Ui.conferma(`Cancelli <b>tutto</b>: materie, set, flashcard, statistiche ed esami${Cloud.attivo ? ', <b>anche nel cloud e sugli altri dispositivi</b>' : ''}. Se non hai un backup non potrai recuperarli.`,
                     { titolo: 'Eliminare tutti i dati?', ok: 'Elimina tutto', pericolo: true });
                 if (!ok) return;
                 const tema = Dati.impostazioni().tema;

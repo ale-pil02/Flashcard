@@ -567,26 +567,32 @@ const Revisioni = (() => {
 
     // ---- Flashcard che vanno per conto loro --------------------------------------------
 
-    // Come sta una carta rispetto al suo argomento (il set, già ripassato almeno una volta):
-    // { tipo, giorni, testo } con tipo 'senza-set' (set mai ripassato) | 'passo' (stessa prossima revisione) |
-    // 'mai' (mai valutata) | 'scarso' (da rifare) | 'prima' | 'dopo' (la sua prossima revisione cade N giorni prima o dopo)
-    // Se la carta sta in più mazzi, altri = come sta rispetto a quelli che non segue: [{ a, giorni, testo }]
+    // Come sta una carta rispetto al suo mazzo (già ripassato almeno una volta):
+    // { tipo, giorni, testo } con tipo 'senza-set' (mazzo mai ripassato, carta mai valutata: tutte e due da cominciare) |
+    // 'avanti' (mazzo mai ripassato, ma la carta è già stata valutata: va per conto suo) | 'passo' (stessa prossima
+    // revisione) | 'mai' (mai valutata) | 'scarso' (da rifare) | 'prima' | 'dopo' (la sua prossima revisione cade N giorni
+    // prima o dopo). Se la carta sta in più mazzi, altri = come sta rispetto a quelli che non segue: [{ a, giorni, testo }]
     function sfasatura(c, a = argomentoDi(c)) {
-        if (!a) return { tipo: 'senza-set', giorni: 0, testo: 'Set mai ripassato', altri: [] };
         const s = c.srs || {};
+        if (!a) {
+            const v = Srs.valutazione(c);
+            if (v == null) return { tipo: 'senza-set', giorni: 0, testo: 'Mazzo mai ripassato', altri: [] };
+            if (v === Srs.SCARSO) return { tipo: 'scarso', giorni: 0, testo: 'Scarso: da rifare · mazzo mai ripassato', altri: [] };
+            return { tipo: 'avanti', giorni: 0, testo: `Valutata, mazzo mai ripassato${v === Srs.OK ? ' (Ok)' : ''}`, altri: [] };
+        }
         if (Srs.valutazione(c) == null && !s.allineata) return { tipo: 'mai', giorni: 0, testo: 'Mai valutata', altri: [] };
         const p = Srs.prossima(c);
         const scarto = x => (p ? giorniTra(prossima(x), p) : 0);
         const setIntero = !Array.isArray(a.carte);
         const nome = x => `«${x.nome || nomeSet(x.setId)}»`;
         const g = scarto(a);
-        const quanto = g ? `${plurale(Math.abs(g), 'giorno', 'giorni')} ${g < 0 ? (setIntero ? 'prima del set' : `prima di ${nome(a)}`) : (setIntero ? 'dopo il set' : `dopo ${nome(a)}`)}` : '';
+        const quanto = g ? `${plurale(Math.abs(g), 'giorno', 'giorni')} ${g < 0 ? (setIntero ? 'prima del mazzo' : `prima di ${nome(a)}`) : (setIntero ? 'dopo il mazzo' : `dopo ${nome(a)}`)}` : '';
         const altri = mazziDi(c).filter(x => x !== a).map(x => {
             const d = scarto(x);
             return { a: x, giorni: d, testo: `anche in ${nome(x)}${Array.isArray(x.carte) ? '' : ' (tutto il set)'}: ${d ? `${plurale(Math.abs(d), 'giorno', 'giorni')} ${d < 0 ? 'prima' : 'dopo'}` : 'al passo'}` };
         });
         if (s.ultimaValutazione === Srs.SCARSO) return { tipo: 'scarso', giorni: Math.abs(g), testo: `Scarso: da rifare${quanto ? ` · ${quanto}` : ''}`, altri };
-        if (!g) return { tipo: 'passo', giorni: 0, testo: setIntero ? 'Al passo con il set' : `Al passo con ${nome(a)}`, altri };
+        if (!g) return { tipo: 'passo', giorni: 0, testo: setIntero ? 'Al passo con il mazzo' : `Al passo con ${nome(a)}`, altri };
         return { tipo: g < 0 ? 'prima' : 'dopo', giorni: Math.abs(g), testo: `${quanto}${s.ultimaValutazione === Srs.OK ? ' (Ok)' : ''}`, altri };
     }
 
@@ -597,7 +603,8 @@ const Revisioni = (() => {
         return { carta: c, argomento: a, ripetizioni: s.rep || 0, intervallo: s.giorno ? Srs.intervalloDi(s.intervallo, s.rep) : null, ultimoRipasso: s.giorno || null, sfasatura: sfasatura(c, a) };
     }
 
-    // Sfasata: non va al passo con il set già ripassato (mai valutata, Scarso, prossima revisione in un altro giorno)
+    // Sfasata: non va al passo con il suo mazzo già ripassato (mai valutata, Scarso, prossima revisione in un altro
+    // giorno), oppure è già stata valutata mentre il suo mazzo non è mai stato ripassato
     function sfasata(v) { return !['passo', 'senza-set'].includes(v.sfasatura.tipo); }
 
     // Tutte le flashcard (di una materia, di alcuni set o di tutti), nell'ordine dei set e dell'albero delle carte
@@ -606,8 +613,8 @@ const Revisioni = (() => {
         return carte.map(voceCarta);
     }
 
-    // Le carte dei set già ripassati che non vanno al passo con il loro set. Tornano con lui quando le ripassi Buono o
-    // Perfetto in un ripasso completo del set, o subito con "Riadegua al set"
+    // Le carte che non vanno al passo con il loro mazzo (anche quelle già valutate di un mazzo mai ripassato). Tornano
+    // con lui quando le ripassi Buono o Perfetto in un ripasso completo del mazzo, o subito con "Riadegua al mazzo"
     function carteDevianti(ambito = {}) { return tutteLeVoci(ambito).filter(sfasata); }
 
     function avviaRipassoCarte(voci, titolo) {
@@ -687,10 +694,10 @@ const Revisioni = (() => {
             avviso: { confronta: perUrgenza, vuoto: v => prossima(v) == null },
         },
     };
-    // Rispetto al set, dalla più lontana: N giorni prima … al passo … N giorni dopo
+    // Rispetto al mazzo, dalla più lontana: N giorni prima … al passo … N giorni dopo
     const ordineSfasatura = v => {
         const x = v.sfasatura;
-        return { prima: -x.giorni, passo: 0, dopo: x.giorni, scarso: 1e5, mai: 2e5, 'senza-set': 3e5 }[x.tipo] ?? 0;
+        return { prima: -x.giorni, passo: 0, dopo: x.giorni, scarso: 1e5, mai: 2e5, avanti: 2.5e5, 'senza-set': 3e5 }[x.tipo] ?? 0;
     };
 
     // ord = { colonna, verso: 1 crescente | -1 decrescente }; senza colonna resta l'ordine dato
@@ -1244,7 +1251,7 @@ const Revisioni = (() => {
         { col: 'carta', ordina: 'carta', testo: 'Flashcard', icona: 'carte', larghezza: 300 },
         { col: 'set', ordina: 'set', testo: 'Set', icona: 'cartella', larghezza: 160 },
         { col: 'stato', ordina: 'valutazione', testo: 'Valutazione', icona: 'obiettivo', larghezza: 122 },
-        { col: 'sfasatura', ordina: 'sfasatura', testo: 'Rispetto al set', icona: 'sincronizza', larghezza: 196 },
+        { col: 'sfasatura', ordina: 'sfasatura', testo: 'Rispetto al mazzo', icona: 'sincronizza', larghezza: 196 },
         { col: 'num', ordina: 'ripetizioni', testo: 'N° Rep', icona: 'elenco-num', larghezza: 64 },
         { col: 'data', ordina: 'ultimo', testo: 'Ultimo ripasso', icona: 'calendario', larghezza: 134 },
         { col: 'intervallo', ordina: 'intervallo', testo: 'Intervallo', icona: 'ruota', larghezza: 92 },
@@ -1269,7 +1276,7 @@ const Revisioni = (() => {
         const p = prossima(v);
         const val = Srs.valutazione(c);
         const mai = !prossima(v);
-        // La data si sceglie solo per le carte che ne hanno una loro (valutate o al passo con il set)
+        // La data si sceglie solo per le carte che ne hanno una loro (valutate o al passo con il mazzo)
         const datata = Srs.prossima(c) != null;
         return `
             <tr data-id="${c.id}" class="${!mai && avviso(v).tipo === 'scaduto' ? 'scaduto' : ''}">
@@ -1295,7 +1302,7 @@ const Revisioni = (() => {
                         title="Ripassa questa flashcard" aria-label="Ripassa">${ico(v.ultimoRipasso === chiaveGiorno() ? 'spunta' : 'fulmine')}</button>
                     ${v.argomento && (sfasata(v) || v.sfasatura.altri.length) ? `<button type="button" class="btn btn-fantasma btn-piccolo btn-adegua" data-carta-adegua
                         title="${v.sfasatura.altri.length ? 'Scegli il mazzo da seguire: la flashcard prende ultimo ripasso e intervallo di quel mazzo (la stessa prossima revisione) e da lì in poi si allinea a lui; valutazione e N° Rep restano'
-                            : 'Riadeguamento al set: prende ultimo ripasso e intervallo del set (la stessa prossima revisione) e torna al passo; valutazione e N° Rep restano'}">${ico('sincronizza')}${v.sfasatura.altri.length ? 'Riadegua…' : Array.isArray(v.argomento.carte) ? 'Riadegua' : 'Riadegua al set'}</button>` : ''}
+                            : 'Riadeguamento al mazzo: prende ultimo ripasso e intervallo del mazzo (la stessa prossima revisione) e torna al passo; valutazione e N° Rep restano'}">${ico('sincronizza')}${v.sfasatura.altri.length ? 'Riadegua…' : Array.isArray(v.argomento.carte) ? 'Riadegua' : 'Riadegua al mazzo'}</button>` : ''}
                 </td>
             </tr>`;
     }

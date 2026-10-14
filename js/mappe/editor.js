@@ -24,11 +24,15 @@ Viste.mappa = {
         document.title = m.nome + ' · Flashcard';
         if (Mappe.aggiorna(m)) Archivio.salva('mappe', m);
         // La freccia indietro torna alla pagina da cui si è aperta la mappa, come il tasto Indietro (per esempio ai
-        // materiali del set, o alla "link argomenti"); senza pagina precedente, o se era lo studio (ripartirebbe da
-        // capo), va all'elenco delle mappe
+        // materiali del set, o alla "link argomenti"). Dallo studio torna alla stessa carta e il ripasso continua (la
+        // sessione resta sospesa: js/viste/studio.js); senza pagina precedente va all'elenco delle mappe
         const da = Router.precedente;
         const vista = da && (Router.analizza(da) || {}).vista;
-        this.editor = EditorMappa(el, m, { nodo: query.nodo || null, indietroStoria: !!vista && vista !== 'studio' });
+        const daStudio = vista === 'studio' && Viste.studio.haSospesa();
+        this.editor = EditorMappa(el, m, {
+            nodo: query.nodo || null, indietroStoria: !!vista && (vista !== 'studio' || daStudio),
+            titoloIndietro: daStudio ? 'Torna al ripasso' : null,
+        });
     },
 
     esci() {
@@ -56,7 +60,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         pannello: SOLA ? null : (() => { try { return localStorage.getItem(CHIAVE_PANNELLO) || null; } catch (e) { return null; } })(),
         passato: [], futuro: [], continua: null,
         cerca: { aperta: false, testo: '', trovati: [], indice: -1 },
-        appunti: null, stileCopiato: null, popDisp: null, popDispMulti: false, punto: null, focusLato: null,
+        appunti: null, stileCopiato: null, popDisp: null, popDispMulti: false, popDistanza: false, punto: null, focusLato: null,
     };
     const geo = new Map();          // id → riquadro disposto (x, y, w, h, dir, livello, colore, s = stile)
     const elementi = new Map();     // id → <div class="nodo">
@@ -72,7 +76,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     radiceEl.innerHTML = `
         <div class="editor-mappa${SOLA ? ' sola-lettura' : ''}">
             <header class="mappa-barra">
-                <a class="btn-icona mappa-btn" href="#/mappe" data-indietro title="${opzioni.indietroStoria ? 'Torna indietro' : 'Torna alle mappe'}" aria-label="Torna indietro">${ico('sinistra')}</a>
+                <a class="btn-icona mappa-btn${opzioni.titoloIndietro ? ' torna-ripasso' : ''}" href="#/mappe" data-indietro title="${esc(opzioni.titoloIndietro || (opzioni.indietroStoria ? 'Torna indietro' : 'Torna alle mappe'))}" aria-label="${esc(opzioni.titoloIndietro || 'Torna indietro')}">${ico('sinistra')}${opzioni.titoloIndietro ? `<span>${esc(opzioni.titoloIndietro)}</span>` : ''}</a>
                 <input class="mappa-nome" value="${esc(m.nome)}" maxlength="120" aria-label="Nome della mappa" spellcheck="false">
                 ${m.panoramica ? `<button type="button" class="chip chip-panoramica" data-a="panoramica" title="Mappa d'insieme della materia, tenuta dall'app">${ico('mappa')}d'insieme</button>` : ''}
                 <span class="mappa-salvato" data-salvato>Salvata</span>
@@ -171,6 +175,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         disegnaPresto();
         salvaPresto();
         aggiornaStoria();
+        aggiornaReset();
+    }
+
+    // I pulsanti Reset dei pannelli si accendono appena un valore non è più quello predefinito (anche mentre trascini)
+    function aggiornaReset() {
+        $$('[data-reset-sezione]', pannelloEl).forEach(b => { const r = RESET[b.dataset.resetSezione]; b.disabled = !(r && r.serve()); });
     }
 
     function annulla() {
@@ -336,7 +346,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 id, n, s, livello: i.livello, colore: i.colore, sotto: s.forma === 'sottolineata',
                 lato: !st.focus && n.genitore === m.radice ? n.lato : null, off: n.off || null, figli: [],
                 fx: n.genitore || id === m.radice ? null : n.x, fy: n.genitore || id === m.radice ? null : n.y,
-                modo: id === m.radice ? null : n.disposizione || null, fratelli: +n.distanzaFigli || null,
+                modo: id === m.radice ? null : n.disposizione || null, fratelli: +n.distanzaFigli || null, prima: +n.distanzaPrima || null,
             };
             tutti.push(b);
             if (!n.chiuso || SOLA) b.figli = n.figli.filter(f => m.nodi[f]).map(crea);
@@ -744,7 +754,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function seleziona(id, { aggiungi = false } = {}) {
         if (st.modifica) concludiModifica();
-        if (!aggiungi) { st.sel.clear(); st.popDispMulti = false; }
+        if (!aggiungi) { st.sel.clear(); st.popDispMulti = false; st.popDistanza = false; }
         st.punto = null;
         if (id && m.nodi[id]) {
             if (aggiungi && st.sel.has(id)) st.sel.delete(id); else st.sel.add(id);
@@ -811,6 +821,9 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function posizionaSopra() {
         if (!st.vista) return;
+        // Mentre trascini il cursore della distanza nella barra dei nodi scelti la barra resta com'è (ridisegnandola il
+        // cursore sparirebbe da sotto il puntatore); si aggiorna quando lo lasci
+        if (sopraEl.contains(document.activeElement) && document.activeElement.matches('[data-distanza-scelti]')) return;
         const z = st.vista.zoom;
         const parti = [];
         const b = st.attivo && st.sel.size === 1 && !st.modifica && !st.collegando ? geo.get(st.attivo) : null;
@@ -872,12 +885,21 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const scelti = !st.modifica && !st.collegando && st.sel.size > 1 ? [...st.sel].map(id => geo.get(id)).filter(Boolean) : [];
         if (scelti.length > 1) {
             const fratelli = sonoFratelli([...st.sel]);
+            const allineabili = daAllineare();
+            const distanziabili = bersagliDistanza().length > 0;
+            if (!distanziabili) st.popDistanza = false;
             parti.push(`<div class="mappa-pop pop-multipla in-alto" data-pop="multi">
                 <span class="pop-titolo">${st.sel.size} nodi</span>
+                ${allineabili ? `<span class="pop-allinea" title="${allineabili.fermi.length ? 'Allinea i nodi in disposizione libera a quelli che non si spostano (per esempio la radice)' : 'Allinea i nodi scelti tra di loro (l\'altezza non cambia)'}">
+                    <span class="pop-etichetta">Allinea</span>
+                    ${ALLINEAMENTI.map(([v, t]) => `<button type="button" data-allinea="${v}" title="Allinea ${t}" aria-label="Allinea ${t}">${iconaAllinea(v)}</button>`).join('')}
+                </span>` : ''}
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="figlio" title="Un nodo nuovo, figlio di tutti i nodi scelti">${ico('piu')}Figlio comune</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="graffa" ${fratelli ? 'title="Una graffa raccoglie i nodi scelti e li porta a un nodo nuovo"' : 'disabled title="La graffa raccoglie nodi con lo stesso genitore"'}><b class="segno-graffa">}</b>Graffa</button>
                 <button type="button" class="btn btn-secondario btn-piccolo" data-multi="flashcard" title="Le flashcard di questi nodi, scritte dall'IA">${ico('carte')}Flashcard</button>
                 <button type="button" class="btn btn-secondario btn-piccolo${st.popDispMulti ? ' attivo' : ''}" data-multi="disposizione" aria-expanded="${st.popDispMulti}" title="Disposizione dei figli di tutti i nodi scelti, in un colpo solo">${ico('ramo')}Disposizione</button>
+                ${distanziabili ? `<button type="button" class="btn btn-secondario btn-piccolo${st.popDistanza ? ' attivo' : ''}" data-multi="distanza" aria-expanded="${!!st.popDistanza}" title="Allontana o avvicina solo questi nodi: restano allineati e i loro rami li seguono">${iconaDistanza()}Distanza</button>` : ''}
+                ${st.popDistanza ? controlliDistanzaScelti(true) : ''}
                 ${st.popDispMulti ? griglieDisposizioneMulti() : ''}
             </div>`);
         }
@@ -1034,6 +1056,192 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         st.popDispMulti = false;
         posizionaSopra();
         Ui.toast(`Disposizione di ${plurale(ids.length, 'nodo', 'nodi')}: ${(SCELTE_NODO.find(x => x[0] === v) || ['', v])[1].toLowerCase()}`, 'successo', 2200);
+    }
+
+    // ---- Allineamento dei nodi scelti (disposizione libera) ------------------------------------------
+    // Si allineano i nodi che restano dove li si lascia: figli di un nodo in disposizione libera e nodi liberi. Come
+    // nella disposizione orizzontale, ma scegli tu: bordo sinistro, centro o bordo destro alla stessa x (l'altezza non
+    // cambia). Il riferimento sono i nodi scelti che non si possono spostare (la radice, o nodi in una disposizione
+    // automatica), se ce ne sono; altrimenti il riquadro che contiene tutti i nodi scelti. Ogni ramo segue il suo nodo.
+
+    const ALLINEAMENTI = [['sinistra', 'a sinistra'], ['centro', 'al centro'], ['destra', 'a destra']];
+
+    function siAllineaAMano(id) {
+        const n = m.nodi[id];
+        if (!n || id === m.radice || id === st.focus || !geo.has(id)) return false;
+        return !n.genitore || (geo.get(n.genitore) || {}).disp === 'libera';
+    }
+
+    // { mobili, fermi } tra i nodi scelti (o dati); null se non c'è niente da allineare
+    function daAllineare(ids = [...st.sel]) {
+        const scelti = ids.filter(id => geo.has(id));
+        const mobili = scelti.filter(siAllineaAMano);
+        if (!mobili.length || scelti.length < 2) return null;
+        return { mobili, fermi: scelti.filter(id => !mobili.includes(id)) };
+    }
+
+    function iconaAllinea(tipo) {
+        const [asse, x1, x2] = { sinistra: [2, 4, 4], centro: [10, 3, 5.5], destra: [18, 4, 8] }[tipo];
+        const [w1, w2] = tipo === 'centro' ? [14, 9] : [12, 8];
+        return `<svg class="icona-allinea" viewBox="0 0 20 18" aria-hidden="true"><rect x="${x1}" y="3" width="${w1}" height="4" rx="1.2" fill="currentColor" opacity=".8"/>
+            <rect x="${x2}" y="11" width="${w2}" height="4" rx="1.2" fill="currentColor" opacity=".8"/><path d="M${asse} 1 V17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    }
+
+    // Prepara l'allineamento dei nodi (quelli scelti, se non si dicono) dalle posizioni disegnate adesso:
+    // { mobili, mossi, applica } dove applica() cambia le posizioni nella mappa (dentro una modifica); null se non
+    // c'è niente da allineare. La usa anche l'assistente (js/ia/strumenti-mappe.js)
+    function preparaAllineamento(tipo, ids) {
+        const x = daAllineare(ids);
+        if (!x || !ALLINEAMENTI.some(a => a[0] === tipo)) return null;
+        const riquadro = lista => {
+            const bb = lista.map(id => geo.get(id));
+            return { x0: Math.min(...bb.map(b => b.x)), x1: Math.max(...bb.map(b => b.x + b.w)) };
+        };
+        const r = riquadro(x.fermi.length ? x.fermi : x.mobili);
+        const bersaglio = b => (tipo === 'sinistra' ? r.x0 + b.w / 2 : tipo === 'destra' ? r.x1 - b.w / 2 : (r.x0 + r.x1) / 2);
+        const centro = b => b.x + b.w / 2;
+        const mossi = x.mobili.filter(id => Math.abs(bersaglio(geo.get(id)) - centro(geo.get(id))) > 0.5).length;
+        // Dall'alto in basso: un nodo scelto sotto un altro nodo scelto si allinea rispetto a dove il padre è arrivato
+        const profondita = id => Mappe.antenati(m, id).length;
+        const ordinati = [...x.mobili].sort((a, b) => profondita(a) - profondita(b));
+        const posizioni = new Map(ordinati.map(id => [id, { ...geo.get(id) }]));
+        const padri = new Map([...new Set(ordinati.map(id => m.nodi[id].genitore).filter(Boolean))].map(pid => [pid, {
+            centro: Disposizione.centro(geo.get(pid)),
+            figli: m.nodi[pid].figli.filter(f => geo.has(f)).map(f => [f, Disposizione.centro(geo.get(f))]),
+        }]));
+        const applica = () => {
+            const spostamento = new Map();   // id → di quanto si sposta in orizzontale il suo centro
+            const spostamentoDi = id => {
+                for (let q = id; q; q = m.nodi[q] && m.nodi[q].genitore) if (spostamento.has(q)) return spostamento.get(q);
+                return 0;
+            };
+            // Nella disposizione libera i fratelli senza una posizione propria si mettono in colonna attorno a quelli
+            // fermi: prima di spostarne qualcuno si fermano dove sono, così non si muovono
+            padri.forEach((p, pid) => p.figli.forEach(([f, c]) => {
+                if (m.nodi[f] && m.nodi[f].genitore === pid && !m.nodi[f].off) m.nodi[f].off = { dx: c.x - p.centro.x, dy: c.y - p.centro.y };
+            }));
+            ordinati.forEach(id => {
+                const n = m.nodi[id], b = posizioni.get(id);
+                if (!n) return;
+                const dopo = bersaglio(b);
+                spostamento.set(id, dopo - centro(b));
+                if (!n.genitore) { n.x = dopo; return; }
+                const p = padri.get(n.genitore);
+                if (!p || !n.off) return;
+                const dx = dopo - (p.centro.x + spostamentoDi(n.genitore));
+                const primaDx = n.off.dx;
+                n.off = { dx, dy: n.off.dy };
+                // Passando dall'altra parte del padre il ramo si ribalta, come trascinandolo
+                if ((primaDx < 0) !== (dx < 0)) ribalta(id);
+            });
+        };
+        return { mobili: x.mobili, mossi, applica };
+    }
+
+    // ---- Distanza tra i nodi scelti (disposizioni automatiche) --------------------------------------
+    // Allarga (o stringe) solo lo spazio tra i nodi scelti, non tra tutti i fratelli: i nodi tengono l'allineamento della
+    // disposizione e i loro rami li seguono, come se li spostassi nella disposizione libera. Per ogni nodo che ha almeno
+    // due figli "toccati" dalla selezione (scelti loro o qualcuno sotto di loro) nella stessa pila, cambiano tutti gli
+    // spazi dal primo all'ultimo toccato: con A e C scelti e B in mezzo, sia A–B sia B–C. Con nodi di padri diversi si
+    // allontanano i rami che li contengono, padri compresi. Nel modello: distanzaPrima sul nodo = distanza dal fratello
+    // che gli sta prima nella sua pila (moltiplica quella normale). Radiale e libera no: lì i nodi si trascinano.
+
+    // I nodi a cui va la distanza dal fratello precedente ([] se tra i nodi scelti non c'è uno spazio da cambiare)
+    function bersagliDistanza(ids = [...st.sel]) {
+        const toccati = new Map();   // genitore → figli toccati dalla selezione
+        ids.filter(id => geo.has(id)).forEach(id => {
+            for (let x = id; m.nodi[x] && m.nodi[x].genitore && geo.has(m.nodi[x].genitore); x = m.nodi[x].genitore) {
+                const g = m.nodi[x].genitore;
+                if (!toccati.has(g)) toccati.set(g, new Set());
+                toccati.get(g).add(x);
+            }
+        });
+        const bersagli = [];
+        toccati.forEach((figli, g) => {
+            if (figli.size < 2 || !['orizzontale', 'verticale', 'su', 'lineare'].includes(geo.get(g).disp)) return;
+            // Le pile dei figli: a destra e a sinistra (la radice ai due lati), in riga, in elenco; i raccordi no
+            const pile = new Map();
+            m.nodi[g].figli.forEach(f => {
+                const b = geo.get(f);
+                if (!b || b.raccordo) return;
+                if (!pile.has(b.dir)) pile.set(b.dir, []);
+                pile.get(b.dir).push(b);
+            });
+            pile.forEach((lista, dir) => {
+                const asse = dir === 'giu' || dir === 'su' ? 'x' : 'y';
+                lista.sort((a, b) => a[asse] - b[asse]);
+                const dentro = lista.map((b, i) => (figli.has(b.id) ? i : -1)).filter(i => i >= 0);
+                if (dentro.length > 1) lista.slice(dentro[0] + 1, dentro[dentro.length - 1] + 1).forEach(b => bersagli.push(b.id));
+            });
+        });
+        return bersagli;
+    }
+
+    const distanzaDi = id => (+(m.nodi[id] || {}).distanzaPrima > 0 ? +m.nodi[id].distanzaPrima : 1);
+
+    function iconaDistanza() {
+        return `<svg class="ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2" width="12" height="4" rx="1.5" fill="currentColor"/><rect x="4" y="14" width="12" height="4" rx="1.5" fill="currentColor"/>
+            <path d="M10 7.5 V12.5 M7.8 9.2 L10 7.2 L12.2 9.2 M7.8 10.8 L10 12.8 L12.2 10.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+
+    function impostaDistanza(bersagli, v) {
+        bersagli.forEach(id => {
+            const n = m.nodi[id];
+            if (!n) return;
+            if (!(v > 0) || Math.abs(v - 1) < 0.01) delete n.distanzaPrima; else n.distanzaPrima = Math.round(limita(v, 0.2, 12) * 100) / 100;
+        });
+    }
+
+    // Il cursore "Tra i nodi scelti" (pannello Disposizione e barra dei nodi scelti)
+    function controlliDistanzaScelti(inBarra = false) {
+        const bersagli = bersagliDistanza();
+        if (!bersagli.length && inBarra) return '';
+        const valori = bersagli.map(distanzaDi);
+        const v = valori.length ? valori[0] : 1, diversi = valori.some(x => Math.abs(x - v) > 0.001);
+        const etichetta = bersagli.length ? `${Math.round(v * 100)}%${diversi ? ' (diverse)' : ''}` : '—';
+        if (inBarra) {
+            const via = valori.some(x => x !== 1) ? `<button type="button" class="btn btn-fantasma btn-piccolo" data-distanza-via title="Lo spazio tra questi nodi torna come quello tra gli altri fratelli (100%)">${ico('ruota')}Reset</button>` : '';
+            return `<div class="pop-distanza"><span>Distanza tra i nodi scelti</span>
+                <input type="range" min="0.2" max="12" step="0.1" value="${v}" data-distanza-scelti aria-label="Distanza tra i nodi scelti">
+                <b data-ds-valore>${etichetta}</b>${via}</div>`;
+        }
+        // Senza nodi da distanziare il cursore resta spento (il perché sta nel suggerimento al passaggio del mouse)
+        const perche = !bersagli.length ? (st.sel.size > 1 ? 'Nella disposizione radiale o libera i nodi si spostano trascinandoli; ai due lati della radice vale tra nodi dello stesso lato'
+            : 'Scegli due o più nodi (Ctrl+clic)') : '';
+        return `
+            <label class="campo campo-compatto${bersagli.length ? '' : ' spento'}"${perche ? ` title="${esc(perche)}"` : ''}><span>Tra i nodi scelti <b data-ds-valore>${etichetta}</b></span>
+                <input type="range" min="0.2" max="12" step="0.1" value="${v}" data-distanza-scelti ${bersagli.length ? '' : 'disabled'}></label>`;
+    }
+
+    function cursoreDistanza(t) {
+        const v = +t.value;
+        const bersagli = bersagliDistanza();
+        if (!bersagli.length) return;
+        $$('[data-ds-valore]', radiceEl).forEach(b => { b.textContent = Math.round(v * 100) + '%'; });
+        $$('[data-distanza-scelti]', radiceEl).forEach(x => { if (x !== t) x.value = v; });
+        modificaContinua('distanza:' + bersagli.join(), () => impostaDistanza(bersagli, v));
+    }
+
+    function distanzaComeGliAltri() {
+        const bersagli = bersagliDistanza();
+        if (bersagli.length) modifica(() => impostaDistanza(bersagli, 1));
+        aggiornaPannello(true);
+        posizionaSopra();
+    }
+
+    // Per l'assistente (js/ia/strumenti-mappe.js): { bersagli, applica(v) } con le posizioni disegnate adesso
+    function preparaDistanza(ids) {
+        const bersagli = bersagliDistanza(ids);
+        return bersagli.length ? { bersagli, applica: v => impostaDistanza(bersagli, v) } : null;
+    }
+
+    function allinea(tipo) {
+        const p = preparaAllineamento(tipo);
+        if (!p) return;
+        const nome = (ALLINEAMENTI.find(a => a[0] === tipo) || ['', ''])[1];
+        if (!p.mossi) { Ui.toast(`I nodi sono già allineati ${nome}`, 'info', 2200); return; }
+        modifica(p.applica);
+        Ui.toast(`${plurale(p.mossi, 'nodo allineato', 'nodi allineati')} ${nome}`, 'successo', 2200);
     }
 
     function popEtichetta(e, p) {
@@ -1881,7 +2089,39 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         pannelloEl.innerHTML = `
             <div class="pannello-testa"><h2>${titoli[st.pannello]}</h2>${pulsante('chiudi-pannello', ico('chiudi'), 'Chiudi il pannello')}</div>
             <div class="pannello-corpo">${corpo}</div>`;
+        sezioniApribili();
         pannelloEl.querySelector('.pannello-corpo').scrollTop = scorrimento;
+    }
+
+    // Sezioni dei pannelli che si aprono e chiudono con un clic sul titolo. Quelle chiuse restano chiuse in tutte le
+    // mappe (in questo browser): una sezione è "pannello:titolo"
+    const CHIAVE_SEZIONI = 'flashcard-mappe-sezioni-chiuse';
+    const sezioniChiuse = (() => { try { return JSON.parse(localStorage.getItem(CHIAVE_SEZIONI) || '{}') || {}; } catch (e) { return {}; } })();
+
+    function sezioniApribili() {
+        $$('.pannello-sezione', pannelloEl).forEach(sez => {
+            const h = sez.firstElementChild;
+            if (!h || h.tagName !== 'H3') return;
+            const chiave = st.pannello + ':' + h.textContent.trim();
+            const chiusa = !!sezioniChiuse[chiave];
+            sez.classList.add('apribile');
+            sez.classList.toggle('chiusa', chiusa);
+            // Reset: riporta i valori della sezione a quelli predefiniti (RESET); spento se lo sono già
+            const r = RESET[sez.dataset.reset];
+            const reset = r ? `<button type="button" class="pannello-reset" data-reset-sezione="${sez.dataset.reset}" ${r.serve() ? '' : 'disabled'}
+                title="Riporta ai valori predefiniti: ${esc(r.valori)}" aria-label="Reset: ${esc(r.nome)}">${ico('ruota')}Reset</button>` : '';
+            h.innerHTML = `<button type="button" class="pannello-interruttore" data-sezione="${esc(chiave)}" aria-expanded="${!chiusa}" title="${chiusa ? 'Apri' : 'Chiudi'} la sezione">${ico('destra', 'freccia-sezione')}<span>${h.innerHTML}</span></button>${reset}`;
+        });
+    }
+
+    function alternaSezione(b) {
+        const sez = b.closest('.pannello-sezione');
+        const chiusa = !sez.classList.contains('chiusa');
+        sez.classList.toggle('chiusa', chiusa);
+        b.setAttribute('aria-expanded', String(!chiusa));
+        b.title = `${chiusa ? 'Apri' : 'Chiudi'} la sezione`;
+        if (chiusa) sezioniChiuse[b.dataset.sezione] = true; else delete sezioniChiuse[b.dataset.sezione];
+        try { localStorage.setItem(CHIAVE_SEZIONI, JSON.stringify(sezioniChiuse)); } catch (e) { /* resta per questa pagina */ }
     }
 
     const nessunNodo = testo => `<p class="pannello-vuoto">${testo}</p>`;
@@ -2050,17 +2290,15 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         });
     }
 
-    // Disposizione: la disposizione di base, le distanze (tra tutti i nodi, tra fratelli e tra i figli del nodo scelto)
-    // e la griglia di allineamento
+    // Disposizione: la disposizione di base, le distanze globali (tutta la mappa), le distanze tra i nodi selezionati
+    // e la griglia di allineamento. Ogni sezione ha il suo Reset (RESET, qui sotto)
     function pannelloDisposizione() {
         const sp = m.spaziatura || 1, fr = m.spaziaturaFratelli || 1;
         const conDirezione = ['orizzontale', 'libera'].includes(m.disposizione);
         const g = griglia();
-        const n = st.sel.size === 1 && m.nodi[st.attivo];
-        const nomeNodo = n ? '«' + esc(Ui.tronca(Mappe.testoSemplice(n.testo) || '(vuoto)', 30)) + '»' : '';
         const perc = v => Math.round(v * 100) + '%';
         return `
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="disposizione">
                 <h3>Disposizione della mappa</h3>
                 <div class="griglia-disposizioni">${Mappe.DISPOSIZIONI.map(([id, nome]) => `
                     <button type="button" class="scelta-disposizione${m.disposizione === id ? ' attivo' : ''}" data-disp="${id}">${miniaturaDisposizione(id)}<span>${nome}</span></button>`).join('')}
@@ -2071,36 +2309,114 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         ${[['auto', 'Automatico'], ['orario', 'Automatico in senso orario'], ['destra', 'Tutti a destra'], ['sinistra', 'Tutti a sinistra']]
                             .map(([v, t]) => `<option value="${v}" ${m.direzione === v ? 'selected' : ''}>${t}</option>`).join('')}
                     </select></label>` : ''}
-                <p class="pannello-nota">È la disposizione di base: ogni nodo può averne una sua per i propri figli, dalla maniglia sopra il nodo selezionato
-                    (o dalla barra, per più nodi insieme). Nella disposizione libera i nodi restano dove li lasci.</p>
             </section>
-            <section class="pannello-sezione">
-                <h3>Distanze</h3>
+            <section class="pannello-sezione" data-reset="distanze-globali">
+                <h3>Distanze globali</h3>
                 <label class="campo campo-compatto"><span>Spazio tra tutti i nodi <b data-sp-valore>${perc(sp)}</b></span>
                     <input type="range" min="0.6" max="2" step="0.1" value="${sp}" data-spaziatura></label>
                 <label class="campo campo-compatto"><span>Distanza tra fratelli <b data-fr-valore>${perc(fr)}</b></span>
-                    <input type="range" min="0.2" max="6" step="0.1" value="${fr}" data-fratelli></label>
-                ${n && n.figli.length > 1 ? `
-                <label class="campo campo-compatto"><span>Solo tra i figli di ${nomeNodo} <b data-frn-valore>${n.distanzaFigli ? perc(n.distanzaFigli) : 'come la mappa'}</b></span>
-                    <input type="range" min="0.2" max="6" step="0.1" value="${n.distanzaFigli || 1}" data-fratelli-nodo></label>
-                ${n.distanzaFigli ? '<button type="button" class="btn btn-fantasma btn-piccolo" data-fratelli-nodo-via>Come il resto della mappa</button>' : ''}` : `
-                <p class="pannello-nota">Seleziona un nodo con più figli per dare una distanza solo ai suoi.</p>`}
+                    <input type="range" min="0.2" max="12" step="0.1" value="${fr}" data-fratelli></label>
             </section>
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="distanze-scelti">
+                <h3>Distanze tra nodi selezionati</h3>
+                ${controlliDistanzaScelti()}
+            </section>
+            <section class="pannello-sezione" data-reset="griglia">
                 <h3>Griglia di allineamento</h3>
-                <label class="spunta-semplice"><input type="checkbox" data-griglia-attiva ${g.attiva ? 'checked' : ''}> <b>Aggancia i nodi alla griglia</b> <small>(Ctrl+G; con Alt premuto li sposti liberamente)</small></label>
+                <label class="spunta-semplice" title="Ctrl+G; con Alt premuto sposti i nodi liberamente"><input type="checkbox" data-griglia-attiva ${g.attiva ? 'checked' : ''}> <b>Aggancia i nodi alla griglia</b></label>
                 <label class="campo campo-compatto"><span>Passo della griglia <b data-gr-valore>${g.passo} px</b></span>
                     <input type="range" min="10" max="80" step="5" value="${g.passo}" data-griglia-passo></label>
-                <p class="pannello-nota">Con la griglia accesa i nodi che sposti (nella disposizione libera, o i nodi liberi) si fermano sui suoi punti, così
-                    restano allineati. Nelle disposizioni automatiche i nodi li sistema l'app.</p>
             </section>`;
+    }
+
+    // ---- Reset delle sezioni dei pannelli ---------------------------------------------------------------
+    // Ogni sezione con data-reset ha nel titolo il pulsante Reset, che riporta i suoi valori a quelli predefiniti: per la
+    // mappa quelli di una mappa nuova, per i nodi scelti quelli del tema (o del loro stile predefinito). Il pulsante è
+    // spento se i valori sono già quelli. serve() = c'è qualcosa da riportare; fai() = lo riporta (dentro una modifica)
+    const CHIAVI_TESTO = ['grassetto', 'corsivo', 'sottolineato', 'barrato', 'scala', 'allinea', 'coloreTesto', 'colore', 'riempimento'];
+    const CHIAVI_FORMA = ['forma', 'tratto', 'spessore', 'coloreBordo', 'sottolineatura'];
+    const nodiScelti = () => [...st.sel].map(id => m.nodi[id]).filter(Boolean);
+    const conStile = chiavi => nodiScelti().some(n => n.stile && chiavi.some(k => k in n.stile));
+    const togliStile = chiavi => nodiScelti().forEach(n => { if (n.stile) chiavi.forEach(k => { delete n.stile[k]; }); });
+    const RESET = {
+        disposizione: {
+            nome: 'Disposizione della mappa', valori: 'orizzontale, rami principali automatici',
+            serve: () => m.disposizione !== 'orizzontale' || (m.direzione || 'auto') !== 'auto' || m.nodi[m.radice].figli.some(f => m.nodi[f] && m.nodi[f].lato),
+            fai: () => {
+                raddrizza(null);
+                m.disposizione = 'orizzontale';
+                m.direzione = 'auto';
+                m.nodi[m.radice].figli.forEach(f => { if (m.nodi[f]) m.nodi[f].lato = null; });
+            },
+            dopo: () => requestAnimationFrame(() => adatta()),
+        },
+        'distanze-globali': {
+            nome: 'Distanze globali', valori: 'spazio tra tutti i nodi 100%, distanza tra fratelli 100%',
+            serve: () => (+m.spaziatura || 1) !== 1 || (+m.spaziaturaFratelli || 1) !== 1,
+            fai: () => { m.spaziatura = 1; m.spaziaturaFratelli = null; },
+        },
+        'distanze-scelti': {
+            nome: 'Distanze tra nodi selezionati', valori: 'gli spazi tra i nodi scelti tornano come quelli tra gli altri fratelli (100%)',
+            serve: () => bersagliDistanza().some(id => distanzaDi(id) !== 1),
+            fai: () => impostaDistanza(bersagliDistanza(), 1),
+        },
+        griglia: {
+            nome: 'Griglia di allineamento', valori: 'spenta, passo 20 px', senzaStoria: true,
+            serve: () => griglia().attiva || griglia().passo !== 20,
+            fai: () => impostaGriglia({ attiva: false, passo: 20 }),
+        },
+        tema: {
+            nome: 'Tema', valori: 'il tema Naturale, senza colori e livelli propri della mappa',
+            serve: () => m.tema !== 'naturale' || !!(m.paletta || m.coloreRadice || m.livelli || m.linee),
+            fai: () => { m.tema = 'naturale'; m.paletta = null; m.coloreRadice = null; m.livelli = null; m.linee = null; },
+        },
+        linee: {
+            nome: 'Linee della mappa', valori: 'le linee del tema',
+            serve: () => !!m.linee,
+            fai: () => { m.linee = null; },
+        },
+        testo: {
+            nome: 'Testo', valori: 'carattere, dimensione, allineamento e colori del tema (o dello stile predefinito) per i nodi scelti',
+            serve: () => conStile(CHIAVI_TESTO),
+            fai: () => togliStile(CHIAVI_TESTO),
+        },
+        forma: {
+            nome: 'Forma e bordo', valori: 'forma, bordo e linea sotto il nodo del tema (o dello stile predefinito) per i nodi scelti',
+            serve: () => conStile(CHIAVI_FORMA),
+            fai: () => togliStile(CHIAVI_FORMA),
+        },
+        'linea-padre': {
+            nome: 'Linea verso il nodo padre', valori: 'linea del tema, senza curve o punti di passaggio',
+            serve: () => idsCollegamento().some(id => { const n = m.nodi[id]; return !!(n.piega || n.percorso || (n.stile && Mappe.CHIAVI_COLLEGAMENTO.some(k => k in n.stile))); }),
+            fai: () => idsCollegamento().forEach(id => {
+                const n = m.nodi[id];
+                if (n.stile) Mappe.CHIAVI_COLLEGAMENTO.forEach(k => { delete n.stile[k]; });
+                n.piega = null;
+                n.percorso = null;
+            }),
+        },
+        dimensioni: {
+            nome: 'Dimensioni del nodo', valori: 'larghezza automatica, senza minimi',
+            serve: () => nodiScelti().some(n => +n.larghezza > 0) || conStile(['larghezzaMin', 'altezzaMin']),
+            fai: () => { nodiScelti().forEach(n => { delete n.larghezza; }); togliStile(['larghezzaMin', 'altezzaMin']); },
+        },
+    };
+
+    function resetSezione(chiave) {
+        const r = RESET[chiave];
+        if (!r || !r.serve()) return;
+        if (r.senzaStoria) r.fai(); else modifica(() => { r.fai(); });
+        if (r.dopo) r.dopo();
+        aggiornaPannello(true);
+        posizionaSopra();
+        Ui.toast(`${r.nome}: valori predefiniti`, 'successo', 2000);
     }
 
     // Tema e linee di tutta la mappa
     function pannelloTema() {
         const lin = Mappe.tema(m).linee;
         return `
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="tema">
                 <h3>Tema</h3>
                 <div class="griglia-temi">${Mappe.temi().map(t => `
                     <div class="scheda-tema">
@@ -2109,9 +2425,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                     </div>`).join('')}
                     <button type="button" class="scelta-tema nuovo-tema" data-tema-nuovo>${ico('piu')}<span>Nuovo tema</span></button>
                 </div>
-                <p class="pannello-nota">Il nuovo tema parte dall'aspetto attuale della mappa (anche dagli stili importati da SimpleMind); lo modifichi e lo ritrovi in tutte le mappe.</p>
             </section>
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="linee">
                 <h3>Linee della mappa</h3>
                 <div class="riga-bottoni">${Mappe.FORME_LINEA.map(([v, t]) => `<button type="button" class="${lin.forma === v ? 'attivo' : ''}" data-linee="forma" data-valore="${v}" title="${t}">${iconaLinea(v)}</button>`).join('')}</div>
                 <label class="spunta-semplice"><input type="checkbox" data-linee-auto ${lin.affusolamento ? 'checked' : ''}> <b>Affusolamento automatico</b></label>
@@ -2124,7 +2439,6 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                     <input type="range" min="0.5" max="6" step="0.5" value="${lin.minimo}" data-linee-num="minimo"></label>` : `
                 <label class="campo campo-compatto"><span>Spessore delle linee <b data-val="spessore">${lin.spessore} px</b></span>
                     <input type="range" min="0.5" max="10" step="0.5" value="${lin.spessore}" data-linee-num="spessore"></label>`}
-                <p class="pannello-nota">Valgono per tutta la mappa. Per cambiare una sola linea, cliccala.</p>
             </section>`;
     }
 
@@ -2193,9 +2507,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                 </div>
                 <input type="range" min="-100" max="100" step="5" value="${cv.valore}" data-curvatura aria-label="Curvatura della linea">
                 <b data-curva-valore>${cv.aMano ? 'a mano' : cv.valore}</b>
-            </div>
-            <p class="pannello-nota">${cv.aMano ? 'La linea ha punti di passaggio messi a mano: il cursore li sostituisce con una curva semplice.'
-                : '0 = linea normale; verso destra o sinistra si piega da una parte o dall\'altra. Per un percorso preciso trascina la linea sulla mappa.'}</p>`;
+            </div>`;
     }
 
     function iconaCurva(forma) {
@@ -2224,7 +2536,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             <div class="riga-bottoni">${Mappe.FORME_LINEA.map(([v, t]) => `<button type="button" class="${att(c.forma === v)}" data-coll="lineaForma" data-valore="${v}" title="${t}">${iconaLinea(v)}</button>`).join('')}</div>
             <span class="etichetta-campo">Tratto</span>
             <div class="lista-scelte">${Mappe.TRATTI_LINEA.map(([v, t]) => `<button type="button" class="${att(c.tratto === v)}" data-coll="linea" data-valore="${v}">${iconaLinea(v)}<span>${t}</span></button>`).join('')}</div>
-            ${c.tratto === 'auto' ? '<p class="pannello-nota">Si assottiglia a ogni livello, senza scendere sotto lo spessore minimo (le misure sono in Tema e linee → Linee della mappa).</p>' : `
+            ${c.tratto === 'auto' ? '' : `
             <label class="campo campo-compatto"><span>Spessore</span>
                 <select data-coll-num="lineaSpessore">${SPESSORI.map(v => `<option value="${v}" ${Math.abs(c.spessore - v) < 0.01 ? 'selected' : ''}>${v} px</option>`).join('')}
                     ${SPESSORI.some(v => Math.abs(c.spessore - v) < 0.01) ? '' : `<option value="${c.spessore}" selected>${c.spessore} px</option>`}</select></label>`}
@@ -2262,17 +2574,14 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         } else {
             testa = `Linea da ${nome(m.nodi[n.genitore])} a ${nome(n)}.`;
             extra = n.piega || Disposizione.percorsoValido(n.percorso)
-                ? `<p class="pannello-nota">Hai deciso tu il percorso della linea: segue i due nodi quando si spostano. Trascina la linea o i pallini vuoti per aggiungere punti di passaggio, i pallini pieni per spostarli. Per togliere un punto: cliccalo e premi Canc (o la × accanto), oppure doppio clic o clic destro sul punto; gli altri restano dove sono.</p>
-                   <button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="raddrizza">Raddrizza la linea</button>`
-                : '<p class="pannello-nota">Trascina un punto qualsiasi della linea per farla passare da lì: ogni punto che aggiungi è un punto di passaggio, che poi sposti o togli (doppio clic).</p>';
+                ? `<button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="raddrizza" title="Toglie i punti di passaggio messi a mano">Raddrizza la linea</button>` : '';
         }
         return `
             <p class="pannello-nota">${testa}</p>
             ${extra}
-            <section class="pannello-sezione">${controlliCollegamento()}</section>
+            <section class="pannello-sezione" data-reset="linea-padre"><h3>Linea</h3>${controlliCollegamento()}</section>
             <div class="pannello-azioni">
                 <button type="button" class="btn btn-secondario btn-piccolo" data-coll-az="ramo" title="Stesso stile per tutte le linee del ramo che parte da qui">Applica a tutto il ramo</button>
-                <button type="button" class="btn btn-fantasma btn-piccolo" data-coll-az="ripristina" title="Stile del tema e linea non piegata">Stile del tema</button>
             </div>`;
     }
 
@@ -2341,7 +2650,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function pannelloStile() {
         if (st.arco && m.nodi[st.arco]) return pannelloCollegamento();
-        if (!st.sel.size) return nessunNodo('Seleziona uno o più nodi per cambiarne il carattere, la forma e i colori, oppure clicca una linea per cambiarne lo stile.');
+        if (!st.sel.size) return nessunNodo('Nessun nodo selezionato');
         const s = stileAttivo();
         const nodo = m.nodi[st.attivo] || {};
         const proprio = nodo.stile || {};
@@ -2350,12 +2659,12 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         const usato = Mappe.stilePredefinito(nodo.stilePredefinito);
         const so = s.sottolineatura || {};
         return `
-            ${st.sel.size > 1 ? `<p class="pannello-nota">${st.sel.size} nodi selezionati: le modifiche valgono per tutti.</p>` : ''}
+            ${st.sel.size > 1 ? `<p class="pannello-nota">${st.sel.size} nodi selezionati</p>` : ''}
             <section class="pannello-sezione">
                 <h3>Stili predefiniti</h3>
                 ${stili.length ? `<div class="stili-predefiniti">${stili.map((x, i) => `
                     <button type="button" class="chip-stile${att(usato && usato.id === x.id)}" data-stile-pre="${x.id}" title="Applica «${esc(x.nome)}» ai nodi scelti${i < 9 ? ` (Ctrl+Alt+${i + 1})` : ''}">${anteprimaStile(x)}<span>${esc(x.nome)}</span></button>`).join('')}
-                </div>` : '<p class="pannello-nota">Uno stile predefinito è un aspetto con un nome (per esempio «Dettaglio»: piccolo e grigio) da dare ai nodi con un clic. Se poi lo cambi, cambiano tutti i nodi che lo usano. Vale per tutte le mappe.</p>'}
+                </div>` : ''}
                 <div class="pannello-azioni">
                     <button type="button" class="btn btn-secondario btn-piccolo" data-stile-pre-az="nuovo" title="Un nuovo stile con l'aspetto di questo nodo">${ico('piu')}Nuovo dallo stile del nodo</button>
                     ${usato ? `<button type="button" class="btn btn-secondario btn-piccolo" data-stile-pre-az="aggiorna" title="Lo stile prende l'aspetto attuale di questo nodo: cambiano tutti i nodi che lo usano">Aggiorna «${esc(usato.nome)}»</button>
@@ -2363,7 +2672,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         <button type="button" class="btn-icona" data-stile-pre-az="menu" title="Rinomina o elimina «${esc(usato.nome)}»" aria-label="Altre azioni sullo stile">${ico('altro')}</button>` : ''}
                 </div>
             </section>
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="testo">
                 <h3>Testo</h3>
                 <div class="riga-bottoni">
                     <button type="button" class="${att(s.grassetto)}" data-stile-inv="grassetto" title="Grassetto (Ctrl+B)"><b>G</b></button>
@@ -2381,15 +2690,14 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                     ${campoColore('colore', 'Ramo', proprio.colore, s.colore, 'Linee, bordo e sottolineatura del ramo')}
                     ${campoColore('riempimento', 'Riempimento', proprio.riempimento, s.riempimento, '', true)}
                 </div>
-                <p class="pannello-nota">Solo una parte del testo in grassetto, corsivo o sottolineato: mentre scrivi nel nodo selezionala e premi Ctrl+B, Ctrl+I o Ctrl+U (o i pulsanti sopra il nodo).</p>
             </section>
-            <section class="pannello-sezione">
+            <section class="pannello-sezione" data-reset="forma">
                 <h3>Forma e bordo</h3>
                 <div class="griglia-forme">${Mappe.FORME.map(([id, nome]) => `
                     <button type="button" class="scelta-forma${att(s.forma === id)}" data-stile="forma" data-valore="${id}" title="${nome}"><span class="anteprima-forma forma-${id}"></span></button>`).join('')}
                 </div>
                 ${s.forma === 'sottolineata' ? `
-                <span class="etichetta-campo">Linea sotto il nodo <small>(solo questa, non le linee ai lati)</small></span>
+                <span class="etichetta-campo">Linea sotto il nodo</span>
                 <div class="riga-bottoni">
                     ${['pieno', 'trattini', 'punti'].map(v => `<button type="button" class="${att((so.tratto || s.tratto || 'pieno') === v)}" data-sott="tratto" data-valore="${v}" title="${v}"><span class="tratto-${v}"></span></button>`).join('')}
                     <select data-sott-spessore title="Spessore della linea sotto il nodo">
@@ -2404,13 +2712,13 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         `<option value="${v}" ${Math.abs((+s.spessore || 0) - v) < 0.01 ? 'selected' : ''}>${v} px</option>`).join('')}</select>
                 </div>`}
             </section>
-            ${idsCollegamento().length ? `<section class="pannello-sezione"><h3>Linea verso il nodo padre</h3>${controlliCollegamento()}</section>` : ''}
-            <section class="pannello-sezione">
+            ${idsCollegamento().length ? `<section class="pannello-sezione" data-reset="linea-padre"><h3>Linea verso il nodo padre</h3>${controlliCollegamento()}</section>` : ''}
+            <section class="pannello-sezione" data-reset="dimensioni">
                 <h3>Dimensioni del nodo</h3>
                 ${[...st.sel].some(id => m.nodi[id] && +m.nodi[id].larghezza > 0)
-                    ? `<p class="pannello-nota">${st.sel.size === 1 ? `Larghezza scelta: ${Math.round(nodo.larghezza)} px.` : 'Alcuni nodi hanno una larghezza scelta.'} Trascina la maniglia ◂▸ sotto il nodo per cambiarla.</p>
+                    ? `<p class="pannello-nota">${st.sel.size === 1 && +nodo.larghezza > 0 ? `Larghezza: ${Math.round(nodo.larghezza)} px` : 'Larghezza scelta a mano'}</p>
                        <button type="button" class="btn btn-secondario btn-piccolo" data-stile-az="larghezza-auto">Larghezza automatica</button>`
-                    : '<p class="pannello-nota">Larghezza automatica: il nodo segue il testo. Trascina la maniglia ◂▸ sotto il nodo per sceglierla tu (il testo va a capo).</p>'}
+                    : '<p class="pannello-nota">Larghezza: automatica</p>'}
                 <div class="riga-campi-piccoli">
                     <span>Minimo</span>
                     <label>largo <input type="number" min="0" max="800" step="10" value="${+s.larghezzaMin || 0}" data-stile-num="larghezzaMin"></label>
@@ -2505,7 +2813,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     function pannelloIcone() {
-        if (!st.sel.size) return nessunNodo('Seleziona uno o più nodi e scegli un\'icona.');
+        if (!st.sel.size) return nessunNodo('Nessun nodo selezionato');
         const attuale = (m.nodi[st.attivo] || {}).icona;
         const mie = [...new Set(Object.values(m.nodi).map(n => n.icona).filter(i => String(i || '').startsWith('img:') && m.immagini[i.slice(4)]))];
         const bottone = i => `<button type="button" class="scelta-icona${attuale === i ? ' attivo' : ''}" data-icona="${esc(i)}" title="${esc(i.startsWith('n:') ? 'Numero ' + i.slice(2) : '')}">${iconaHtml(i)}</button>`;
@@ -2521,7 +2829,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     function pannelloNota() {
         const n = m.nodi[st.attivo];
-        if (!n || st.sel.size !== 1) return nessunNodo('Seleziona un nodo per scrivere una nota, aggiungere un link, una data o una casella da spuntare.');
+        if (!n || st.sel.size !== 1) return nessunNodo(st.sel.size > 1 ? 'Più nodi selezionati' : 'Nessun nodo selezionato');
         return `
             <section class="pannello-sezione">
                 <h3>Nota</h3>
@@ -2545,8 +2853,6 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         <button type="button" class="miniatura-figura-img" data-fig-scegli="${f.id}" title="Scegli l'immagine nella mappa">${m.immagini[f.img] ? `<img src="${m.immagini[f.img]}" alt="">` : ''}</button>
                         <button type="button" class="miniatura-figura-togli" data-fig-togli="${f.id}" title="Elimina l'immagine" aria-label="Elimina l'immagine">${ico('chiudi')}</button>
                     </span>`).join('')}</div>` : ''}
-                <p class="pannello-nota">${(n.figure || []).length ? `${plurale(n.figure.length, 'immagine agganciata', 'immagini agganciate')} al nodo: seguono il nodo, ma spostandole non sposti i nodi. Trascinala per spostarla, tira il suo angolo per cambiarne la grandezza.`
-                    : 'Un\'immagine fuori dal nodo, agganciata a lui: la metti dove vuoi e la ridimensioni. Puoi anche trascinare un file sulla mappa, dove la vuoi, con il nodo selezionato.'}</p>
                 <div class="azioni-riga">
                     <button type="button" class="btn btn-secondario btn-piccolo" data-fig-aggiungi title="Segue il nodo, ma spostandola non sposti i nodi">${ico('collega')}Aggiungi immagine libera</button>
                     ${immaginiDelNodo(n) > 1 ? `<button type="button" class="btn btn-fantasma btn-piccolo" data-img-tutte title="Le immagini libere e quella dentro il nodo">${ico('cestino')}Elimina tutte (${immaginiDelNodo(n)})</button>` : ''}
@@ -2562,7 +2868,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
                         <button type="button" class="btn btn-secondario btn-piccolo" data-img-fuori>Portala fuori dal nodo</button>
                         <button type="button" class="btn btn-fantasma btn-piccolo" data-img-togli>Togli l'immagine</button>
                     </div>` : `<button type="button" class="btn btn-secondario btn-piccolo" data-img-dentro>${ico('immagine')}Metti un'immagine dentro</button>
-                    <p class="pannello-nota">Puoi anche incollarla (Ctrl+V) o trascinarla sul nodo.</p>`}
+`}
             </section>`;
     }
 
@@ -2578,7 +2884,7 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         };
         visita(m.radice, 0);
         Mappe.radiciLibere(m).forEach(l => visita(l.id, 0));
-        return `<p class="pannello-nota">Clic per trovare il nodo nella mappa, doppio clic per modificarlo.</p><div class="struttura">${righe.join('')}</div>`;
+        return `<div class="struttura">${righe.join('')}</div>`;
     }
 
     // ---- Menu --------------------------------------------------------------------------------------
@@ -3568,7 +3874,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     function clicPannello(e) {
         const t = e.target;
         let x;
-        if ((x = t.closest('[data-disp]'))) {
+        if ((x = t.closest('[data-reset-sezione]'))) {
+            resetSezione(x.dataset.resetSezione);
+        } else if ((x = t.closest('[data-sezione]'))) {
+            alternaSezione(x);
+        } else if ((x = t.closest('[data-disp]'))) {
             const tipo = x.dataset.disp;
             modifica(() => {
                 if (tipo === 'libera' && m.disposizione !== 'libera') fissaPosizioni(m.radice);
@@ -3589,10 +3899,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
             const cv = curvaturaDi((m.nodi[idsCollegamento()[0]] || {}).percorso);
             if (cv.valore) applicaCurvatura(cv.valore, st.formaCurva);
             aggiornaPannello(true);
-        } else if (t.closest('[data-fratelli-nodo-via]')) {
-            const id = st.attivo;
-            if (m.nodi[id]) modifica(() => { delete m.nodi[id].distanzaFigli; });
-            aggiornaPannello(true);
+        } else if (t.closest('[data-distanza-via]')) {
+            distanzaComeGliAltri();
         } else if ((x = t.closest('[data-campo-colore]'))) {
             apriTavolozza(x);
         } else if ((x = t.closest('[data-stile-pre]'))) {
@@ -3709,10 +4017,8 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         } else if (t.matches('[data-fratelli]')) {
             $('[data-fr-valore]', pannelloEl).textContent = Math.round(t.value * 100) + '%';
             modificaContinua('fratelli', () => { m.spaziaturaFratelli = Math.abs(+t.value - 1) < 0.01 ? null : +t.value; });
-        } else if (t.matches('[data-fratelli-nodo]')) {
-            const id = st.attivo;
-            $('[data-frn-valore]', pannelloEl).textContent = Math.round(t.value * 100) + '%';
-            modificaContinua('fratelli:' + id, () => { m.nodi[id].distanzaFigli = +t.value; });
+        } else if (t.matches('[data-distanza-scelti]')) {
+            cursoreDistanza(t);
         } else if (t.matches('[data-curvatura]')) {
             const v = +t.value;
             $('[data-curva-valore]', pannelloEl).textContent = v;
@@ -3769,8 +4075,11 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         let x;
         if ((x = t.closest('[data-disp-nodo]')) && st.popDisp) { scegliDisposizione(st.popDisp, x.dataset.dispNodo); return; }
         if ((x = t.closest('[data-disp-multi]'))) { scegliDisposizioneMulti(x.dataset.dispMulti); return; }
+        if ((x = t.closest('[data-allinea]'))) { allinea(x.dataset.allinea); return; }
+        if (t.closest('[data-distanza-via]')) { distanzaComeGliAltri(); return; }
         if ((x = t.closest('[data-multi]'))) {
             if (x.dataset.multi === 'disposizione') { st.popDispMulti = !st.popDispMulti; posizionaSopra(); return; }
+            if (x.dataset.multi === 'distanza') { st.popDistanza = !st.popDistanza; posizionaSopra(); return; }
             if (x.dataset.multi === 'flashcard') flashcardDaiNodi(); else figlioComune(x.dataset.multi === 'graffa');
             return;
         }
@@ -3991,6 +4300,13 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         if (r) { seleziona(r.dataset.struttura); modificaNodo(r.dataset.struttura); }
     });
     sopraEl.addEventListener('change', suCambioPop);
+    sopraEl.addEventListener('input', e => { if (e.target.matches('[data-distanza-scelti]')) cursoreDistanza(e.target); });
+    sopraEl.addEventListener('focusout', e => {
+        if (!e.target.matches('[data-distanza-scelti]')) return;
+        st.continua = null;
+        // Verso un pulsante della stessa barra no: ridisegnandola adesso il clic andrebbe perso
+        if (!sopraEl.contains(e.relatedTarget)) requestAnimationFrame(() => { posizionaSopra(); aggiornaPannello(true); });
+    });
     // I pulsanti della barra del testo non tolgono il cursore (né la selezione) dal nodo in modifica
     sopraEl.addEventListener('mousedown', e => { if (e.target.closest('.barra-testo-nodo')) e.preventDefault(); });
     const suSelezioneTesto = () => { if (st.modifica && st.modifica.tipo === 'nodo') segnaFormatiAttivi(); };
@@ -4054,6 +4370,6 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     return {
         id: m.id, chiudi, stato, seleziona: selezionaDaFuori, concentra, adatta: () => adatta(), esportaImmagine,
-        fissaPosizioni, posizionaNuovi, posizioneLibera, offsetRaccordo,
+        fissaPosizioni, posizionaNuovi, posizioneLibera, offsetRaccordo, preparaAllineamento, preparaDistanza,
     };
 }

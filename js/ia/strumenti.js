@@ -499,12 +499,9 @@ const Strumenti = (() => {
             esegui: a => {
                 const s = richiediSet(a.set_id);
                 return {
-                    cartella_collegata: s.cartella ? s.cartella.nome : undefined,
                     materiali: Dati.materialiDiSet(s.id).map(m => ({
                         id: m.id, nome: m.nome, tipo: m.tipo, descrizione: Materiali.descrivi(m), ha_schema: !!m.albero, caratteri_testo: (m.testo || '').length,
                         mappa_id: m.mappaId || undefined,
-                        cartella: m.cartella ? m.cartella.percorso : undefined,
-                        file_collegato: m.collegato ? m.collegato.percorso : undefined,
                         cambiato_di_recente: m.precedente ? true : undefined,
                     })),
                 };
@@ -551,7 +548,6 @@ const Strumenti = (() => {
             esegui: async (a, ctx) => {
                 const m = Dati.materiale(a.materiale_id);
                 if (!m) throw new Error('Materiale non trovato.');
-                if (m.cartella) throw new Error("Viene da una cartella collegata: si toglie cancellando il file dalla cartella, l'app si aggiorna da sola.");
                 if (!await ctx.conferma(m.mappaId ? `Togliere la mappa <b>${esc(m.nome)}</b> dai materiali del set? Resta nella sezione Mappe.`
                     : `Eliminare il materiale <b>${esc(m.nome)}</b>?`)) return { annullato: true, motivo: "L'utente non ha confermato" };
                 Dati.eliminaMateriale(m.id);
@@ -562,7 +558,7 @@ const Strumenti = (() => {
         // --- Revisioni degli argomenti (spaced repetition come nel database di Notion) ---
         {
             nome: 'elenca_revisioni',
-            descrizione: "Elenca gli argomenti delle revisioni (spaced repetition degli argomenti): N° Rep, ultimo ripasso, prossima revisione (ultimo + 2^(N° Rep − 1) giorni), alert e stato. Filtra per set (sotto-set compresi), per materia o solo quelli da ripassare. Con flashcard = true elenca invece il pannello «Per flashcard»: le carte da ripassare per conto loro, prima del loro set.",
+            descrizione: "Elenca gli argomenti delle revisioni (spaced repetition degli argomenti): N° Rep, ultimo ripasso, prossima revisione (ultimo + 2^(N° Rep − 1) giorni), alert e stato. Filtra per set (sotto-set compresi), per materia o solo quelli da ripassare. Con flashcard = true elenca invece il pannello «Per flashcard»: le carte sfasate rispetto al loro mazzo (anche quelle già valutate di un mazzo mai ripassato), da ripassare per conto loro.",
             parametri: S.obj({ set_id: S.str('facoltativo'), materia_id: S.str('facoltativo'), solo_da_ripassare: S.bool('solo quelli in ritardo o da fare oggi'), flashcard: S.bool('le flashcard per conto loro invece degli argomenti') }),
             etichetta: () => 'Guardo le revisioni',
             esegui: a => {
@@ -572,7 +568,7 @@ const Strumenti = (() => {
                     if (a.solo_da_ripassare) voci = voci.filter(Revisioni.cartaDaRipassare);
                     return {
                         oggi: chiaveGiorno(),
-                        flashcard: voci.slice(0, 200).map(v => cartaPerIA(v.carta, { set: nomeSet(v.carta.setId), alert: Revisioni.avviso(v).testo + (Revisioni.maiValutata(v) ? ' (mai valutata)' : '') })),
+                        flashcard: voci.slice(0, 200).map(v => cartaPerIA(v.carta, { set: nomeSet(v.carta.setId), alert: Revisioni.avviso(v).testo + (Revisioni.maiValutata(v) ? ' (mai valutata)' : ''), rispetto_al_mazzo: v.sfasatura.testo })),
                         totale: voci.length,
                     };
                 }

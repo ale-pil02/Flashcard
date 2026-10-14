@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// File dei materiali (PDF, slide, immagini…) e oggetti troppo grandi per Firestore: solo l'account del
+// proprietario, solo nella propria cartella. Stessa email di firestore.rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function proprietario(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email == 'alessandropillot01@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /utenti/{uid}/{percorso=**} {
+      allow read, delete: if proprietario(uid);
+      // 200 MB al massimo per file (l'app ne accetta fino a 60)
+      allow create, update: if proprietario(uid) && request.resource.size < 200 * 1024 * 1024;
+    }
+
+    // Tutto il resto è vietato
+    match /{tutto=**} {
+      allow read, write: if false;
+    }
+  }
+}

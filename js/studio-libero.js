@@ -8,7 +8,7 @@ const StudioLibero = (() => {
 
     const CATEGORIE = [
         { id: 'da-fare', testo: 'Da ripassare', titolo: 'In ritardo o da fare oggi', vale: v => Revisioni.cartaDaRipassare(v) },
-        { id: 'sfasate', testo: 'Sfasate', titolo: 'Non vanno al passo con il loro set', vale: v => Revisioni.sfasata(v) },
+        { id: 'sfasate', testo: 'Sfasate', titolo: 'Non vanno al passo con il loro mazzo', vale: v => Revisioni.sfasata(v) },
         { id: 'nuove', testo: 'Mai valutate', vale: v => Srs.valutazione(v.carta) == null },
         ...Srs.VALUTAZIONI.map(x => ({ id: x.chiave, testo: x.nome, vale: v => Srs.valutazione(v.carta) === x.valore })),
     ];

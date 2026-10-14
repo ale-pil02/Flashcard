@@ -94,6 +94,9 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .mappa-btn .ico { width: 19px; height: 19px; }
 .mappa-btn.attivo { background: var(--primario-tenue); color: var(--primario-testo); }
 .mappa-btn:disabled { opacity: .35; pointer-events: none; }
+/* Mappa aperta dallo studio: la freccia indietro dice dove porta */
+.mappa-btn.torna-ripasso { display: inline-flex; gap: 4px; width: auto; padding: 0 12px 0 8px; background: var(--primario-tenue); color: var(--primario-testo); font-size: .85rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+@media (max-width: 700px) { .mappa-btn.torna-ripasso span { display: none; } .mappa-btn.torna-ripasso { padding: 0 8px; } }
 .mappa-zoom-valore {
     min-width: 52px;
     padding: 6px;
@@ -531,7 +534,55 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .pannello-corpo { flex: 1; overflow-y: auto; padding: 4px 16px 24px; }
 .pannello-sezione { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--bordo); }
 .pannello-sezione:last-child { border-bottom: none; }
-.pannello-sezione h3 { margin: 0; color: var(--testo-3); font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.pannello-sezione h3 { margin: 0; color: var(--testo); font-size: .8rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+/* Sezioni che si aprono e chiudono: il titolo è un pulsante con la freccia (giù = aperta, a destra = chiusa) */
+.pannello-sezione h3 { display: flex; align-items: center; gap: 6px; }
+.pannello-interruttore {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin: -4px 0 -4px -6px;
+    padding: 4px 6px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    text-transform: inherit;
+    cursor: pointer;
+}
+.pannello-interruttore:hover { background: var(--superficie-2); }
+.pannello-interruttore .freccia-sezione { width: 16px; height: 16px; color: var(--testo-2); }
+/* Reset della sezione: riporta i suoi valori a quelli predefiniti */
+.pannello-reset {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin: -4px -4px -4px 0;
+    padding: 3px 8px;
+    border: 1px solid var(--bordo);
+    border-radius: 7px;
+    background: none;
+    color: var(--testo-2);
+    font: inherit;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: none;
+    cursor: pointer;
+}
+.pannello-reset .ico { width: 13px; height: 13px; }
+.pannello-reset:hover:not(:disabled) { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); }
+.pannello-reset:disabled { opacity: .4; cursor: default; }
+.campo-compatto.spento { opacity: .5; }
+.pannello-sezione.chiusa { gap: 0; }
+.pannello-sezione.chiusa .freccia-sezione { transform: none; }
+.pannello-sezione.chiusa > :not(h3) { display: none; }
 .pannello-vuoto { margin: 24px 0; color: var(--testo-3); font-size: .9rem; line-height: 1.5; text-align: center; }
 .pannello-nota { margin: 2px 0; color: var(--testo-3); font-size: .8rem; line-height: 1.45; }
 .pannello-azioni { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 4px; }
@@ -664,7 +715,17 @@ body[data-vista="mappa"] .fab-ia { display: none; }
 .pop-multipla .btn .ico { width: 15px; height: 15px; }
 .pop-multipla { flex-wrap: wrap; max-width: 420px; }
 /* Barra dei nodi scelti: ferma in alto al centro della mappa (la griglia delle disposizioni si apre sotto) */
-.pop-multipla.in-alto { top: 10px; left: 12px; right: 12px; width: fit-content; max-width: 560px; margin: 0 auto; transform: none; justify-content: center; }
+.pop-multipla.in-alto { top: 10px; left: 12px; right: 12px; width: fit-content; max-width: 700px; margin: 0 auto; transform: none; justify-content: center; }
+/* Allinea (nodi in disposizione libera): tre pulsanti con l'icona, a sinistra, al centro, a destra */
+.pop-allinea { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--bordo); border-radius: 9px; }
+.pop-allinea .pop-etichetta { margin-right: 4px; color: var(--testo-2); font-size: .78rem; font-weight: 700; }
+.pop-allinea button { display: grid; place-items: center; width: 30px; height: 28px; padding: 0; border: none; border-radius: 7px; background: none; color: var(--testo); cursor: pointer; }
+.pop-allinea button:hover { background: var(--primario-tenue); color: var(--primario-testo); }
+.icona-allinea { width: 18px; height: 16px; }
+/* Distanza tra i nodi scelti: cursore nella barra, sotto i pulsanti */
+.pop-distanza { display: flex; flex-basis: 100%; align-items: center; gap: 10px; margin-top: 4px; padding: 6px 8px; border-radius: 9px; background: var(--superficie-2); color: var(--testo-2); font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.pop-distanza input[type=range] { flex: 1; min-width: 120px; accent-color: var(--primario); }
+.pop-distanza b { min-width: 44px; color: var(--testo); text-align: right; }
 .pop-multipla.in-alto .griglia-disposizioni-multi { max-height: min(380px, calc(100vh - 260px)); overflow: auto; }
 .pop-multipla .btn.attivo { border-color: var(--primario); background: var(--primario-tenue); color: var(--primario-testo); }
 .griglia-disposizioni-multi { flex-basis: 100%; margin-top: 4px; white-space: normal; }

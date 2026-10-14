@@ -1,0 +1,12 @@
+[
+  {
+    "origin": [
+      "https://flashcard-ale.web.app",
+      "https://flashcard-ale.firebaseapp.com",
+      "http://localhost:8010",
+      "http://127.0.0.1:8010"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

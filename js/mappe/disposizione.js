@@ -1,11 +1,12 @@
 // Disposizione dei nodi di una mappa e forma dei collegamenti.
 //
 // L'editor passa un albero di riquadri già misurati:
-//   b = { id, w, h, ext: { alto, basso, sx, dx }, livello, sotto, modo, figli: [b], lato, off, fx, fy, raccordo }
+//   b = { id, w, h, ext: { alto, basso, sx, dx }, livello, sotto, modo, figli: [b], lato, off, fx, fy, raccordo, prima }
 //   ext = ingombro con le etichette, rispetto all'angolo del nodo (alto ≤ 0, basso ≥ h, sx ≤ 0, dx ≥ w);
 //   sotto = nodo sottolineato (la linea arriva sulla riga sotto il testo); modo = disposizione scelta su quel nodo
 //   (null = come il padre); off = distanza del centro da quello del genitore, se il genitore è in disposizione libera;
-//   fx, fy = centro dei nodi liberi (fuori dall'albero); raccordo = { nodi: [id dei fratelli raccolti], graffa }
+//   fx, fy = centro dei nodi liberi (fuori dall'albero); raccordo = { nodi: [id dei fratelli raccolti], graffa };
+//   prima = distanza dal fratello che gli sta prima nella sua pila (moltiplica quella normale; null = normale)
 // e riceve x, y (angolo in alto a sinistra), dir = come il nodo si attacca al padre
 // ('centro' | 'd' | 's' | 'giu' | 'su' | 'lineare' | 'radiale' | 'libera'), verso = dove vanno i suoi figli
 // e disp = la disposizione con cui li dispone.
@@ -32,7 +33,7 @@ const Disposizione = (() => {
             sp,
         };
     }
-    const traFigli = n => (+n.fratelli > 0 ? limita(+n.fratelli, 0.1, 6) : 1);
+    const traFigli = n => (+n.fratelli > 0 ? limita(+n.fratelli, 0.1, 12) : 1);
 
     // Disposizione che un figlio eredita dal padre, con il lato (+1 destra, -1 sinistra) per chi va in orizzontale
     function perFiglio(f, modo, dir) {
@@ -98,16 +99,19 @@ const Disposizione = (() => {
     }
 
     // Impila le unità lungo un asse ('y' in colonna, 'x' in riga) a partire da 0; i raccordi di un'unità stanno
-    // in pila tra loro, centrati sui fratelli che raccolgono
+    // in pila tra loro, centrati sui fratelli che raccolgono. Lo spazio prima di un nodo è gap, per la sua distanza
+    // dal fratello precedente se ne ha una (f.prima: 1 = come gli altri; scelta per i nodi selezionati nell'editor)
     function impila(uu, asse, gap) {
         const k0 = asse + '0', k1 = asse + '1', r = 'r' + asse, lato = asse === 'y' ? 'h' : 'w';
         const lun = f => f.blocco[k1] - f.blocco[k0];
         const meta = (p, u) => (p[r] + p[lato] / 2 + u[r] + u[lato] / 2) / 2;
+        const spazio = f => gap * (+f.prima > 0 ? limita(+f.prima, 0.1, 12) : 1);
         let pos = 0;
-        uu.forEach(u => {
+        uu.forEach((u, iu) => {
+            if (iu) pos += spazio(u.membri[0]);
             let t = 0;
-            u.membri.forEach(f => { f[r] = t - f.blocco[k0]; t += lun(f) + gap; });
-            let inizio = 0, fine = t - gap;
+            u.membri.forEach((f, i) => { if (i) t += spazio(f); f[r] = t - f.blocco[k0]; t += lun(f); });
+            let inizio = 0, fine = t;
             if (u.extra.length) {
                 let e = 0;
                 u.extra.forEach(f => { f[r] = e - f.blocco[k0]; e += lun(f) + gap; });
@@ -119,7 +123,7 @@ const Disposizione = (() => {
                 });
             }
             [...u.membri, ...u.extra].forEach(f => { f[r] += pos - inizio; });
-            pos += fine - inizio + gap;
+            pos += fine - inizio;
         });
     }
 
@@ -250,7 +254,7 @@ const Disposizione = (() => {
     }
 
     function calcola(r, liberi, { tipo = 'orizzontale', direzione = 'auto', spaziatura = 1, fratelli = 1 } = {}) {
-        const o = distanze(limita(spaziatura || 1, 0.5, 2.5), limita(+fratelli || 1, 0.1, 6));
+        const o = distanze(limita(spaziatura || 1, 0.5, 2.5), limita(+fratelli || 1, 0.1, 12));
         const modo = r.modo || tipo;
         const orizz = modo === 'orizzontale' || modo === 'libera';
         disponi(r, modo === 'orizzontale' && ['destra', 'sinistra'].includes(direzione) ? direzione : modo, 1, o, orizz ? direzione : null);

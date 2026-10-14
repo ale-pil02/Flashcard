@@ -10,7 +10,7 @@ Viste.set = {
     titolo: 'Set',
     filtri: { setId: null, testo: '', tag: '', stato: '' },
     pannelloRevisioni: 'set',   // sezione Revisioni del set: 'set' (gli argomenti) o 'carte' (le flashcard)
-    soloSfasate: false,         // pannello "Per flashcard": solo le carte sfasate rispetto al set
+    soloSfasate: false,         // pannello "Per flashcard": solo le carte sfasate rispetto al loro mazzo
     chiuse: new Set(),   // carte con i rami chiusi
 
     mostra(el, params) {
@@ -194,7 +194,7 @@ Viste.set = {
                     perUrgenza: this.soloSfasate,
                     dopo: () => disegnaRevisioni(),
                     vuoto: this.soloSfasate
-                        ? `<p class="nota nota-centrata">Tutte le flashcard di questo set vanno al passo con il set. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo l'ultimo ripasso e mai valutate e quelle ripassate o cambiate per conto loro.</p>`
+                        ? `<p class="nota nota-centrata">Tutte le flashcard di questo set vanno al passo con il loro mazzo. Qui compaiono quelle valutate Ok o Scarso, quelle aggiunte dopo l'ultimo ripasso e mai valutate, quelle ripassate o cambiate per conto loro e quelle già valutate di un mazzo mai ripassato.</p>`
                         : `<p class="nota nota-centrata">Il set non ha ancora flashcard.</p>`,
                 });
                 return;

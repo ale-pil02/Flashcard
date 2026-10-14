@@ -95,8 +95,8 @@ const Tour = (() => {
             titolo: 'Per flashcard: tutte le carte',
             rotta: '/revisioni', prima: () => Object.assign(Viste.revisioni, { pannello: 'carte', scheda: 'tutte', soloSfasate: false }),
             trova: () => [$('.filtro-carte-rev'), $('.tabella-carte-rev')],
-            testo: () => `<p>Anche ogni flashcard ha le sue date, con il suo N° Rep. La colonna <b>Rispetto al set</b> dice se la carta va al passo con il
-                suo set o di quanto è sfasata.</p><p>Nel ripasso completo di un set, le carte che valuti Buono o Perfetto prendono la data del set.</p>`,
+            testo: () => `<p>Anche ogni flashcard ha le sue date, con il suo N° Rep. La colonna <b>Rispetto al mazzo</b> dice se la carta va al passo con il
+                suo mazzo o di quanto è sfasata.</p><p>Nel ripasso completo di un set, le carte che valuti Buono o Perfetto prendono la data del set.</p>`,
         },
         {
             titolo: 'Solo le sfasate',
@@ -107,7 +107,7 @@ const Tour = (() => {
                 return `<p>Con <b>Solo sfasate</b> restano le carte che vanno per conto loro${voci.length ? ', per esempio:' : '.'}</p>
                     ${voci.length ? `<ul class="tour-elenco">${voci.map(v => `<li><b>${esc(v.sfasatura.testo)}</b> · ${esc(Ui.tronca(testoDaHtml(v.carta.domanda), 60))}</li>`).join('')}</ul>` : ''}
                     <p>Ok le fa tornare un po' prima, Scarso le rende da rifare. <b>Ripassa le sfasate da fare</b> le studia tutte insieme;
-                    <b>Riadegua al set</b> rimette una carta al passo senza ripassarla.</p>`;
+                    <b>Riadegua al mazzo</b> rimette una carta al passo senza ripassarla.</p>`;
             },
         },
         {

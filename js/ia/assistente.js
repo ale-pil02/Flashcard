@@ -148,7 +148,6 @@ const Assistente = (() => {
     }
 
     document.addEventListener('storia-cambiata', () => { if (conv) allineaModifiche(); });
-    document.addEventListener('cartella-cambiata', e => { if (aperto && e.detail.setId === setId) disegnaFonti(); });
 
     // Nota dell'app per il modello: va col prossimo messaggio dell'utente
     function notaPerIA(testo, c = conv) {
@@ -594,12 +593,6 @@ const Assistente = (() => {
         attesa = '';
         partiFonti = null;   // i materiali si rileggono a ogni messaggio (possono essere cambiati)
         disegna();
-        // Una cartella collegata al set va riletta prima: l'assistente deve vedere l'ultima versione dei file
-        if (setId && Cartelle.collegata(setId)) {
-            attesa = 'Rileggo la cartella collegata…';
-            disegnaMessaggi();
-            await Cartelle.sincronizza(setId).catch(e => console.warn(e));
-        }
         let modifiche = false;
         const registrazione = Storia.inizia({ origine: 'assistente', descrizione: testo, escludi: [['chat', conv.id]] });
         try {

@@ -411,6 +411,14 @@ const Mappe = (() => {
         Object.values(m.nodi).forEach(n => {
             if ((n.genitore || n.id === m.radice) && (n.x != null || n.y != null)) { n.x = null; n.y = null; cambiata = true; }
         });
+        // La distanza tra i figli di un nodo (distanzaFigli, il vecchio cursore "Solo tra i figli di…") diventa la
+        // distanza di ogni figlio dal fratello prima (distanzaPrima, il cursore "Tra i nodi scelti"): stessi spazi
+        Object.values(m.nodi).forEach(n => {
+            if (!(+n.distanzaFigli > 0)) { if ('distanzaFigli' in n) { delete n.distanzaFigli; cambiata = true; } return; }
+            n.figli.slice(1).forEach(f => { if (m.nodi[f] && !(+m.nodi[f].distanzaPrima > 0)) m.nodi[f].distanzaPrima = +n.distanzaFigli; });
+            delete n.distanzaFigli;
+            cambiata = true;
+        });
         return cambiata;
     }
 

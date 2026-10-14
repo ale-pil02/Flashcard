@@ -623,7 +623,7 @@ const Importa = (() => {
         const n = nome => (Array.isArray(d[nome]) ? d[nome].length : 0);
         const ok = await Ui.conferma(
             `Il backup del ${esc(formattaData(contenuto.esportato || Date.now()))} contiene ${plurale(n('materie'), 'materia', 'materie')}, `
-            + `${plurale(n('set'), 'set', 'set')} e ${plurale(n('carte'), 'carta', 'carte')}.<br><br><b>Tutti i dati attuali verranno sostituiti.</b>`,
+            + `${plurale(n('set'), 'set', 'set')} e ${plurale(n('carte'), 'carta', 'carte')}.<br><br><b>Tutti i dati attuali verranno sostituiti${Cloud.attivo ? ', anche nel cloud e sugli altri dispositivi' : ''}.</b>`,
             { titolo: 'Ripristinare il backup?', ok: 'Ripristina', pericolo: true });
         if (!ok) return;
 

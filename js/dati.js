@@ -3,9 +3,8 @@
 //
 // Modello (un oggetto per documento, tutti con "id"):
 //   materia  { id, nome, emoji, colore, ordine, creata }
-//   set      { id, materiaId, genitoreId, nome, descrizione, creato, modificato, ultimoStudio, cartella }
-//              genitoreId = set che lo contiene (null = set principale della materia);
-//              cartella = { nome, collegata } se è collegato a una cartella del computer (js/cartelle.js)
+//   set      { id, materiaId, genitoreId, nome, descrizione, creato, modificato, ultimoStudio }
+//              genitoreId = set che lo contiene (null = set principale della materia)
 //   carta    { id, setId, genitoreId, ordine, domanda, risposte: [{ testo, corretta }], tag: [],
 //              suggerimento, spiegazione, mappa, srs, creata, modificata }
 //              genitoreId = domanda madre nello stesso set (null = domanda principale);
@@ -19,11 +18,11 @@
 //              ripasso di prova: conta nelle statistiche ma non ha cambiato la carta
 //   esame    { id, nome, data: "AAAA-MM-GG", materiaId, note }
 //   materiale { id, setId, nome, tipo, mime, dimensione, creato, testo, pagine, albero, anteprima,
-//              usaInChat, remoto, cartella, precedente, novita, mappaId }  file di studio di un set; il contenuto sta
+//              usaInChat, remoto, precedente, novita, aggiornato, mappaId }  file di studio di un set; il contenuto sta
 //              in Archivio "file" con lo stesso id. albero = { titolo, corpo, figli } per mappe mentali e schemi.
 //              mappaId = mappa dell'app (sezione Mappe) di cui è il riflesso: niente file, segue la mappa (js/materiali.js)
-//              cartella = { percorso, modificato, dimensione } se viene da una cartella collegata;
-//              precedente = { testo, albero, modificato } versione di prima dell'ultima modifica del file
+//              precedente = { testo, albero, modificato } versione di prima dell'ultima versione caricata (⋯ → Carica
+//              una nuova versione); aggiornato = quando è arrivata
 //   chat     { id: "globale" | "set:<id>", storico (formato Gemini), vista, aggiornata }
 //   argomento { id, setId, nome, fonte, materialeIds: [], fontiTolte: [], ripetizioni, ultimoRipasso: "AAAA-MM-GG" | null,
 //              intervallo, stato, delSet, carte, ordine, creato,
@@ -721,6 +720,18 @@ const Dati = (() => {
             nuove.intervalli = true;
         }
 
+        // Cartelle e file collegati tolti: i set non seguono più nessuna cartella e i materiali che ne venivano restano
+        // come copie normali (si rinominano, spostano, eliminano)
+        if (!fatte.senzaCollegamenti) {
+            const set = Archivio.tutti('set').filter(s => 'cartella' in s);
+            set.forEach(s => { delete s.cartella; });
+            if (set.length) Archivio.salvaMolti('set', set);
+            const materiali = Archivio.tutti('materiali').filter(m => 'cartella' in m || 'collegato' in m);
+            materiali.forEach(m => { delete m.cartella; delete m.collegato; });
+            if (materiali.length) Archivio.salvaMolti('materiali', materiali);
+            nuove.senzaCollegamenti = true;
+        }
+
         if (Object.keys(nuove).length) salvaImpostazioni({ migrazioni: { ...fatte, ...nuove } });
     }
 
@@ -765,14 +776,14 @@ const Dati = (() => {
     // Aggiorna la ripetizione spaziata e registra il ripasso. date = false per i ritorni della carta nella stessa
     // sessione: cambiano la valutazione, non N° Rep e date. diProva = ripasso di prova: la carta resta com'è, il ripasso
     // va lo stesso nelle statistiche
-    function registraRisposta(c, valutazione, durata, { date = true, diProva = false } = {}) {
+    function registraRisposta(c, valutazione, durata, { date = true, diProva = false, id = null } = {}) {
         if (!diProva) {
             c.srs = Srs.valuta(c.srs, valutazione, { date });
             Archivio.salva('carte', c);
         }
         const ts = Date.now();
         Archivio.salva('ripassi', {
-            id: uid(), cartaId: c.id, setId: c.setId, ts, giorno: chiaveGiorno(ts),
+            id: id || uid(), cartaId: c.id, setId: c.setId, ts, giorno: chiaveGiorno(ts),
             valutazione, modo: 'impara', durata: Math.round(limita(durata || 0, 0, 5 * 60 * 1000)), ...(diProva ? { ripassoDiProva: true } : {}),
         });
         const s = set(c.setId);

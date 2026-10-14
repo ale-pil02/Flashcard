@@ -1,5 +1,5 @@
 // Filtri della sezione Revisioni, per i pannelli "Per set" e "Per flashcard": quali set, quali stati (revisione, stato o
-// valutazione, rispetto al set), ordine crescente o decrescente (date di revisione, N° Rep, nome…) e colonne da
+// valutazione, rispetto al mazzo), ordine crescente o decrescente (date di revisione, N° Rep, nome…) e colonne da
 // nascondere. I filtri valgono finché l'app resta aperta; ordine e colonne nascoste restano in questo browser.
 // Dentro un gruppo di stati basta una scelta, tra gruppi diversi servono tutte (es. Set A, In ritardo, Ok o Scarso).
 
@@ -20,14 +20,14 @@ const FiltriRevisioni = (() => {
             id: 'valutazione', testo: 'Valutazione', di: v => { const x = Srs.valutazione(v.carta); return x == null ? 'nuova' : (Srs.VALUTAZIONI.find(y => y.valore === x) || {}).chiave; },
             voci: [['nuova', 'Mai valutata'], ...Srs.VALUTAZIONI.map(x => [x.chiave, x.nome])],
         }, {
-            id: 'rispetto', testo: 'Rispetto al set', di: v => v.sfasatura.tipo,
-            voci: [['passo', 'Al passo con il set'], ['prima', 'Prima del set'], ['dopo', 'Dopo il set'], ['scarso', 'Scarso: da rifare'], ['mai', 'Mai valutata'], ['senza-set', 'Set mai ripassato']],
+            id: 'rispetto', testo: 'Rispetto al mazzo', di: v => v.sfasatura.tipo,
+            voci: [['passo', 'Al passo con il mazzo'], ['prima', 'Prima del mazzo'], ['dopo', 'Dopo il mazzo'], ['scarso', 'Scarso: da rifare'], ['mai', 'Mai valutata'], ['avanti', 'Valutata, mazzo mai ripassato'], ['senza-set', 'Mazzo mai ripassato']],
         }];
     }
 
     const ORDINI = {
         set: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['nome', 'Mazzo'], ['set', 'Set'], ['stato', 'Stato']],
-        carte: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['carta', 'Flashcard'], ['set', 'Set'], ['valutazione', 'Valutazione'], ['sfasatura', 'Rispetto al set']],
+        carte: [['prossima', 'Prossima revisione'], ['ultimo', 'Ultimo ripasso'], ['intervallo', 'Intervallo'], ['ripetizioni', 'N° Rep'], ['carta', 'Flashcard'], ['set', 'Set'], ['valutazione', 'Valutazione'], ['sfasatura', 'Rispetto al mazzo']],
     };
     const nomeOrdine = (tipo, col) => ((ORDINI[tipo].find(o => o[0] === col) || [])[1]) || (col === 'avviso' ? 'Alert' : col);
 

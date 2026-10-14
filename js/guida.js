@@ -132,8 +132,8 @@ const Guida = (() => {
                     <li><i class="pallino pallino-ok"></i><span>Le carte <b>Ok</b> e <b>Scarso</b> seguono le loro regole e finiscono nel pannello <b>Per flashcard</b>, da ripassare per conto loro.</span></li>
                     <li><i class="pallino pallino-nuova"></i><span>Se ci sono carte da sistemare puoi ripassare <b>solo quelle</b>: si aggiornano le flashcard, non il N° Rep del set.</span></li>
                 </ul>
-                <p class="nota">Il pannello Per flashcard c'è nella sezione Revisioni e nella pagina di ogni set. «Riadegua al set» rimette una carta
-                    al passo con il set senza ripassarla.</p>`,
+                <p class="nota">Il pannello Per flashcard c'è nella sezione Revisioni e nella pagina di ogni set. «Riadegua al mazzo» rimette una carta
+                    al passo con il suo mazzo senza ripassarla.</p>`,
         },
         {
             titolo: 'Effettivo o di prova?',

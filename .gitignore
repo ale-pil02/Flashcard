@@ -7,3 +7,7 @@ venv/
 .vscode/
 .idea/
 node_modules/
+# Firebase: cartella pubblicata (la rigenera copia-in-public.js) e cache della CLI
+public/
+.firebase/
+firebase-debug.log

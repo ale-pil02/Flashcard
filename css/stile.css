@@ -1338,6 +1338,35 @@ a.tessera:hover, .tessera-materia:hover {
 .btn-valuta kbd { position: absolute; top: 6px; right: 8px; }
 .btn-valuta:hover { background: color-mix(in srgb, var(--colore) 24%, var(--superficie)); transform: translateY(-2px); }
 .btn-valuta.suggerita { border-color: var(--colore); }
+/* Carta già valutata, rivista con la freccia indietro: la valutazione data è evidenziata */
+.btn-valuta.data { border-color: var(--colore); background: color-mix(in srgb, var(--colore) 30%, var(--superficie)); }
+.btn-valuta:disabled { cursor: default; opacity: .55; transform: none; }
+.btn-valuta.data:disabled { opacity: 1; }
+.carta-passata { border-style: dashed; }
+.studio-sopra-carta .studio-etichette .btn { padding-block: 2px; }
+.studio-sopra-carta .studio-etichette .btn .ico { width: 14px; height: 14px; order: 2; }
+
+/* Frecce ‹ › ai lati dei pulsanti (come in Vaia): carte già valutate e carta successiva */
+.studio-nav { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; max-width: 840px; }
+.studio-nav > .valutazioni { flex: 1; }
+.studio-nav-centro { display: flex; flex: 1; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+.studio-freccia {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid var(--bordo-forte);
+    border-radius: 50%;
+    background: var(--superficie);
+    color: var(--testo-2);
+    cursor: pointer;
+    transition: background .15s, color .15s, transform .1s;
+}
+.studio-freccia .ico { width: 20px; height: 20px; }
+.studio-freccia:hover:not(:disabled) { background: var(--superficie-2); color: var(--testo); transform: scale(1.06); }
+.studio-freccia:disabled { opacity: .3; cursor: default; }
 .valuta-scarso { --colore: var(--scarso); }
 .valuta-ok { --colore: var(--ok); }
 .valuta-buono { --colore: var(--buono); }
@@ -1693,31 +1722,9 @@ body:has(.barra-selezione) #livello-toast { bottom: 84px; }
     body.ia-aperta .barra-selezione { left: calc(50% - 92px); }
 }
 
-/* Cartella collegata */
 button.link { padding: 0; border: none; background: none; font: inherit; font-weight: 700; cursor: pointer; }
-.striscia-cartella {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding: 10px 10px 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--primario) 30%, var(--bordo));
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--primario) 6%, var(--superficie));
-}
-.striscia-cartella.avviso { border-color: color-mix(in srgb, var(--ok) 45%, var(--bordo)); background: color-mix(in srgb, var(--ok) 8%, var(--superficie)); }
-.striscia-icona { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 10px; background: var(--primario-tenue); color: var(--primario-testo); }
-.striscia-cartella.avviso .striscia-icona { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok-testo); }
-.striscia-testo { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-.striscia-testo b { overflow: hidden; font-size: .92rem; text-overflow: ellipsis; white-space: nowrap; }
-.striscia-testo small { color: var(--testo-2); font-size: .8rem; }
-.nota-cartella { display: flex; align-items: flex-start; gap: 6px; margin: -4px 0 12px; }
-.nota-cartella .ico { flex: none; margin-top: 2px; color: var(--ok-testo); }
-.nota-collega { margin-top: 10px; text-align: center; }
-.ico.ico-cartella { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
 .tessera-materiale.con-novita { border-color: var(--primario); box-shadow: 0 0 0 3px var(--primario-tenue); }
 .etichetta-novita { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: var(--primario); color: #fff; font-size: .7rem; font-weight: 700; }
-.etichetta-mancante { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok-testo); font-size: .7rem; font-weight: 700; }
 .novita-materiale { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--primario) 30%, var(--bordo)); border-radius: 14px; background: color-mix(in srgb, var(--primario) 5%, var(--superficie)); }
 .novita-materiale summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; cursor: pointer; }
 .novita-materiale summary .ico { width: 17px; height: 17px; color: var(--primario-testo); }
@@ -2084,6 +2091,9 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
     .studio-piede { padding: 12px 12px calc(14px + env(safe-area-inset-bottom)); }
     .btn-grande { width: 100%; min-width: 0; }
     .valutazioni { gap: 6px; }
+    .studio-nav { gap: 6px; }
+    .studio-freccia { width: 34px; height: 34px; }
+    .studio-freccia .ico { width: 17px; height: 17px; }
     .btn-valuta { padding: 10px 4px; border-radius: 14px; }
     .btn-valuta b { font-size: .9rem; }
     .fine-numeri { grid-template-columns: repeat(2, 1fr); }
@@ -2161,6 +2171,7 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .sfasatura-prima, .sfasatura-scarso { background: color-mix(in srgb, var(--scarso) 13%, transparent); color: color-mix(in srgb, var(--scarso) 75%, var(--testo)); }
 .sfasatura-dopo { background: color-mix(in srgb, var(--ok) 16%, transparent); color: color-mix(in srgb, var(--ok) 60%, var(--testo)); }
 .sfasatura-mai { background: var(--primario-tenue); color: var(--primario-testo); }
+.sfasatura-avanti { background: color-mix(in srgb, var(--buono) 15%, transparent); color: color-mix(in srgb, var(--buono) 65%, var(--testo)); }
 
 /* Tutorial sui dati di prova (js/tour.js): la luce sull'elemento e la scheda con il testo, sotto le finestre */
 .tour-luce { position: fixed; z-index: 95; border-radius: 12px; outline: 2.5px solid var(--primario); box-shadow: 0 0 0 9999px rgba(12, 14, 34, .32); pointer-events: none; transition: left .25s, top .25s, width .25s, height .25s; }
@@ -2277,3 +2288,58 @@ tr:hover .btn-icona.mini, .btn-icona.mini:focus-visible { opacity: 1; }
 .conta-sorelle b { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
 .conta-sorelle b .ico { width: 15px; height: 15px; color: var(--primario-testo); }
 .conta-sorelle small { color: var(--testo-2); font-size: .8rem; line-height: 1.4; }
+
+/* Cloud (js/cloud.js): schermata di accesso, stato in Impostazioni, pallino nel menu */
+.accesso-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    place-items: center;
+    padding: 16px;
+    background: var(--sfondo);
+}
+body.bloccata .accesso-gate { display: grid; }
+body.bloccata { overflow: hidden; }
+.accesso-scheda {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: min(360px, 100%);
+    padding: 32px 24px;
+    border: 1px solid var(--bordo);
+    border-radius: 20px;
+    background: var(--superficie);
+    box-shadow: var(--ombra-media);
+    text-align: center;
+}
+.accesso-scheda h2 { margin: 0; font-size: 1.3rem; }
+.accesso-scheda p { margin: 0; color: var(--testo-2); font-size: .92rem; line-height: 1.5; }
+.accesso-logo { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--sfumatura); color: #fff; box-shadow: 0 6px 16px -6px var(--primario); }
+.accesso-logo .ico { width: 26px; height: 26px; }
+.btn-google {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 10px 18px;
+    border: 1px solid var(--bordo-forte);
+    border-radius: 99px;
+    background: var(--superficie);
+    color: var(--testo);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.btn-google:hover { border-color: var(--testo-3); }
+.btn-google[hidden] { display: none; }
+.btn-google svg { width: 18px; height: 18px; flex: none; }
+
+.stato-cloud { display: flex; align-items: center; gap: 6px; }
+.pallino-cloud { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--nuova); }
+.pallino-cloud[data-livello="ok"] { background: var(--perfetto); }
+.pallino-cloud[data-livello="lavoro"] { background: var(--ok); }
+.pallino-cloud[data-livello="errore"] { background: var(--scarso); }
+.nav-cloud { width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: var(--scarso); }
+.barra-inferiore .nav-cloud { position: absolute; top: 4px; left: calc(50% + 8px); margin: 0; }
