@@ -10,6 +10,7 @@
 //
 // voce { id, quando, origine: 'assistente' | 'utente' | 'annullamento', descrizione, riepilogo,
 //        documenti: [{ c: collezione, id, prima, dopo }], file: [{ id, prima: Blob | null }],
+//        stati: [{ id: altra voce, prima: { stato, annullataDa }, dopo }] (voci annullate o ripristinate nel blocco),
 //        stato: 'attiva' | 'annullata', annullataDa: id della voce che l'ha annullata }
 
 const Storia = (() => {
@@ -26,6 +27,7 @@ const Storia = (() => {
     const SEP = '\u0000';
 
     let aperta = null;   // registrazione in corso
+    let sospesa = null;  // turno dell'assistente messo da parte mentre annulla o ripristina una voce (dalTurno)
 
     Archivio.alCambio((nome, operazioni) => {
         if (!aperta || aperta.nonRegistrate.includes(nome)) return;
@@ -62,7 +64,7 @@ const Storia = (() => {
         aperta = {
             id: uid(), quando: Date.now(), origine, descrizione, nonRegistrate,
             foto: Archivio.fotografia([...nonRegistrate, ...SENZA_FOTO]), prime: new Map(),
-            toccati: new Map(), file: new Map(), attese: [], invalida: false,
+            toccati: new Map(), file: new Map(), stati: new Map(), attese: [], invalida: false,
             escludi: new Set(escludi.map(([nome, id]) => nome + SEP + id)),
         };
         return aperta;
@@ -104,10 +106,16 @@ const Storia = (() => {
             if (prima || await Archivio.leggiFile(id)) file.push({ id, prima });
         }
         if (!documenti.length && !file.length) return null;
+        const stati = [];
+        for (const [id, prima] of r.stati) {
+            const ora = await Archivio.leggiRiga('storia', id);
+            const dopo = ora && { stato: ora.stato, annullataDa: ora.annullataDa };
+            if (dopo && JSON.stringify(prima) !== JSON.stringify(dopo)) stati.push({ id, prima, dopo });
+        }
 
         const voce = {
             id: r.id, quando: r.quando, origine: r.origine, descrizione: r.descrizione,
-            riepilogo: riepiloga(documenti), documenti, file, stato: 'attiva', annullataDa: null,
+            riepilogo: riepiloga(documenti), documenti, file, stati, stato: 'attiva', annullataDa: null,
         };
         await Archivio.salvaRiga('storia', voce);
         pota();
@@ -169,6 +177,15 @@ const Storia = (() => {
 
     // ---- Annullamento ------------------------------------------------------------------
 
+    // Segna una voce annullata o di nuovo attiva. Il cambio entra nei blocchi in registrazione (anche nel turno messo da
+    // parte): chi annulla quel blocco rimette la voce com'era, insieme alle modifiche che aveva disfatto o rifatto
+    async function cambiaStato(voce, stato, annullataDa) {
+        const prima = { stato: voce.stato, annullataDa: voce.annullataDa };
+        Object.assign(voce, { stato, annullataDa });
+        await Archivio.salvaRiga('storia', voce);
+        [aperta, sospesa].forEach(r => { if (r && !r.stati.has(voce.id)) r.stati.set(voce.id, prima); });
+    }
+
     async function annulla(idVoce) {
         if (aperta) throw new Error("Aspetta che l'assistente finisca di lavorare");
         const voce = await Archivio.leggiRiga('storia', idVoce);
@@ -204,11 +221,14 @@ const Storia = (() => {
             if (f.prima) await Archivio.salvaFile(f.id, f.prima);
             else await Archivio.eliminaFile(f.id);
         }
+        // Le voci annullate o ripristinate in questo blocco tornano com'erano (se poi non le hai cambiate di nuovo)
+        for (const s of voce.stati || []) {
+            const v = await Archivio.leggiRiga('storia', s.id);
+            if (v && v.stato === s.dopo.stato && v.annullataDa === s.dopo.annullataDa) await cambiaStato(v, s.prima.stato, s.prima.annullataDa);
+        }
         const inversa = await termina(r);
 
-        voce.stato = 'annullata';
-        voce.annullataDa = inversa ? inversa.id : null;
-        await Archivio.salvaRiga('storia', voce);
+        await cambiaStato(voce, 'annullata', inversa ? inversa.id : null);
         dopoCambio();
         return { saltati, inversa };
     }
@@ -219,17 +239,15 @@ const Storia = (() => {
         if (!voce || voce.stato !== 'annullata') return { saltati: 0 };
         if (!voce.annullataDa) throw new Error('Non c\'è niente da ripristinare');
         const esito = await annulla(voce.annullataDa);
-        voce.stato = 'attiva';
-        voce.annullataDa = null;
-        await Archivio.salvaRiga('storia', voce);
+        await cambiaStato(voce, 'attiva', null);
         dopoCambio();
         return esito;
     }
 
     // Annulla o ripristina chiesto all'assistente mentre il suo turno è registrato: il turno si mette da parte, la modifica
     // ha la sua voce (come dalle Modifiche recenti), poi quello che ha toccato entra anche nel turno, così l'Annulla sotto
-    // la risposta la disfa insieme al resto. Le mappe che cambieranno si fotografano per il turno prima, intere (la voce
-    // dell'annullamento le tiene alleggerite, senza le immagini)
+    // la risposta la disfa insieme al resto, e la voce torna «attiva» o «annullata» com'era (cambiaStato). Le mappe che
+    // cambieranno si fotografano per il turno prima, intere (la voce dell'annullamento le tiene alleggerite, senza le immagini)
     async function dalTurno(idVoce, ripristino) {
         const turno = aperta;
         if (turno) {
@@ -238,11 +256,13 @@ const Storia = (() => {
             ((voce && voce.documenti) || []).filter(d => SENZA_FOTO.includes(d.c)).forEach(d => primaDi(d.c, d.id));
         }
         aperta = null;
+        sospesa = turno;
         let esito;
         try {
             esito = ripristino ? await ripristina(idVoce) : await annulla(idVoce);
         } finally {
             aperta = turno;
+            sospesa = null;
         }
         const inversa = esito && esito.inversa;
         if (turno && inversa) {

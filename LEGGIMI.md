@@ -330,7 +330,8 @@ mazzo con alcune carte.
 
 ## Mappe mentali (come SimpleMind)
 
-Sezione **Mappe** nel menu: elenco delle mappe con anteprima, filtrabile per materia; ogni mappa può stare
+Sezione **Mappe** nel menu: elenco delle mappe con anteprima (si aggiorna da sola anche quando una mappa chiusa cambia,
+per esempio per l'assistente o per l'Annulla della chat), filtrabile per materia; ogni mappa può stare
 in una materia e in un set. **Ordine delle mappe** (in alto a destra): *A mano*, *Ultima modificata* o *Per nome*.
 A mano si trascinano le tessere dove si vuole (o dal loro menu ⋯: *Sposta prima* / *Sposta dopo*); le mappe nuove
 compaiono in cima. Trascinare una tessera passa da solo all'ordine a mano. Nel modello: `ordineMappe` e

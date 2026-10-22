@@ -53,6 +53,9 @@ body[data-vista="mappa"] .fab-ia { display: none; }
     background: var(--sfondo);
 }
 
+/* Editor nascosto che ridisegna la miniatura di una mappa cambiata a editor chiuso */
+.miniatura-nascosta { position: fixed; top: 0; left: -10000px; width: 1200px; height: 800px; overflow: hidden; visibility: hidden; pointer-events: none; }
+
 .mappa-barra {
     display: flex;
     align-items: center;

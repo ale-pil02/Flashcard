@@ -42,7 +42,7 @@ Viste.mappa = {
 };
 
 // opzioni: nodo = nodo da selezionare all'apertura; solaLettura, ramo (cima da mostrare), evidenzia (nodo da
-// evidenziare), zoomLibero (la rotellina ingrandisce anche senza Ctrl)
+// evidenziare), zoomLibero (la rotellina ingrandisce anche senza Ctrl); soloAnteprima (solo la miniatura, qui in fondo)
 function EditorMappa(radiceEl, m, opzioni = {}) {
     const SOLA = !!opzioni.solaLettura;
     const ico = Ui.ico;
@@ -4265,6 +4265,20 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
 
     // ---- Avvio e chiusura -----------------------------------------------------------------------------
 
+    // Solo la miniatura: si disegna, senza ascoltare niente né salvare. Si ridisegna quando le immagini dei nodi sono
+    // pronte, che prima misurerebbero zero
+    if (opzioni.soloAnteprima) {
+        return {
+            id: m.id,
+            async miniatura() {
+                disegna();
+                await Promise.all([...radiceEl.querySelectorAll('img')].map(i => i.decode().catch(() => {})));
+                disegna();
+                return anteprima();
+            },
+        };
+    }
+
     if (SOLA) {
         tela.addEventListener('pointerdown', suPuntatoreGiuLettura);
         tela.addEventListener('wheel', suRotella, { passive: false });
@@ -4379,3 +4393,57 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
         fissaPosizioni, posizionaNuovi, posizioneLibera, offsetRaccordo, preparaAllineamento, preparaDistanza,
     };
 }
+
+// Miniature delle mappe cambiate mentre il loro editor è chiuso (dall'assistente, dall'Annulla della chat, dalla «link
+// argomenti» che si riallinea): poco dopo un editor nascosto le ridisegna, così nella sezione Mappe non restano vecchie.
+// Con l'editor aperto ci pensa lui (salvaOra); mentre lavori in un editor si aspetta che tu lo lasci, per non rallentarlo
+(() => {
+    const daRifare = new Set();
+    let timer = null, inCorso = false;
+    const aperta = id => !!(Viste.mappa.editor && Viste.mappa.editor.id === id);
+
+    document.addEventListener('mappa-da-fuori', e => {
+        const { id, fase } = e.detail || {};
+        if (fase !== 'dopo' || aperta(id)) return;
+        daRifare.add(id);
+        programma(800);
+    });
+
+    function programma(ms) {
+        clearTimeout(timer);
+        timer = setTimeout(rifai, ms);
+    }
+
+    async function rifai() {
+        if (inCorso || (App.rottaAttiva && App.rottaAttiva.vista === 'mappa')) { programma(3000); return; }
+        inCorso = true;
+        let cambiate = 0;
+        try {
+            for (const id of [...daRifare]) {
+                daRifare.delete(id);
+                const m = Mappe.mappa(id);
+                if (!m || aperta(id)) continue;
+                // Si disegna una copia portata al formato attuale come all'apertura nell'editor (le immagini restano quelle
+                // della mappa): della mappa vera cambia solo la miniatura
+                const copia = { ...structuredClone({ ...m, immagini: null }), immagini: m.immagini };
+                Mappe.aggiorna(copia);
+                const box = document.createElement('div');
+                box.className = 'miniatura-nascosta';
+                document.body.appendChild(box);
+                try {
+                    const svg = await EditorMappa(box, copia, { soloAnteprima: true }).miniatura();
+                    // Archivio.salva e non Mappe.salva: la data di modifica resta quella del cambio vero
+                    if (svg && svg !== m.anteprima && Mappe.mappa(id) === m && !aperta(id)) { m.anteprima = svg; Archivio.salva('mappe', m); cambiate++; }
+                } catch (err) {
+                    console.warn('Miniatura della mappa non ridisegnata', err);
+                } finally {
+                    box.remove();
+                }
+            }
+        } finally {
+            inCorso = false;
+        }
+        // L'elenco delle mappe si ridisegna appena non disturba, come per i dati arrivati dal cloud
+        if (cambiate && App.rottaAttiva && App.rottaAttiva.vista === 'mappe') App.aggiornaDaRemoto();
+    }
+})();

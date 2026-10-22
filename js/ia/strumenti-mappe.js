@@ -30,6 +30,10 @@
     const nomeMappa = id => (Mappe.mappa(id) || {}).nome || 'una mappa';
     const breve = t => Ui.tronca(Mappe.testoSemplice(t) || '(vuoto)', 50);
 
+    // "link argomenti": i nodi presi dalle mappe della materia (n.rif) si cambiano lì, come nell'editor
+    const generato = (m, id) => !!(m.panoramica && m.nodi[id] && m.nodi[id].rif);
+    const DALL_ORIGINE = "nodi presi dalle mappe della materia (campo origine di leggi_mappa): si tolgono dalla mappa d'origine (per quelli scelti a mano basta in_link_argomenti=false in modifica_nodi, sempre sulla mappa d'origine)";
+
     // Cambia una mappa; se qualcosa va storto la rimette com'era
     function cambia(id, fn) {
         const m = richiediMappa(id);
@@ -754,7 +758,7 @@
         },
         {
             nome: 'sposta_nodi',
-            descrizione: "Sposta nodi (con i loro rami) sotto un altro nodo, in una certa posizione tra i figli, o li rende nodi liberi; con copia=true li duplica. Con mappa_destinazione_id li porta (o copia) in un'altra mappa. Per riordinare tra fratelli: stesso genitore e il nuovo indice.",
+            descrizione: "Sposta nodi (con i loro rami) sotto un altro nodo, in una certa posizione tra i figli, o li rende nodi liberi; con copia=true li duplica. Con mappa_destinazione_id li porta (o copia) in un'altra mappa. Per riordinare tra fratelli: stesso genitore e il nuovo indice. Nella «link argomenti» i nodi presi dalle altre mappe non si spostano (ordine e genitore vengono da lì); portati in un'altra mappa ne arriva una copia e restano anche qui.",
             parametri: S.obj({
                 mappa_id: S.str('mappa di partenza'), nodi_ids: S.arr(S.str('id')),
                 genitore_id: S.str("nuovo genitore; '' = nodi liberi"), indice: S.int('facoltativo: posizione tra i figli del nuovo genitore (0 = primo)'),
@@ -786,14 +790,20 @@
                         const ed = editorDi(m.id);
                         if (ed && genitore) ed.posizionaNuovi(genitore, esiti.map(x => x.nuovo_id));
                     });
+                    // Come Taglia nell'editor: i nodi presi dalle mappe della materia arrivano copiati e restano nella «link argomenti»
+                    const rimasti = destId !== src.id && !a.copia ? cime.filter(id => generato(src, id)) : [];
                     if (destId !== src.id && !a.copia) {
-                        cambia(src.id, m => cime.forEach(id => { if (id !== m.radice) Mappe.eliminaNodo(m, id); }));
+                        cambia(src.id, m => cime.forEach(id => { if (id !== m.radice && !rimasti.includes(id)) Mappe.eliminaNodo(m, id); }));
                     }
-                    return { [a.copia ? 'copiati' : 'spostati']: esiti, mappa_destinazione_id: destId };
+                    return {
+                        [a.copia ? 'copiati' : 'spostati']: esiti, mappa_destinazione_id: destId,
+                        ...(rimasti.length ? { rimasti_anche_nella_partenza: rimasti, perche: DALL_ORIGINE } : {}),
+                    };
                 }
                 return cambia(src.id, m => {
                     cime.forEach((id, i) => {
                         if (id === m.radice) { esiti.push({ nodo_id: id, errore: 'la radice non si sposta' }); return; }
+                        if (generato(m, id)) { esiti.push({ nodo_id: id, errore: "nodo preso da un'altra mappa (campo origine): ordine e genitore vengono dalla mappa d'origine e si cambiano lì" }); return; }
                         const n = m.nodi[id], prima = n.genitore;
                         if (!Mappe.sposta(m, id, genitore, indice == null ? null : indice + i)) {
                             esiti.push({ nodo_id: id, errore: 'non si può mettere un nodo dentro il suo stesso ramo' });
@@ -814,14 +824,18 @@
         },
         {
             nome: 'elimina_nodi',
-            descrizione: "Elimina nodi da una mappa, con tutto il loro ramo. Chiede conferma all'utente.",
+            descrizione: "Elimina nodi da una mappa, con tutto il loro ramo. Chiede conferma all'utente. Nella «link argomenti» i nodi presi dalle altre mappe non si eliminano: si tolgono dalla mappa d'origine.",
             parametri: S.obj({ mappa_id: S.str('id della mappa'), nodi_ids: S.arr(S.str('id')) }, ['mappa_id', 'nodi_ids']),
             modifica: true,
             etichetta: a => `Elimino ${plurale((a.nodi_ids || []).length, 'nodo', 'nodi')} da «${nomeMappa(a.mappa_id)}»`,
             esegui: async (a, ctx) => {
                 const m = richiediMappa(a.mappa_id);
-                const ids = (a.nodi_ids || []).filter(id => m.nodi[id] && id !== m.radice);
-                if (!ids.length) throw new Error('Nessun nodo da eliminare (la radice non si elimina).');
+                const scelti = (a.nodi_ids || []).filter(id => m.nodi[id] && id !== m.radice);
+                // Come nell'editor: dalla «link argomenti» si eliminano solo i nodi aggiunti a mano
+                const fermi = scelti.filter(id => generato(m, id));
+                const ids = scelti.filter(id => !generato(m, id));
+                const nonEliminati = fermi.length ? { non_eliminati: fermi, perche: DALL_ORIGINE } : {};
+                if (!ids.length) throw new Error(fermi.length ? `Non elimino niente: sono ${DALL_ORIGINE}.` : 'Nessun nodo da eliminare (la radice non si elimina).');
                 const tutti = new Set(ids.flatMap(id => [id, ...Mappe.discendenti(m, id)]));
                 const esempi = ids.slice(0, 4).map(id => `<li>${esc(breve(m.nodi[id].testo))}</li>`).join('');
                 // Flashcard collegate a questi nodi: l'utente lo deve sapere prima
@@ -830,7 +844,7 @@
                 if (!await ctx.conferma(`Eliminare ${plurale(tutti.size, 'nodo', 'nodi')} da <b>${esc(m.nome)}</b>?<ul>${esempi}</ul>${ids.length > 4 ? '…' : ''}${avviso}`)) return { annullato: true, motivo: "L'utente non ha confermato" };
                 return cambia(m.id, x => {
                     ids.forEach(id => Mappe.eliminaNodo(x, id));
-                    return { eliminati: tutti.size, ...(collegate.length ? { flashcard_ora_senza_nodo: collegate.map(c => ({ id: c.id, domanda: Ui.tronca(testoDaHtml(c.domanda), 80) })) } : {}) };
+                    return { eliminati: tutti.size, ...nonEliminati, ...(collegate.length ? { flashcard_ora_senza_nodo: collegate.map(c => ({ id: c.id, domanda: Ui.tronca(testoDaHtml(c.domanda), 80) })) } : {}) };
                 });
             },
         },

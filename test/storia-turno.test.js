@@ -35,6 +35,93 @@ test('annullare il turno che ha usato modifiche_recenti non toglie le immagini d
     assert.match(di_nuovo.fatto, /niente/);
 });
 
+// Un turno dell'assistente che cambia la domanda di una carta: la sua voce nelle Modifiche recenti
+async function voceCheCambia(g, carta, domanda) {
+    const Storia = g('Storia');
+    const r = Storia.inizia({ origine: 'assistente', descrizione: 'cambia la domanda' });
+    assert.ok(!(await strumento(g, 'modifica_carte', { modifiche: [{ carta_id: carta.id, domanda }] })).errore);
+    return Storia.termina(r);
+}
+
+// Un turno in cui l'assistente annulla o ripristina quella voce con modifiche_recenti
+async function turnoCon(g, azione, voceId) {
+    const Storia = g('Storia');
+    const r = Storia.inizia({ origine: 'assistente', descrizione: `${azione} la modifica di prima` });
+    const esito = await strumento(g, 'modifiche_recenti', { azione, voce_id: voceId });
+    assert.equal(esito.fatto, azione === 'annulla' ? 'annullata' : 'ripristinata');
+    return Storia.termina(r);
+}
+
+const statoDi = async (g, id) => {
+    const v = await g('Archivio').leggiRiga('storia', id);
+    return { stato: v.stato, annullataDa: v.annullataDa };
+};
+
+test('annullando il turno che ha annullato una voce, la voce torna «attiva» e si può annullare di nuovo', async () => {
+    const { g } = await caricaApp();
+    const Storia = g('Storia'), Dati = g('Dati');
+    const carta = Dati.tutteLeCarte()[0];
+    const domandaPrima = Dati.carta(carta.id).domanda;
+    const voce = await voceCheCambia(g, carta, 'domanda nuova');
+
+    const turno = await turnoCon(g, 'annulla', voce.id);
+    assert.equal(Dati.carta(carta.id).domanda, domandaPrima);
+    assert.equal((await statoDi(g, voce.id)).stato, 'annullata');
+
+    // Annullando il turno la modifica torna, e la voce con lei: di nuovo «attiva», con il pulsante Annulla
+    await Storia.annulla(turno.id);
+    assert.equal(Dati.carta(carta.id).domanda, 'domanda nuova');
+    assert.deepEqual(await statoDi(g, voce.id), { stato: 'attiva', annullataDa: null });
+    assert.equal((await Storia.voci()).find(v => v.id === voce.id).stato, 'attiva', 'nelle Modifiche recenti (e nel riquadro della chat) è attiva');
+
+    // Ripristinando il turno la voce torna annullata, e il suo Ripristina rimette la modifica senza lasciare niente indietro
+    await Storia.ripristina(turno.id);
+    assert.equal(Dati.carta(carta.id).domanda, domandaPrima);
+    assert.equal((await statoDi(g, voce.id)).stato, 'annullata');
+    assert.equal((await Storia.ripristina(voce.id)).saltati, 0);
+    assert.equal(Dati.carta(carta.id).domanda, 'domanda nuova');
+    assert.equal((await statoDi(g, voce.id)).stato, 'attiva');
+
+    // E la si può annullare come una voce qualsiasi
+    await Storia.annulla(voce.id);
+    assert.equal(Dati.carta(carta.id).domanda, domandaPrima);
+});
+
+test('annullando il turno che ha ripristinato una voce, la voce torna «annullata» e si può ripristinare di nuovo', async () => {
+    const { g } = await caricaApp();
+    const Storia = g('Storia'), Dati = g('Dati');
+    const carta = Dati.tutteLeCarte()[0];
+    const domandaPrima = Dati.carta(carta.id).domanda;
+    const voce = await voceCheCambia(g, carta, 'domanda nuova');
+    await Storia.annulla(voce.id);
+    const annullata = await statoDi(g, voce.id);
+    assert.equal(annullata.stato, 'annullata');
+
+    const turno = await turnoCon(g, 'ripristina', voce.id);
+    assert.equal(Dati.carta(carta.id).domanda, 'domanda nuova');
+    assert.equal((await statoDi(g, voce.id)).stato, 'attiva');
+
+    await Storia.annulla(turno.id);
+    assert.equal(Dati.carta(carta.id).domanda, domandaPrima);
+    assert.deepEqual(await statoDi(g, voce.id), annullata, 'di nuovo annullata, dallo stesso annullamento di prima');
+    assert.equal((await Storia.ripristina(voce.id)).saltati, 0);
+    assert.equal(Dati.carta(carta.id).domanda, 'domanda nuova');
+});
+
+test("se dopo il turno la voce è stata cambiata di nuovo a mano, annullare il turno la lascia com'è", async () => {
+    const { g } = await caricaApp();
+    const Storia = g('Storia'), Dati = g('Dati');
+    const carta = Dati.tutteLeCarte()[0];
+    const voce = await voceCheCambia(g, carta, 'domanda nuova');
+    const turno = await turnoCon(g, 'annulla', voce.id);
+    await Storia.ripristina(voce.id);   // l'utente la ripristina dalle Modifiche recenti
+    assert.equal((await statoDi(g, voce.id)).stato, 'attiva');
+
+    await Storia.annulla(turno.id);
+    assert.deepEqual(await statoDi(g, voce.id), { stato: 'attiva', annullataDa: null });
+    assert.equal(Dati.carta(carta.id).domanda, 'domanda nuova');
+});
+
 test('annullare il turno che ha registrato un ripasso toglie anche i ripassi dalle statistiche', async () => {
     const { g } = await caricaApp();
     const Storia = g('Storia'), Dati = g('Dati');
