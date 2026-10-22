@@ -14,7 +14,9 @@
 
 const Storia = (() => {
     const MAX_VOCI = 40;
-    const NON_REGISTRATE = ['ripassi', 'chat'];   // studio e conversazioni non si annullano
+    // Studio e conversazioni non si annullano. I ripassi però entrano nei turni dell'assistente (registra_ripasso, dati
+    // di prova) e nei loro annullamenti: annullando il turno spariscono insieme alle date delle carte che hanno mosso
+    const NON_REGISTRATE = { utente: ['ripassi', 'chat'], assistente: ['chat'], annullamento: ['chat'] };
     // Documenti grandi (le mappe, con le immagini): non stanno nella fotografia iniziale, si fotografano quando chi li
     // cambia lo annuncia (primaDi). Le modifiche fatte nell'editor delle mappe hanno il suo Annulla e qui non contano.
     const SENZA_FOTO = ['mappe'];
@@ -26,7 +28,7 @@ const Storia = (() => {
     let aperta = null;   // registrazione in corso
 
     Archivio.alCambio((nome, operazioni) => {
-        if (!aperta || NON_REGISTRATE.includes(nome)) return;
+        if (!aperta || aperta.nonRegistrate.includes(nome)) return;
         if (operazioni.some(op => op.tipo === 'sostituisci')) { aperta.invalida = true; return; }
         operazioni.forEach(op => {
             const id = op.tipo === 'salva' ? op.valore.id : op.id;
@@ -56,9 +58,10 @@ const Storia = (() => {
     // escludi: [[collezione, id]] da non registrare (es. la conversazione in corso)
     function inizia({ origine = 'utente', descrizione = '', escludi = [] } = {}) {
         if (aperta) return null;   // dentro un blocco già aperto le modifiche finiscono in quello
+        const nonRegistrate = NON_REGISTRATE[origine] || NON_REGISTRATE.utente;
         aperta = {
-            id: uid(), quando: Date.now(), origine, descrizione,
-            foto: Archivio.fotografia([...NON_REGISTRATE, ...SENZA_FOTO]), prime: new Map(),
+            id: uid(), quando: Date.now(), origine, descrizione, nonRegistrate,
+            foto: Archivio.fotografia([...nonRegistrate, ...SENZA_FOTO]), prime: new Map(),
             toccati: new Map(), file: new Map(), attese: [], invalida: false,
             escludi: new Set(escludi.map(([nome, id]) => nome + SEP + id)),
         };
@@ -135,7 +138,7 @@ const Storia = (() => {
     const NOMI = {
         carte: ['flashcard', 'flashcard', 'f'], set: ['set', 'set', 'm'], materie: ['materia', 'materie', 'f'],
         materiali: ['materiale', 'materiali', 'm'], esami: ['esame', 'esami', 'm'], argomenti: ['mazzo', 'mazzi', 'm'],
-        mappe: ['mappa', 'mappe', 'f'],
+        mappe: ['mappa', 'mappe', 'f'], ripassi: ['ripasso', 'ripassi', 'm'],
     };
 
     function participio(radice, n, genere) { return radice + (genere === 'f' ? (n === 1 ? 'a' : 'e') : (n === 1 ? 'o' : 'i')); }
@@ -223,6 +226,46 @@ const Storia = (() => {
         return esito;
     }
 
+    // Annulla o ripristina chiesto all'assistente mentre il suo turno è registrato: il turno si mette da parte, la modifica
+    // ha la sua voce (come dalle Modifiche recenti), poi quello che ha toccato entra anche nel turno, così l'Annulla sotto
+    // la risposta la disfa insieme al resto. Le mappe che cambieranno si fotografano per il turno prima, intere (la voce
+    // dell'annullamento le tiene alleggerite, senza le immagini)
+    async function dalTurno(idVoce, ripristino) {
+        const turno = aperta;
+        if (turno) {
+            let voce = await Archivio.leggiRiga('storia', idVoce);
+            if (voce && ripristino) voce = voce.annullataDa ? await Archivio.leggiRiga('storia', voce.annullataDa) : null;
+            ((voce && voce.documenti) || []).filter(d => SENZA_FOTO.includes(d.c)).forEach(d => primaDi(d.c, d.id));
+        }
+        aperta = null;
+        let esito;
+        try {
+            esito = ripristino ? await ripristina(idVoce) : await annulla(idVoce);
+        } finally {
+            aperta = turno;
+        }
+        const inversa = esito && esito.inversa;
+        if (turno && inversa) {
+            inversa.documenti.forEach(d => {
+                const chiave = d.c + SEP + d.id;
+                // Una mappa senza la fotografia di prima non entra nel turno: annullandolo la si cancellerebbe
+                if (SENZA_FOTO.includes(d.c) && !turno.prime.has(chiave)) return;
+                if (turno.nonRegistrate.includes(d.c) || turno.escludi.has(chiave)) return;
+                turno.toccati.set(chiave, { nome: d.c, id: d.id });
+            });
+            inversa.file.forEach(f => { if (!turno.file.has(f.id)) turno.file.set(f.id, f.prima); });
+        }
+        return esito;
+    }
+
+    const annullaNelTurno = idVoce => dalTurno(idVoce, false);
+    const ripristinaNelTurno = idVoce => dalTurno(idVoce, true);
+
+    // Le voci delle modifiche recenti, dalla più nuova (senza gli annullamenti, che stanno dentro la voce che annullano)
+    async function voci() {
+        return (await Archivio.tutteLeRighe('storia')).filter(v => v.origine !== 'annullamento').sort((a, b) => b.quando - a.quando);
+    }
+
     function dopoCambio() {
         App.applicaTema(Dati.impostazioni().tema);
         App.aggiornaDopoAssistente();
@@ -252,9 +295,7 @@ const Storia = (() => {
     // ---- Elenco delle modifiche recenti ---------------------------------------------------
 
     async function elenco() {
-        const voci = (await Archivio.tutteLeRighe('storia'))
-            .filter(v => v.origine !== 'annullamento')
-            .sort((a, b) => b.quando - a.quando);
+        const lista = await voci();
         const ico = Ui.ico;
         // Per l'assistente il titolo è cosa ha cambiato e sotto c'è la richiesta; per le tue azioni basta la descrizione
         const riga = v => `
@@ -270,9 +311,9 @@ const Storia = (() => {
             </div>`;
         Ui.modale({
             titolo: 'Modifiche recenti', classe: 'modale-larga',
-            corpo: voci.length
+            corpo: lista.length
                 ? `<p class="nota">Le modifiche fatte dall'assistente e quelle su più flashcard insieme. Annullando torna com'era solo quello che hanno cambiato loro.</p>
-                   <div class="lista-storia">${voci.map(riga).join('')}</div>`
+                   <div class="lista-storia">${lista.map(riga).join('')}</div>`
                 : Ui.vuoto({ icona: 'orologio', titolo: 'Nessuna modifica da annullare', testo: "Qui compaiono le modifiche dell'assistente e quelle fatte su più flashcard insieme." }),
             alApri: el => el.addEventListener('click', async e => {
                 const b = e.target.closest('[data-storia]');
@@ -289,7 +330,8 @@ const Storia = (() => {
     }
 
     return {
-        inizia, termina, primaDi, esegui, annulla, ripristina, annullaConAvviso, ripristinaConAvviso, elenco,
+        inizia, termina, primaDi, esegui, annulla, ripristina, annullaConAvviso, ripristinaConAvviso, annullaNelTurno, ripristinaNelTurno,
+        voci, elenco,
         get inCorso() { return !!aperta; },
     };
 })();

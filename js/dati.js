@@ -837,6 +837,12 @@ const Dati = (() => {
         return esami().filter(e => e.data >= oggiChiave);
     }
 
+    // ---- Tutti i dati -----------------------------------------------------------------
+    // "Elimina tutti i dati" (Impostazioni, assistente): resta solo il tema. Non si annulla: anche la storia si svuota
+    function eliminaTutto() {
+        return Archivio.sostituisciTutto({ impostazioni: [{ ...IMPOSTAZIONI_PREDEFINITE, tema: impostazioni().tema, id: ID_IMPOSTAZIONI }] });
+    }
+
     return {
         impostazioni, salvaImpostazioni, limitiSessione,
         materie, materia, creaMateria, aggiornaMateria, eliminaMateria,
@@ -851,6 +857,6 @@ const Dati = (() => {
         segnaRipasso, annullaUltimoRipasso,
         chat, salvaChat, eliminaChat,
         registraRisposta, ripassi, attivitaPerGiorno, oggi,
-        esami, esame, creaEsame, aggiornaEsame, eliminaEsame, prossimiEsami,
+        esami, esame, creaEsame, aggiornaEsame, eliminaEsame, prossimiEsami, eliminaTutto,
     };
 })();

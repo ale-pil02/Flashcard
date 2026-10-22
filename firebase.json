@@ -7,7 +7,7 @@
   },
   "hosting": {
     "public": "public",
-    "predeploy": ["node copia-in-public.js"],
+    "predeploy": ["npm test", "node copia-in-public.js"],
     "ignore": ["**/.*"],
     "headers": [
       {

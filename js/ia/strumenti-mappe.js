@@ -6,6 +6,7 @@
 (() => {
     const S = Strumenti.S;
     const num = d => ({ type: 'NUMBER', description: d });
+    const PT_BASE = 10.5;   // dimensione del testo in punti con scala 1 (come nell'editor)
 
     // ---- Aiuti -------------------------------------------------------------------------------------
 
@@ -64,6 +65,29 @@
         return e;
     }
 
+    // Larghezza e altezza vere di un'immagine (0 se non si riesce a leggerla)
+    function misura(src) {
+        if (typeof Image === 'undefined') return Promise.resolve({ w: 0, h: 0 });
+        return new Promise(ok => { const i = new Image(); i.onload = () => ok({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => ok({ w: 0, h: 0 }); i.src = src; });
+    }
+
+    // Un'immagine come icona: al massimo 64 px di lato, in PNG, come «Carica icona» dell'editor
+    function comeIcona(src) {
+        if (typeof Image === 'undefined') return Promise.resolve(src);
+        return new Promise(ok => {
+            const i = new Image();
+            i.onload = () => {
+                const c = document.createElement('canvas');
+                const s = Math.min(1, 64 / Math.max(i.naturalWidth, i.naturalHeight));
+                c.width = Math.max(1, Math.round(i.naturalWidth * s)); c.height = Math.max(1, Math.round(i.naturalHeight * s));
+                c.getContext('2d').drawImage(i, 0, 0, c.width, c.height);
+                ok(c.toDataURL('image/png'));
+            };
+            i.onerror = () => ok(src);
+            i.src = src;
+        });
+    }
+
     // Materia e set (undefined = come adesso): il set porta con sé la sua materia, e cambiando solo la materia
     // il set resta se ne fa parte
     function posto(materiaId, setId, attuale = {}) {
@@ -106,16 +130,37 @@
         else { m.disposizione = v; if (v === 'orizzontale' && !['auto', 'orario'].includes(m.direzione)) m.direzione = 'auto'; }
     }
 
+    // Campi del nodo che nodoPerIA mette con un altro nome (gli altri vanno in altri_dati)
+    const CAMPI_NODO = ['id', 'genitore', 'figli', 'testo', 'nota', 'etichette', 'icona', 'immagine', 'figure', 'link', 'data', 'spunta', 'chiuso',
+        'disposizione', 'larghezza', 'distanzaPrima', 'stilePredefinito', 'raccordo', 'rif', 'inPanoramica', 'legami', 'stile', 'lato', 'off', 'x', 'y', 'piega', 'percorso'];
+
+    // Etichetta sopra il nodo: il testo, e con i dettagli anche sfondo, carattere, dimensione e posizione
+    function etichettaPerIA(e, dettagli) {
+        if (!dettagli) return e.testo;
+        const s = e.stile || {};
+        return {
+            id: e.id, testo: e.testo, colore: s.riempimento || undefined, grassetto: s.grassetto || undefined, corsivo: s.corsivo || undefined,
+            sottolineato: s.sottolineato || undefined, pt: s.scala ? Math.round(s.scala * PT_BASE * 10) / 10 : undefined, colore_testo: s.coloreTesto || undefined,
+            dx: Math.round(e.dx || 0), dy: Math.round(e.dy || 0),
+            ...Strumenti.altriDati(e, ['id', 'testo', 'dx', 'dy', 'stile']),
+            ...(Strumenti.altriDati(s, ['riempimento', 'grassetto', 'corsivo', 'sottolineato', 'scala', 'coloreTesto']).altri_dati ? { stile: Strumenti.altriDati(s, ['riempimento', 'grassetto', 'corsivo', 'sottolineato', 'scala', 'coloreTesto']).altri_dati } : {}),
+        };
+    }
+
     // Nodo per il modello, con il suo ramo annidato
     function nodoPerIA(m, id, opz, livello = 0) {
         const n = m.nodi[id];
         if (!n) return null;
         const o = { id: n.id, testo: n.testo };
         if (n.nota) o.nota = n.nota;
-        if (n.etichette && n.etichette.length) o.etichette = n.etichette.map(e => e.testo);
-        if (n.icona) o.icona = String(n.icona).startsWith('img:') ? '(immagine caricata)' : n.icona;
-        if (n.immagine) o.immagine = { larghezza: n.immagine.larghezza };
-        if ((n.figure || []).length) o.immagini_accanto = n.figure.map(f => ({ larghezza: Math.round(f.larghezza) }));
+        if (n.etichette && n.etichette.length) o.etichette = n.etichette.map(e => etichettaPerIA(e, opz.dettagli));
+        if (n.icona) { o.icona = n.icona; if (String(n.icona).startsWith('img:')) o.icona_immagine = 'icona caricata dall\'utente (immagine della mappa)'; }
+        if (n.immagine) o.immagine = { immagine_id: n.immagine.id, larghezza: n.immagine.larghezza, ...Strumenti.altriDati(n.immagine, ['id', 'larghezza']) };
+        if ((n.figure || []).length) {
+            o.immagini_accanto = n.figure.map(f => (opz.dettagli
+                ? { id: f.id, immagine_id: f.img, larghezza: Math.round(f.larghezza), rapporto: f.rapporto, dx: Math.round(f.dx || 0), dy: Math.round(f.dy || 0), libera: !!f.fluttuante, ...Strumenti.altriDati(f, ['id', 'img', 'larghezza', 'rapporto', 'dx', 'dy', 'fluttuante']) }
+                : { id: f.id, larghezza: Math.round(f.larghezza) }));
+        }
         if (n.link) o.link = n.link;
         if (n.data) o.data = n.data;
         if (n.spunta != null) o.spunta = n.spunta ? 'fatta' : 'da_fare';
@@ -124,8 +169,8 @@
         if (+n.larghezza > 0) o.larghezza = Math.round(n.larghezza);
         if (+n.distanzaPrima > 0) o.distanza_dal_fratello_prima = n.distanzaPrima;
         if (n.stilePredefinito) { const x = Mappe.stilePredefinito(n.stilePredefinito); o.stile_predefinito = x ? { id: x.id, nome: x.nome } : n.stilePredefinito; }
-        if (n.raccordo) o.raccordo = { nodi: n.raccordo.nodi, graffa: !!n.raccordo.graffa };
-        if (n.rif && n.rif.mappa) o.origine = { mappa_id: n.rif.mappa, nodo_id: n.rif.nodo };
+        if (n.raccordo) o.raccordo = { nodi: n.raccordo.nodi, graffa: !!n.raccordo.graffa, ...Strumenti.altriDati(n.raccordo, ['nodi', 'graffa']) };
+        if (n.rif) o.origine = n.rif.mappa ? { mappa_id: n.rif.mappa, nodo_id: n.rif.nodo, ...Strumenti.altriDati(n.rif, ['mappa', 'nodo']) } : { materia_id: n.rif.materia, ...Strumenti.altriDati(n.rif, ['materia']) };
         if (n.inPanoramica) o.in_link_argomenti = true;
         if (n.legami) o.altri_genitori = n.legami;
         if (opz.dettagli) {
@@ -133,9 +178,10 @@
             if (n.lato) o.lato = n.lato === 's' ? 'sinistra' : 'destra';
             if (n.off) o.posizione = { dx: Math.round(n.off.dx), dy: Math.round(n.off.dy) };
             if (!n.genitore && id !== m.radice && n.x != null) o.posizione = { x: Math.round(n.x), y: Math.round(n.y || 0) };
-            if (n.piega) o.linea_piegata = true;
+            if (n.piega) o.linea_piegata = n.piega;
             if (n.percorso) o.curvatura_linea = curvaturaPerIA(n.percorso);
         }
+        Object.assign(o, Strumenti.altriDati(n, CAMPI_NODO));
         if (n.figli.length) {
             if (livello >= opz.profondita) o.discendenti_non_mostrati = Mappe.discendenti(m, id).length;
             else o.figli = n.figli.map(f => nodoPerIA(m, f, opz, livello + 1)).filter(Boolean);
@@ -221,14 +267,50 @@
         if (!v) return collegamento ? [{ u: 0.5, v: 0 }] : null;
         return forma === 'onda' ? [{ u: 0.3333, v }, { u: 0.6667, v: -v }] : [{ u: 0.5, v }];
     }
-    const SCHEMA_CURVATURA = S.obj({ valore: num('da -100 a 100: quanto si piega e da che parte (0 = normale)'), forma: S.str('arco (predefinita) | onda (a S)') }, ['valore']);
+    const SCHEMA_CURVATURA = S.obj({
+        valore: num('da -100 a 100: quanto si piega e da che parte (0 = normale)'), forma: S.str('arco (predefinita) | onda (a S)'),
+        punti: S.arr(S.obj({ u: num('da 0 a 1: dove, lungo la linea'), v: num('scostamento in proporzione alla lunghezza della linea (-2…2; + da una parte, − dall\'altra)') }, ['u', 'v']),
+            "al posto di valore: i punti di passaggio messi a mano, come trascinando la linea nell'editor (in lettura: curvatura.punti)"),
+    });
+
+    // Percorso della linea da una curvatura del modello: punti a mano oppure arco/onda
+    function percorsoDa(c, collegamento = false) {
+        if (Array.isArray(c.punti) && c.punti.length) {
+            const p = puntiValidi(c.punti);
+            if (!p) throw new Error('curvatura.punti: servono punti con u (0-1) e v numerici');
+            return p;
+        }
+        return percorsoCurvo(c.forma, c.valore, collegamento);
+    }
 
     function curvaturaPerIA(percorso) {
         if (!Disposizione.percorsoValido(percorso)) return undefined;
         const [p, q] = percorso;
         if (percorso.length === 1 && Math.abs(p.u - 0.5) < 0.01) return { forma: 'arco', valore: Math.round(p.v * 200) };
-        if (percorso.length === 2 && Math.abs(p.u - 1 / 3) < 0.01 && Math.abs(q.u - 2 / 3) < 0.01) return { forma: 'onda', valore: Math.round(p.v * 200) };
-        return { punti_a_mano: percorso.length };
+        if (percorso.length === 2 && Math.abs(p.u - 1 / 3) < 0.01 && Math.abs(q.u - 2 / 3) < 0.01 && Math.abs(p.v + q.v) < 0.0001) return { forma: 'onda', valore: Math.round(p.v * 200) };
+        return { punti: percorso.map(x => ({ u: x.u, v: x.v })) };
+    }
+
+    // Punti di passaggio messi a mano (come trascinando la linea nell'editor): u da 0 a 1 lungo la linea, v = scostamento
+    // in proporzione alla sua lunghezza (positivo da una parte, negativo dall'altra)
+    function puntiValidi(punti) {
+        const p = (punti || []).filter(x => x && isFinite(x.u) && isFinite(x.v)).map(x => ({ u: limita(+x.u, 0.01, 0.99), v: limita(+x.v, -2, 2) }))
+            .sort((a, b) => a.u - b.u);
+        return p.length && Disposizione.percorsoValido(p) ? p : null;
+    }
+
+    // Campi della mappa che leggi_mappa mette con un altro nome
+    const CAMPI_MAPPA = ['id', 'nome', 'materiaId', 'setId', 'tema', 'disposizione', 'direzione', 'spaziatura', 'spaziaturaFratelli', 'griglia', 'linee',
+        'paletta', 'coloreRadice', 'livelli', 'radice', 'nodi', 'relazioni', 'panoramica'];
+
+    // Un tema com'è, per il modello
+    function temaPerIA(t) {
+        return {
+            id: t.id, nome: t.nome, personale: !!t.personale || undefined, sfondo: t.sfondo, testo: t.testo, radice: t.radice, scuro: t.scuro || undefined,
+            colori_rami: t.paletta, livelli: t.livelli,
+            linee: { forma: t.linee.forma, affusolamento: t.linee.affusolamento, spessore_radice: t.linee.inizio, riduzione: +(1 - t.linee.fattore).toFixed(2), spessore_minimo: t.linee.minimo, spessore: t.linee.spessore },
+            ...Strumenti.altriDati(t, ['id', 'nome', 'personale', 'sfondo', 'testo', 'radice', 'scuro', 'paletta', 'livelli', 'linee']),
+        };
     }
 
     // ---- Strumenti ------------------------------------------------------------------------------------
@@ -253,10 +335,12 @@
                         materia: x.materiaId && Dati.materia(x.materiaId) ? { id: x.materiaId, nome: Dati.materia(x.materiaId).nome } : null,
                         set: x.setId && Dati.set(x.setId) ? { id: x.setId, nome: Dati.set(x.setId).nome } : null,
                         modificata: chiaveGiorno(x.modificata || x.creata), ...(x.id === aperta ? { aperta: true } : {}),
+                        ...(x.panoramica ? { link_argomenti: true } : {}),
                     })),
                     temi: Mappe.temi().map(t => ({ id: t.id, nome: t.nome, ...(t.personale ? { personale: true } : {}) })),
                     stili_predefiniti: Mappe.stiliPredefiniti().map((x, i) => ({ id: x.id, nome: x.nome, scorciatoia: i < 9 ? `Ctrl+Alt+${i + 1}` : undefined })),
                     ordine_mappe: Mappe.ordineMappe(),
+                    materie_senza_link_argomenti: Panoramica.mancanti().map(x => ({ id: x.id, nome: x.nome })),
                 };
                 if (a.cerca) {
                     const q = String(a.cerca).toLowerCase();
@@ -298,37 +382,53 @@
                     set: m.setId && Dati.set(m.setId) ? Dati.set(m.setId).nome : null, set_id: m.setId,
                     impostazioni: {
                         tema: { id: t.id, nome: t.nome }, disposizione: m.disposizione, direzione_rami: m.direzione, spaziatura: m.spaziatura || 1,
-                        distanza_fratelli: m.spaziaturaFratelli || 1, griglia: m.griglia && m.griglia.attiva ? { attiva: true, passo: m.griglia.passo || 20 } : undefined,
+                        distanza_fratelli: m.spaziaturaFratelli || 1, griglia: m.griglia ? { attiva: !!m.griglia.attiva, passo: m.griglia.passo || 20, ...Strumenti.altriDati(m.griglia, ['attiva', 'passo']) } : undefined,
                         linee: { forma: t.linee.forma, affusolamento: t.linee.affusolamento, spessore_radice: t.linee.inizio, riduzione: +(1 - t.linee.fattore).toFixed(2), spessore_minimo: t.linee.minimo, spessore: t.linee.spessore },
+                        linee_proprie_della_mappa: m.linee && Object.keys(m.linee).length ? m.linee : undefined,
                         colori_rami: (m.paletta || []).length ? m.paletta : null, colore_radice: m.coloreRadice || null,
-                        stili_per_livello_propri: !!(m.livelli && m.livelli.length) || undefined,
+                        stili_per_livello_propri: m.livelli && m.livelli.length ? m.livelli : undefined,
                     },
+                    // immagini = il contenuto delle immagini (dati binari: i nodi dicono quali hanno), anteprima = miniatura
+                    // disegnata dall'app, vista = zoom e posizione dello schermo nell'editor
+                    ...Strumenti.altriDati(m, CAMPI_MAPPA, ['immagini', 'anteprima', 'vista']),
                     radice: nodoPerIA(m, m.radice, opz),
                     nodi_liberi: Mappe.radiciLibere(m).map(l => nodoPerIA(m, l.id, opz)),
                     collegamenti: m.relazioni.map(r => ({
                         id: r.id, da: r.da, a: r.a, testo: r.testo || undefined, colore: r.colore || undefined, tratto: r.tratto || 'punti',
                         freccia_inizio: !!r.frecciaInizio, freccia_fine: r.frecciaFine !== false,
+                        curvatura: r.percorso ? curvaturaPerIA(r.percorso) : undefined, curva_spostata_a_mano: r.curva || undefined,
+                        ...Strumenti.altriDati(r, ['id', 'da', 'a', 'testo', 'colore', 'tratto', 'frecciaInizio', 'frecciaFine', 'percorso', 'curva']),
                     })),
                     aperta_nell_editor: !!ed || undefined,
-                    selezione_utente: s && (s.selezionati.length || s.concentrato_su || s.linea_scelta) ? {
+                    selezione_utente: s && (s.selezionati.length || s.concentrato_su || s.linea_scelta || s.collegamento_scelto || s.etichetta_scelta || s.immagine_scelta) ? {
                         nodi: s.selezionati, concentrato_su: s.concentrato_su || undefined, linea_verso_il_nodo: s.linea_scelta || undefined,
+                        collegamento: s.collegamento_scelto || undefined, etichetta: s.etichetta_scelta || undefined, immagine: s.immagine_scelta || undefined,
                     } : undefined,
                 };
             },
         },
         {
             nome: 'crea_mappa',
-            descrizione: "Crea una mappa mentale. Con 'schema' la riempie subito: elenco rientrato (tab o due spazi per livello, trattini facoltativi) o titoli Markdown (#, ##…). Se lo schema ha una sola riga in cima quella è la radice, altrimenti la radice è il nome e le righe in cima sono i rami principali.",
+            descrizione: "Crea una mappa mentale. Con 'schema' la riempie subito: elenco rientrato (tab o due spazi per livello, trattini facoltativi) o titoli Markdown (#, ##…). Se lo schema ha una sola riga in cima quella è la radice, altrimenti la radice è il nome e le righe in cima sono i rami principali. Con link_argomenti crea invece la mappa d'insieme «link argomenti» di una materia (come il riquadro «Crea «link argomenti»» della sezione Mappe; vedi materie_senza_link_argomenti in elenca_mappe).",
             parametri: S.obj({
                 nome: S.str('nome della mappa (e tema centrale se non c\'è lo schema)'), schema: S.str('facoltativo: i nodi come elenco rientrato'),
                 materia_id: S.str('facoltativa'), set_id: S.str('facoltativo: il set (la materia è la sua)'),
                 tema: S.str('facoltativo: id del tema (vedi elenca_mappe)'),
                 disposizione: S.str('facoltativa: orizzontale | destra | sinistra | verticale | su | lineare | radiale | libera'),
                 apri: S.bool("facoltativo: apre la mappa nell'editor"),
-            }, ['nome']),
+                link_argomenti: S.bool("crea la mappa «link argomenti» della materia materia_id (nome e contenuto li mette l'app)"),
+            }),
             modifica: true,
-            etichetta: a => `Creo la mappa «${a.nome}»`,
+            etichetta: a => (a.link_argomenti ? 'Creo la mappa «link argomenti»' : `Creo la mappa «${a.nome}»`),
             esegui: a => {
+                if (a.link_argomenti) {
+                    if (!Dati.materia(a.materia_id)) throw new Error('Serve la materia (materia_id): vedi materie_senza_link_argomenti in elenca_mappe.');
+                    const p = Panoramica.crea(a.materia_id);
+                    if (!p) throw new Error('Questa materia ha già la sua mappa «link argomenti».');
+                    if (a.apri) Router.vai('/mappa/' + p.id);
+                    return { creata: true, mappa_id: p.id, nome: p.nome, nodi: Mappe.contaNodi(p), aperta: !!a.apri };
+                }
+                if (!String(a.nome || '').trim()) throw new Error('Serve il nome della mappa.');
                 const nome = String(a.nome || '').trim() || 'Nuova mappa';
                 const m = a.schema && String(a.schema).trim() ? FileMappe.daTesto(a.schema, nome) : Mappe.nuova({ nome });
                 m.nome = nome;
@@ -360,6 +460,7 @@
                     spessore_minimo: num('spessore minimo (0.5-6 px)'), spessore: num('spessore senza affusolamento (0.5-10 px)'),
                 }, [], 'linee di tutta la mappa'),
                 ripristina_tema: S.bool('toglie colori, stili per livello e linee propri della mappa: torna tutto come nel tema'),
+                ripristina_linee: S.bool('solo le linee della mappa tornano come nel tema (il Reset di «Linee della mappa»)'),
             }, ['mappa_id']),
             modifica: true,
             etichetta: a => `Modifico la mappa «${nomeMappa(a.mappa_id)}»`,
@@ -368,6 +469,7 @@
                 if (a.nome && a.nome.trim()) { m.nome = a.nome.trim(); fatto.push('nome'); }
                 if (a.materia_id !== undefined || a.set_id !== undefined) { Object.assign(m, posto(a.materia_id, a.set_id, m)); fatto.push('posto'); }
                 if (a.ripristina_tema) { m.paletta = null; m.coloreRadice = null; m.livelli = null; m.linee = null; fatto.push('stile del tema'); }
+                if (a.ripristina_linee) { m.linee = null; fatto.push('linee del tema'); }
                 if (a.tema) { m.tema = temaValido(a.tema); m.paletta = null; m.coloreRadice = null; m.livelli = null; m.linee = null; fatto.push('tema'); }
                 if (a.disposizione) { impostaDisposizione(m, m.radice, a.disposizione); fatto.push('disposizione'); }
                 if (a.direzione_rami) {
@@ -511,7 +613,11 @@
                     data: S.str("data AAAA-MM-GG ('' per toglierla)"),
                     spunta: S.str('casella da spuntare: nessuna | da_fare | fatta'),
                     icona: S.str("un'emoji, 'n:1'…'n:10' (numero nel cerchio) o '' per toglierla"),
-                    etichette: S.arr(S.obj({ testo: S.str('testo'), colore: S.str("sfondo #rrggbb o 'nessuno'") }, ['testo']), "etichette sopra il nodo (sostituiscono quelle che ci sono; lista vuota = nessuna)"),
+                    etichette: S.arr(S.obj({
+                        testo: S.str('testo'), colore: S.str("sfondo #rrggbb o 'nessuno'"), colore_testo: S.str('colore del testo, #rrggbb'),
+                        grassetto: S.bool('grassetto'), corsivo: S.bool('corsivo'), sottolineato: S.bool('sottolineato'), pt: num('dimensione in punti (normale 7,9)'),
+                        dx: num('posizione rispetto al centro del nodo, orizzontale (px)'), dy: num('verticale (px; negativo = sopra)'),
+                    }, ['testo']), "etichette sopra il nodo, in ordine (sostituiscono quelle che ci sono, tenendo di ognuna ciò che non dici; lista vuota = nessuna)"),
                     larghezza_immagine: S.int("larghezza dell'immagine del nodo in px (40-600)"), togli_immagine: S.bool("toglie l'immagine del nodo"),
                     disposizione_figli: S.str("come si dispongono i figli: '' (come il padre) | orizzontale | destra | sinistra | verticale | su | lineare | radiale | libera; per la radice è quella della mappa"),
                     distanza_figli: num('distanza tra tutti i figli di questo nodo (0.2-12, 1 = come gli altri fratelli); 0 = normale. Per pochi nodi usa distanza_tra_nodi'),
@@ -523,7 +629,8 @@
                     stile: SCHEMA_STILE,
                     ripristina: S.arr(S.str('nome della proprietà di stile'), 'proprietà di stile da riportare come nel tema'),
                     ripristina_stile: S.bool('tutto lo stile del nodo torna come nel tema'),
-                    copia_stile_da: S.str('id di un nodo da cui copiare tutto lo stile'),
+                    copia_stile_da: S.str('id di un nodo da cui copiare tutto lo stile (con lo stile predefinito)'),
+                    solo_linea: S.bool('con copia_stile_da: copia solo lo stile della linea verso il genitore'),
                     raddrizza_linea: S.bool('la linea verso il genitore, se piegata a mano, torna normale'),
                     lato: S.str('solo rami principali: destra | sinistra | auto'),
                     posizione: S.obj({ dx: num('distanza orizzontale del centro da quello del genitore (genitore in disposizione libera)'), dy: num('distanza verticale'), x: num('nodi liberi: centro, x'), y: num('nodi liberi: centro, y') }),
@@ -567,15 +674,21 @@
                         n.etichette = x.etichette.filter(e => String(e.testo || '').trim()).map((e, i) => {
                             const vecchia = (n.etichette || [])[i];
                             const fondo = e.colore === 'nessuno' ? 'nessuno' : Mappe.coloreValido(e.colore) ? e.colore : null;
-                            return vecchia
+                            const et = vecchia
                                 ? { ...vecchia, testo: String(e.testo).trim(), stile: { ...(vecchia.stile || {}), ...(fondo ? { riempimento: fondo } : {}) } }
                                 : { id: uid(), testo: String(e.testo).trim(), dx: 0, dy: -(26 + i * 22), stile: { riempimento: fondo || '#ffe0d2', scala: 0.75 } };
+                            ['grassetto', 'corsivo', 'sottolineato'].forEach(k => { if (typeof e[k] === 'boolean') et.stile[k] = e[k]; });
+                            if (isFinite(e.pt) && +e.pt > 0) et.stile.scala = Math.round(limita(+e.pt, 4, 96) / PT_BASE * 1000) / 1000;
+                            if (e.colore_testo != null) { if (Mappe.coloreValido(e.colore_testo)) et.stile.coloreTesto = e.colore_testo; else delete et.stile.coloreTesto; }
+                            if (isFinite(e.dx)) et.dx = +e.dx;
+                            if (isFinite(e.dy)) et.dy = +e.dy;
+                            return et;
                         });
                     }
                     if (x.togli_immagine) n.immagine = null;
                     else if (x.larghezza_immagine != null) {
                         if (n.immagine) n.immagine = { ...n.immagine, larghezza: limita(+x.larghezza_immagine || 120, 40, 600) };
-                        else avvisi.push('il nodo non ha un\'immagine (le immagini le aggiunge l\'utente)');
+                        else avvisi.push('il nodo non ha un\'immagine dentro (per aggiungerla: immagini_nodi)');
                     }
                     if (x.disposizione_figli != null) impostaDisposizione(m, n.id, x.disposizione_figli);
                     if (x.distanza_figli != null) {
@@ -586,20 +699,33 @@
                     if (x.distanza_dal_fratello_prima != null) { const v = +x.distanza_dal_fratello_prima; if (v > 0 && Math.abs(v - 1) > 0.01) n.distanzaPrima = limita(v, 0.2, 12); else delete n.distanzaPrima; }
                     if (x.larghezza != null) n.larghezza = +x.larghezza > 0 ? Math.round(limita(+x.larghezza, 40, 1200)) : null;
                     if (x.stile_predefinito != null) {
+                        const pre = x.stile_predefinito && Mappe.stilePredefinito(x.stile_predefinito);
                         if (!x.stile_predefinito) delete n.stilePredefinito;
-                        else if (Mappe.stilePredefinito(x.stile_predefinito)) n.stilePredefinito = x.stile_predefinito;
-                        else avvisi.push(`stile predefinito «${x.stile_predefinito}» inesistente (vedi elenca_mappe)`);
+                        else if (pre) {
+                            // Come nell'editor: le scelte fatte sul nodo che lo stile decide si tolgono, così si vede lo stile
+                            n.stilePredefinito = pre.id;
+                            if (n.stile) Object.keys(pre.stile).forEach(k => { delete n.stile[k]; });
+                        } else avvisi.push(`stile predefinito «${x.stile_predefinito}» inesistente (vedi elenca_mappe)`);
                     }
                     if (typeof x.ramo_chiuso === 'boolean') n.chiuso = x.ramo_chiuso && n.figli.length > 0;
                     if (x.ripristina_stile) { n.stile = {}; n.piega = null; n.percorso = null; }
                     if (x.copia_stile_da) {
+                        // Come Copia/Incolla stile dell'editor: tutto lo stile con lo stile predefinito, oppure (solo_linea)
+                        // solo quello della linea verso il genitore
                         const da = m.nodi[x.copia_stile_da];
-                        if (da) n.stile = structuredClone(da.stile || {}); else avvisi.push('nodo da cui copiare lo stile non trovato');
+                        if (!da) avvisi.push('nodo da cui copiare lo stile non trovato');
+                        else if (x.solo_linea) {
+                            n.stile = n.stile || {};
+                            Mappe.CHIAVI_COLLEGAMENTO.forEach(k => { if (da.stile && k in da.stile) n.stile[k] = structuredClone(da.stile[k]); else delete n.stile[k]; });
+                        } else {
+                            n.stile = structuredClone(da.stile || {});
+                            if (da.stilePredefinito) n.stilePredefinito = da.stilePredefinito; else delete n.stilePredefinito;
+                        }
                     }
                     (x.ripristina || []).forEach(k => { if (n.stile) delete n.stile[k]; });
                     if (x.stile) applicaStile(n, x.stile, avvisi);
                     if (x.raddrizza_linea) { n.piega = null; n.percorso = null; }
-                    if (x.curvatura_linea && n.genitore) { n.piega = null; n.percorso = percorsoCurvo(x.curvatura_linea.forma, x.curvatura_linea.valore); }
+                    if (x.curvatura_linea && n.genitore) { n.piega = null; n.percorso = percorsoDa(x.curvatura_linea); }
                     if (x.lato != null) {
                         if (n.genitore !== m.radice) avvisi.push('il lato vale solo per i rami principali');
                         else n.lato = { destra: 'd', sinistra: 's' }[x.lato] || null;
@@ -782,13 +908,125 @@
                     if (typeof x.freccia_inizio === 'boolean') r.frecciaInizio = x.freccia_inizio;
                     if (typeof x.freccia_fine === 'boolean') r.frecciaFine = x.freccia_fine;
                     if (x.raddrizza) { r.curva = null; r.percorso = null; }
-                    if (x.curvatura) r.percorso = percorsoCurvo(x.curvatura.forma, x.curvatura.valore, true);
+                    if (x.curvatura) { r.percorso = percorsoDa(x.curvatura, true); r.curva = null; }
                 });
                 const via = new Set(a.elimina || []);
                 const prima = m.relazioni.length;
                 m.relazioni = m.relazioni.filter(r => !via.has(r.id));
                 return { creati, modificati: (a.modifica || []).length, eliminati: prima - m.relazioni.length, ...(errori.length ? { errori } : {}) };
             }),
+        },
+        {
+            nome: 'immagini_nodi',
+            descrizione: "Le immagini dei nodi, come nell'editor: aggiunge un'immagine (da un materiale immagine di un set, o riusando un'immagine che la mappa ha già) accanto al nodo, dentro il nodo o come sua icona; cambia le immagini accanto (larghezza, posizione, libera = segue il nodo senza spostare gli altri nodi), le mette dentro il nodo o porta fuori quella dentro; le elimina. Gli id si leggono con leggi_mappa e dettagli (immagine, immagini_accanto, icona). Il contenuto delle immagini non lo vedi, e i file del computer li aggiunge solo l'utente.",
+            parametri: S.obj({
+                mappa_id: S.str('id della mappa'),
+                aggiungi: S.arr(S.obj({
+                    nodo_id: S.str('id del nodo'), materiale_id: S.str('materiale di tipo immagine (elenca_materiali)'),
+                    immagine_id: S.str("oppure un'immagine che la mappa ha già (immagine_id in leggi_mappa)"),
+                    dove: S.str('accanto (predefinito: libera, sopra il nodo) | dentro | icona'), larghezza: num('px'),
+                }, ['nodo_id'])),
+                modifica: S.arr(S.obj({
+                    nodo_id: S.str('id del nodo'), immagine_accanto_id: S.str('id da immagini_accanto'), larghezza: num('px (24-1600)'),
+                    dx: num('centro rispetto al centro del nodo, orizzontale (px)'), dy: num('verticale (px; negativo = sopra)'),
+                    libera: S.bool('true = segue il nodo ma non sposta i nodi'), metti_dentro: S.bool("diventa l'immagine dentro il nodo (quella che c'era esce al suo posto)"),
+                }, ['nodo_id', 'immagine_accanto_id'])),
+                larghezza_dentro: S.arr(S.obj({ nodo_id: S.str('id del nodo'), larghezza: num('px (40-600)') }, ['nodo_id', 'larghezza']), "larghezza dell'immagine dentro il nodo"),
+                porta_fuori: S.arr(S.str('id del nodo'), "l'immagine dentro questi nodi diventa un'immagine accanto, libera"),
+                elimina: S.arr(S.obj({ nodo_id: S.str('id del nodo'), immagine_accanto_id: S.str("id da immagini_accanto; 'dentro' = l'immagine dentro il nodo; 'tutte' = tutte quelle del nodo") }, ['nodo_id', 'immagine_accanto_id'])),
+            }, ['mappa_id']),
+            modifica: true,
+            etichetta: a => `Sistemo le immagini di «${nomeMappa(a.mappa_id)}»`,
+            esegui: async a => {
+                const m = richiediMappa(a.mappa_id);
+                // Le immagini da leggere e misurare si preparano prima, poi la mappa cambia in un colpo solo
+                const nuove = [];
+                for (const x of a.aggiungi || []) {
+                    richiediNodo(m, x.nodo_id);
+                    let src = null;
+                    if (x.immagine_id) src = m.immagini[x.immagine_id] || null;
+                    else if (x.materiale_id) {
+                        const mat = Dati.materiale(x.materiale_id);
+                        if (!mat || mat.tipo !== 'immagine') throw new Error(`Il materiale ${x.materiale_id} non è un'immagine: usa elenca_materiali.`);
+                        const blob = await Archivio.leggiFile(mat.id);
+                        if (!blob) throw new Error(`Il file di «${mat.nome}» non è disponibile su questo dispositivo.`);
+                        src = await Ricco.comprimiImmagine(blob);
+                    }
+                    if (!src) throw new Error(`Nodo ${x.nodo_id}: indica materiale_id (un'immagine dei materiali) o immagine_id (una della mappa).`);
+                    if (x.dove === 'icona') src = await comeIcona(src);
+                    nuove.push({ x, src, misure: await misura(src) });
+                }
+                const fuori = new Map();
+                for (const id of a.porta_fuori || []) {
+                    const n = richiediNodo(m, id);
+                    if (n.immagine && m.immagini[n.immagine.id]) fuori.set(id, await misura(m.immagini[n.immagine.id]));
+                }
+                return cambia(m.id, mm => {
+                    const fatto = [], errori = [];
+                    // Prima si portano fuori le immagini di adesso (misurate qui sopra), poi arrivano le nuove
+                    fuori.forEach((misure, id) => {
+                        const n = mm.nodi[id];
+                        const larghezza = n.immagine.larghezza, rapporto = misure.w ? misure.h / misure.w : 0.75;
+                        n.figure = [...(n.figure || []), { id: uid(), img: n.immagine.id, larghezza, rapporto, dx: 0, dy: -(larghezza * rapporto / 2 + 30), fluttuante: true }];
+                        n.immagine = null;
+                        fatto.push(`immagine portata fuori da ${id}`);
+                    });
+                    nuove.forEach(({ x, src, misure }) => {
+                        const n = mm.nodi[x.nodo_id];
+                        // Un'icona è una copia rimpicciolita: non prende il posto dell'immagine da cui viene
+                        const k = x.dove !== 'icona' && x.immagine_id && mm.immagini[x.immagine_id] ? x.immagine_id : uid();
+                        mm.immagini[k] = src;
+                        const dove = x.dove || 'accanto';
+                        if (dove === 'icona') { n.icona = 'img:' + k; fatto.push(`icona di ${n.id}`); return; }
+                        if (dove === 'dentro') {
+                            n.immagine = { id: k, larghezza: Math.round(limita(+x.larghezza || Math.min(220, misure.w || 160), 40, 600)) };
+                            fatto.push(`immagine dentro ${n.id}`);
+                            return;
+                        }
+                        const larghezza = Math.round(limita(+x.larghezza || Math.min(240, misure.w || 160), 24, 1600));
+                        const rapporto = misure.w ? misure.h / misure.w : 0.75;
+                        const f = { id: uid(), img: k, larghezza, rapporto, dx: 0, dy: -(larghezza * rapporto / 2 + 30), fluttuante: true };
+                        n.figure = [...(n.figure || []), f];
+                        fatto.push(`immagine ${f.id} accanto a ${n.id}`);
+                    });
+                    (a.modifica || []).forEach(x => {
+                        const n = mm.nodi[x.nodo_id];
+                        const f = n && (n.figure || []).find(q => q.id === x.immagine_accanto_id);
+                        if (!f) { errori.push(`immagine ${x.immagine_accanto_id} non trovata accanto al nodo ${x.nodo_id}`); return; }
+                        if (isFinite(x.larghezza) && +x.larghezza > 0) f.larghezza = Math.round(limita(+x.larghezza, 24, 1600));
+                        if (isFinite(x.dx)) f.dx = +x.dx;
+                        if (isFinite(x.dy)) f.dy = +x.dy;
+                        if (typeof x.libera === 'boolean') { if (x.libera) f.fluttuante = true; else delete f.fluttuante; }
+                        if (x.metti_dentro) {
+                            // Come «Mettila dentro il nodo»: quella che c'era dentro esce e prende il suo posto
+                            const vecchia = n.immagine && mm.immagini[n.immagine.id] ? n.immagine : null;
+                            n.figure = n.figure.filter(q => q.id !== f.id);
+                            if (vecchia) n.figure.push({ id: uid(), img: vecchia.id, larghezza: vecchia.larghezza, rapporto: f.rapporto, dx: f.dx, dy: f.dy, fluttuante: true });
+                            n.immagine = { id: f.img, larghezza: limita(Math.round(f.larghezza), 40, 600) };
+                        }
+                        fatto.push(`immagine ${f.id}`);
+                    });
+                    (a.larghezza_dentro || []).forEach(x => {
+                        const n = mm.nodi[x.nodo_id];
+                        if (!n || !n.immagine) { errori.push(`il nodo ${x.nodo_id} non ha un'immagine dentro`); return; }
+                        n.immagine = { ...n.immagine, larghezza: Math.round(limita(+x.larghezza || 120, 40, 600)) };
+                        fatto.push(`larghezza dell'immagine dentro ${n.id}`);
+                    });
+                    (a.elimina || []).forEach(x => {
+                        const n = mm.nodi[x.nodo_id];
+                        if (!n) { errori.push(`nodo ${x.nodo_id} non trovato`); return; }
+                        if (x.immagine_accanto_id === 'tutte') { n.figure = []; n.immagine = null; }
+                        else if (x.immagine_accanto_id === 'dentro') n.immagine = null;
+                        else {
+                            const prima = (n.figure || []).length;
+                            n.figure = (n.figure || []).filter(q => q.id !== x.immagine_accanto_id);
+                            if (n.figure.length === prima) { errori.push(`immagine ${x.immagine_accanto_id} non trovata accanto al nodo ${n.id}`); return; }
+                        }
+                        fatto.push(`eliminata ${x.immagine_accanto_id} di ${n.id}`);
+                    });
+                    return { fatto, ...(errori.length ? { errori } : {}) };
+                });
+            },
         },
         {
             nome: 'stili_predefiniti',
@@ -801,7 +1039,7 @@
             modifica: true,
             etichetta: a => ({ elenca: 'Guardo gli stili predefiniti', crea: `Creo lo stile «${a.nome || ''}»`, modifica: 'Modifico uno stile predefinito', elimina: 'Elimino uno stile predefinito' })[a.azione] || 'Stili predefiniti',
             esegui: async (a, ctx) => {
-                const elenco = () => Mappe.stiliPredefiniti().map((x, i) => ({ id: x.id, nome: x.nome, stile: x.stile, scorciatoia: i < 9 ? `Ctrl+Alt+${i + 1}` : undefined }));
+                const elenco = () => Mappe.stiliPredefiniti().map((x, i) => ({ id: x.id, nome: x.nome, stile: x.stile, scorciatoia: i < 9 ? `Ctrl+Alt+${i + 1}` : undefined, ...Strumenti.altriDati(x, ['id', 'nome', 'stile']) }));
                 if (a.azione === 'elenca') return { stili: elenco() };
                 const attuale = a.stile_id ? Mappe.stilePredefinito(a.stile_id) : null;
                 if (['modifica', 'elimina'].includes(a.azione) && !attuale) throw new Error(`Stile «${a.stile_id}» non trovato: usa azione elenca.`);
@@ -814,8 +1052,11 @@
                 const avvisi = [];
                 const finto = { stile: a.azione === 'modifica' ? structuredClone(attuale.stile) : {} };
                 if (a.da_mappa_id || a.da_nodo_id) {
-                    const m = richiediMappa(a.da_mappa_id);
-                    finto.stile = structuredClone(richiediNodo(m, a.da_nodo_id).stile || {});
+                    // L'aspetto proprio del nodo, come «Nuovo dallo stile del nodo» e «Aggiorna» dell'editor: lo stile
+                    // predefinito che usa più le scelte fatte su di lui
+                    const n = richiediNodo(richiediMappa(a.da_mappa_id), a.da_nodo_id);
+                    const pre = Mappe.stilePredefinito(n.stilePredefinito);
+                    finto.stile = structuredClone({ ...(pre ? pre.stile : {}), ...(n.stile || {}) });
                 }
                 if (a.stile) applicaStile(finto, a.stile, avvisi);
                 const nome = String(a.nome || (attuale && attuale.nome) || '').trim();
@@ -847,9 +1088,9 @@
         },
         {
             nome: 'tema_mappe',
-            descrizione: "Crea, modifica o elimina un tema personale delle mappe (vale per tutte le mappe): sfondo, colore del testo e della radice, colori dei rami, stile dei nodi per livello (radice, rami principali, secondo livello, successivi) e linee. Un tema nuovo può partire dall'aspetto di una mappa o da un altro tema; i temi di serie non si modificano.",
+            descrizione: "I temi delle mappe (valgono per tutte le mappe): li elenca con tutto il loro contenuto, oppure crea, modifica o elimina un tema personale: sfondo, colore del testo e della radice, colori dei rami, stile dei nodi per livello (radice, rami principali, secondo livello, successivi) e linee. Un tema nuovo può partire dall'aspetto di una mappa o da un altro tema; i temi di serie non si modificano.",
             parametri: S.obj({
-                azione: S.str('crea | modifica | elimina'), tema_id: S.str('modifica ed elimina: id del tema personale'),
+                azione: S.str('elenca | crea | modifica | elimina'), tema_id: S.str('modifica ed elimina: id del tema personale'),
                 parti_da_mappa_id: S.str('crea: parte dall\'aspetto di questa mappa'), parti_da_tema_id: S.str('crea: parte da questo tema'),
                 nome: S.str('nome del tema'), sfondo: S.str('#rrggbb'), testo: S.str('colore del testo, #rrggbb'), radice: S.str('colore della radice, #rrggbb'),
                 colori_rami: S.arr(S.str('#rrggbb'), 'colori dei rami principali, in ordine'),
@@ -865,8 +1106,9 @@
                 applica_a_mappa_id: S.str('facoltativo: usa il tema in questa mappa'),
             }, ['azione']),
             modifica: true,
-            etichetta: a => ({ crea: `Creo il tema «${a.nome || 'nuovo'}»`, modifica: 'Modifico un tema', elimina: 'Elimino un tema' }[a.azione] || 'Temi delle mappe'),
+            etichetta: a => ({ elenca: 'Guardo i temi delle mappe', crea: `Creo il tema «${a.nome || 'nuovo'}»`, modifica: 'Modifico un tema', elimina: 'Elimino un tema' }[a.azione] || 'Temi delle mappe'),
             esegui: async (a, ctx) => {
+                if (a.azione === 'elenca') return { temi: Mappe.temi().map(temaPerIA) };
                 if (a.azione === 'elimina') {
                     const t = Mappe.temiPersonali().find(x => x.id === a.tema_id);
                     if (!t) throw new Error('Tema personale non trovato (i temi di serie non si eliminano).');
@@ -884,7 +1126,7 @@
                         const da = Mappe.temi().find(x => x.id === (a.parti_da_tema_id || 'naturale')) || Mappe.temi()[0];
                         base = { ...structuredClone(da), id: 'p' + uid(), nome: a.nome || 'Il mio tema' };
                     }
-                } else throw new Error('azione: crea | modifica | elimina');
+                } else throw new Error('azione: elenca | crea | modifica | elimina');
                 const t = structuredClone(base);
                 if (a.nome) t.nome = a.nome;
                 ['sfondo', 'testo', 'radice'].forEach(k => { if (Mappe.coloreValido(a[k])) t[k] = a[k]; });

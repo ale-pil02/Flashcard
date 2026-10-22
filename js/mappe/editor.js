@@ -4190,8 +4190,14 @@ function EditorMappa(radiceEl, m, opzioni = {}) {
     }
 
     // Per l'assistente: cosa sta guardando l'utente e qualche azione sulla vista
+    // Cosa ha scelto l'utente, per l'assistente (Istruzioni.contesto e leggi_mappa)
     function stato() {
-        return { selezionati: [...st.sel].filter(id => m.nodi[id]), attivo: st.attivo, concentrato_su: st.focus, linea_scelta: st.arco };
+        return {
+            selezionati: [...st.sel].filter(id => m.nodi[id]), attivo: st.attivo, concentrato_su: st.focus, linea_scelta: st.arco,
+            collegamento_scelto: st.rel && m.relazioni.some(r => r.id === st.rel) ? st.rel : null,
+            etichetta_scelta: st.et && m.nodi[st.et.nodo] ? { ...st.et } : null,
+            immagine_scelta: st.fig && m.nodi[st.fig.nodo] ? { ...st.fig } : null,
+        };
     }
 
     function selezionaDaFuori(ids) {

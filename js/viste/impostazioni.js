@@ -345,8 +345,7 @@ Viste.impostazioni = {
                 const ok = await Ui.conferma(`Cancelli <b>tutto</b>: materie, set, flashcard, statistiche ed esami${Cloud.attivo ? ', <b>anche nel cloud e sugli altri dispositivi</b>' : ''}. Se non hai un backup non potrai recuperarli.`,
                     { titolo: 'Eliminare tutti i dati?', ok: 'Elimina tutto', pericolo: true });
                 if (!ok) return;
-                const tema = Dati.impostazioni().tema;
-                await Archivio.sostituisciTutto({ impostazioni: [{ ...IMPOSTAZIONI_PREDEFINITE, tema, id: 'generali' }] });
+                await Dati.eliminaTutto();
                 Ui.toast('Tutti i dati sono stati eliminati');
                 Router.vai('/home');
             },

@@ -368,6 +368,7 @@ const DatiProva = (() => {
         n(comprensione.id, 'teoria della mente', { link: 'https://it.wikipedia.org/wiki/Teoria_della_mente' });
 
         m.relazioni.push({ id: uid(), da: macro.id, a: abilita.id, testo: 'a cui sono riconducibili', colore: null, tratto: 'punti', frecciaInizio: false, frecciaFine: true, curva: null });
+        Mappe.primaDiCambiare(m.id);   // dentro un turno dell'assistente la mappa nuova entra nel suo Annulla
         Mappe.aggiungi(m);
         return { mappa: m.id, ids: { radice: r, competenza: comp.id, abilita: abilita.id, fasi: fasi.id, regolazione: regolazione.id } };
     }
@@ -386,7 +387,10 @@ const DatiProva = (() => {
         Archivio.eliminaMolti('materie', Archivio.tutti('materie').filter(m => m.prova).map(m => m.id));
         Archivio.eliminaMolti('ripassi', Archivio.tutti('ripassi').filter(r => r.prova).map(r => r.id));
         Archivio.eliminaMolti('esami', Archivio.tutti('esami').filter(e => e.prova).map(e => e.id));
-        Archivio.eliminaMolti('mappe', Archivio.tutti('mappe').filter(m => m.prova).map(m => m.id));
+        const mappe = Archivio.tutti('mappe').filter(m => m.prova).map(m => m.id);
+        mappe.forEach(id => Mappe.primaDiCambiare(id));   // dentro un turno dell'assistente tornano con il suo Annulla
+        Archivio.eliminaMolti('mappe', mappe);
+        mappe.forEach(id => Mappe.cambiataDaFuori(id));
         Ui.toast('Dati di prova rimossi');
     }
 

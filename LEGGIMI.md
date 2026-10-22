@@ -133,9 +133,21 @@ del Ctrl+Z dell'editor.
 Pulsante ✨ in basso a destra. Serve la chiave API di Gemini (Impostazioni → Assistente IA o
 direttamente nel pannello): resta solo in questo browser e non finisce nei backup.
 
-- **Fa tutto quello che fai tu**: crea e modifica materie, set, sotto-set, flashcard (anche ad
-  albero), materiali, esami, impostazioni e mappe mentali, apre pagine, esporta (testo o Excel). Prima di
-  cancellare qualcosa chiede conferma.
+- **Fa tutto quello che fai tu e vede tutto quello che vedi tu** (regola fissa dell'app, controllata da
+  `npm test`: vedi `CLAUDE.md`): crea e modifica materie, set, sotto-set, flashcard (anche ad albero e a scelta
+  multipla, con formattazione e immagini), materiali (note, nome, set, chat del set, «visto»), esami, impostazioni
+  (anche la sequenza degli intervalli e «Applica alle revisioni»), mazzi delle revisioni (anche quali flashcard
+  comprendono e l'annullamento dell'ultimo ripasso) e mappe mentali; apre pagine, esporta (testo o Excel), importa
+  un testo come «Importa», fa il backup e carica o toglie i dati di prova. Prima di cancellare qualcosa chiede
+  conferma; «Elimina tutti i dati» solo se lo chiedi tu, e non si annulla.
+- **Ti interroga**: fa le domande una alla volta, ti chiede com'è andata e alla fine registra il ripasso come lo
+  studio dell'app (`registra_ripasso`: date, N° Rep, statistiche e riga del mazzo; anche di prova). Se stai studiando
+  sa quale carta hai davanti.
+- **Modifiche recenti**: le legge e annulla o ripristina una voce anche tra le tue («annulla quello che ho fatto
+  prima»); l'Annulla sotto la sua risposta disfa anche quello.
+- **Ogni campo dei dati gli arriva**: quelli che gli strumenti non nominano arrivano in `altri_dati`, così un dato
+  nuovo dell'app lo legge subito. Restano a te solo accesso e cloud, la sua chiave e il modello, e i file del
+  computer (caricare un materiale o una sua versione nuova, importare un file, ripristinare un backup).
 - **Mappe mentali**: anche nell'editor delle mappe (pulsante ✨ nella barra). Sa quale mappa hai aperta e quali
   nodi hai selezionato ("aggiungi tre figli a questo nodo"). Crea mappe (anche da uno schema o da un materiale
   del set, .smmx compresi), aggiunge, modifica, sposta, copia (anche in un'altra mappa) ed elimina nodi; cambia
@@ -144,8 +156,10 @@ direttamente nel pannello): resta solo in questo browser e non finisce nei backu
   tra fratelli (anche solo tra alcuni nodi), allineamento dei nodi liberi, griglia, tema e colori; crea, modifica, dà ai nodi ed elimina gli stili predefiniti; crea raccordi
   con linee o graffa e figli comuni, collegamenti tra rami e temi personali; decide l'ordine delle mappe; seleziona
   nodi, si concentra su un ramo, esporta in PNG, OPML o testo. Prima di eliminare nodi collegati a flashcard lo dice.
-  Non aggiunge immagini e non mette a mano i singoli punti di passaggio delle linee (usa la curvatura). Strumenti in
-  `js/ia/strumenti-mappe.js`.
+  Mette, sposta, ridimensiona, porta dentro o fuori ed elimina le immagini dei nodi (da un'immagine tra i materiali o
+  già nella mappa), anche come icona; mette i punti di passaggio delle linee e dei collegamenti; cambia posizione e
+  stile delle etichette; crea la mappa «link argomenti» di una materia. Sa anche quale collegamento, etichetta o
+  immagine hai selezionato. Strumenti in `js/ia/strumenti-mappe.js`.
 - **Livello di ragionamento** (Impostazioni → Assistente IA, o menu ⋯ dell'assistente): come il "Thinking level" di
   Google AI Studio (predefinito del modello, minimo, basso, medio, alto): `generationConfig.thinkingConfig.thinkingLevel`
   per i Gemini 3 e successivi (anche per i nomi senza versione come `gemini-flash-latest`); i Gemini 2.5 usano il loro
@@ -655,6 +669,10 @@ firestore.rules         chi può leggere e scrivere i dati: solo il tuo account 
 storage.rules           lo stesso per i file in Cloud Storage
 cors.json               permette al sito (e a localhost:8010) di scaricare i file da Cloud Storage
 copia-in-public.js      prima di ogni "firebase deploy" copia index.html, manifest.json, css/, js/ e icone/ in public/
+package.json            "npm test": i test in test/ (Node, senza dipendenze); girano anche prima di ogni "firebase deploy"
+test/parita-ia.test.js  controllo che l'assistente legga e cambi tutto quello che legge e cambia l'utente (CLAUDE.md)
+test/aiuti/             l'app caricata in Node senza browser (dati di prova in memoria) e la lettura del codice
+CLAUDE.md               regole per chi cambia il codice (parità con l'assistente, test, pubblicazione)
 ```
 
 ## Cloud (Firebase)

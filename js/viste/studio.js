@@ -712,8 +712,16 @@ Viste.studio = (() => {
             sospendi: lasciaAttuale,
             riprendi: nuovo => { aggancia(nuovo); if (pos !== null) disegnaPassata(); else disegna(); },
             concludi: concludiFuori,
+            // Quello che l'utente ha davanti, per l'assistente (Istruzioni.contesto)
+            stato: () => ({
+                titolo: ambito.titolo, carta: pos !== null ? (sessione.storia[pos] || {}).id : c && c.id, fase, valutate: sessione.risposte,
+                fatte: sessione.fatte, in_coda: sessione.coda.length, di_prova: !!opzioniSessione.diProva, finita: sessione.finita,
+            }),
         };
     }
+
+    // La sessione aperta adesso (null se non si sta studiando)
+    function statoSessione() { return inCorso && !inCorso.finita() ? inCorso.stato() : null; }
 
     // ---- Vista ---------------------------------------------------------------
 
@@ -954,5 +962,5 @@ Viste.studio = (() => {
         });
     }
 
-    return { nav: null, titolo: 'Studio', schermoIntero: true, mostra, esci, personalizza, avvia, concludiSospesa, haSospesa };
+    return { nav: null, titolo: 'Studio', schermoIntero: true, mostra, esci, personalizza, avvia, concludiSospesa, haSospesa, statoSessione };
 })();

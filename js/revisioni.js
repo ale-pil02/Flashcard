@@ -1417,6 +1417,6 @@ const Revisioni = (() => {
         etichettaAvviso, dataBreve, dataLunga, nomeSet, monta, formNuovo, unoPerOgniSet, ripristinaLarghezze,
         carteDelSet, statoDaCarte, statoDi, rigaDelSet, registraSessione, segnaComunque, descriviEsito,
         daNonAllineare, esitiSeConta, ripassaPiuSet, avviaRipasso, carteDevianti, tutteLeVoci, sfasata, sfasatura, cartaDaRipassare, maiValutata, argomentoDi, mazziDi, carteDi, automatico, dovutaDal, nuovaDaRipassare,
-        avviaRipassoCarte, montaCarte, modaleCarte, chiediSeConta, situazioniAvvio, ordina, colonneDi, perUrgenzaCarte,
+        avviaRipassoCarte, montaCarte, modaleCarte, erroreCarte, chiediSeConta, situazioniAvvio, ordina, colonneDi, perUrgenzaCarte,
     };
 })();

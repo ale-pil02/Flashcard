@@ -1,0 +1,11 @@
+{
+  "name": "flashcard",
+  "private": true,
+  "description": "App di flashcard con ripetizione spaziata e mappe mentali",
+  "engines": {
+    "node": ">=21"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}

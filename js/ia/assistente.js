@@ -139,6 +139,9 @@ const Assistente = (() => {
             if (!riga || (riga.stato === 'annullata') === !!v.annullata) continue;
             v.annullata = riga.stato === 'annullata';
             cambiato = true;
+            // Durante un turno l'ha fatto l'assistente stesso (modifiche_recenti) e lo sa dal risultato: una nota adesso
+            // finirebbe tra la sua chiamata e la risposta dello strumento
+            if (controllo && c === conv) continue;
             notaPerIA(v.annullata
                 ? `L'utente ha annullato le modifiche che avevi fatto (${v.riepilogo}): quei dati sono tornati com'erano prima.`
                 : `L'utente ha ripristinato le modifiche che aveva annullato (${v.riepilogo}).`, c);
